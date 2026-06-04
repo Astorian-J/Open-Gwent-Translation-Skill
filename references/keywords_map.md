@@ -101,3 +101,16 @@ Keywords extracted from server card data (1336 cards). Listed by frequency.
 | siege row | 攻城排 |
 | any row | 任意排 |
 | adjacent | 相邻 |
+## Supplementary Keywords (领袖数据确认)
+
+| English | Chinese | Notes |
+|---------|---------|-------|
+| charges | 充能 | Number of ability uses |
+| grace | 神赐 | Divine blessing |
+| heal | 治疗 | Restore health |
+| hoards | 囤积 | SY mechanic |
+| spawn | 生成 | Create a unit/token |
+| vitality | 活力 | Gradual healing over turns |
+
+
+## Notes
