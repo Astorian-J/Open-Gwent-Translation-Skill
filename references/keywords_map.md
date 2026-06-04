@@ -58,7 +58,7 @@ Keywords extracted from server card data (1336 cards). Listed by frequency.
 
 | English | Chinese | Freq | Notes |
 |---------|---------|------|-------|
-| seize | 操控 | 8 | Take control of enemy unit |
+| seize | 抓捕 | 8 | Take control of enemy unit |
 | purify | 净化 | — | Remove status |
 | lock | 锁定 | — | Disable abilities |
 | defender | 卫士 | 6 | Protects adjacent units |
@@ -105,11 +105,21 @@ Keywords extracted from server card data (1336 cards). Listed by frequency.
 
 | English | Chinese | Notes |
 |---------|---------|-------|
+| armor | 护甲 | Protective status (differs from keyword 'armor' → 破甲) |
+| bleeding | 重伤 | Damage-over-time status |
+| bounty | 赏金 | SY: place bounty on enemy unit |
 | charges | 充能 | Number of ability uses |
+| coin / coins | 金币 | SY in-game currency |
+| cooldown | 冷却 | Leader ability cooldown |
 | grace | 神赐 | Divine blessing |
 | heal | 治疗 | Restore health |
-| hoards | 囤积 | SY mechanic |
+| hoards | 囤积 | SY: when having enough coins |
+| locked | 已锁定 | Status: abilities disabled |
+| frost | 白霜 | Weather: damage over time |
+| melee | 近战排 | Row restriction |
+| rain | 下雨 | Weather: damage over time |
 | spawn | 生成 | Create a unit/token |
+| tribute / tributes | 献金 | SY in-game cost |
 | vitality | 活力 | Gradual healing over turns |
 
 
