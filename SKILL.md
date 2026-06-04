@@ -30,6 +30,23 @@ and reads like a native Gwent player wrote it. Casual but not stiff.
 
 ## Translation Workflow
 
+> ⚠️ **MANDATORY**: Every translation **MUST** execute the full pipeline below.
+> Do NOT skip steps. Do NOT manually call sub-scripts one by one.
+> Use the single automation command provided at each phase.
+
+### Phase A: Pre-Translation (Preprocessing)
+
+**Run this command FIRST — before you start translating:**
+
+```bash
+python scripts/auto_pipeline.py pre source.md --date YYYY-MM --type general
+```
+
+This automatically performs Step 0~3 (context setup, reference loading,
+context lock, and format skeleton extraction). Do NOT run these steps manually.
+
+---
+
 ### Step 0: Context Setup
 
 Before translating, determine the article context:
@@ -87,13 +104,10 @@ For articles longer than 5 paragraphs, build a terminology lock table:
 4. Subsequent mentions MUST use the same translation
 ```
 
-To use the lock script:
+**This is done automatically by `auto_pipeline.py pre`.**
+If you need to manually edit the lock table:
 ```bash
-python scripts/context_lock.py build source.txt --output lock.json
-# After deciding each translation:
-python scripts/context_lock.py add "English Term" "中文翻译" --lock lock.json
-# Check consistency:
-python scripts/context_lock.py check translated.txt --lock lock.json
+python scripts/context_lock.py add "English Term" "中文翻译" --lock /tmp/lock.json
 ```
 
 ### Step 3: Extract Format Skeleton (for formatted articles)
@@ -104,11 +118,10 @@ If the source has Markdown/HTML formatting:
 2. Translate only the text content, preserving all formatting
 3. Restore the skeleton with translated content
 
-To use the format script:
+**Format extraction is done automatically by `auto_pipeline.py pre`.**
+If the user later provides translated chunks, restore with:
 ```bash
-python scripts/format_skeleton.py extract source.md --output skeleton.json
-# Translate each chunk from skeleton, save to translated_chunks.txt
-python scripts/format_skeleton.py restore skeleton.json translated_chunks.txt --output result.md
+python scripts/format_skeleton.py restore /tmp/skeleton.json translated_chunks.txt --output result.md
 ```
 
 ### Step 4: Translate with Constraints
@@ -211,6 +224,21 @@ Before output, verify based on direction:
 Present the final translation. If user provided their own translation,
 first output analysis, then the corrected version.
 
+Save the final translation to a file (e.g., `translated.txt`) before proceeding to post-processing.
+
+---
+
+### Phase B: Post-Translation (Verification & Learning)
+
+**Run this command AFTER you have saved the translation:**
+
+```bash
+python scripts/auto_pipeline.py post source.md translated.txt
+```
+
+This automatically performs terminology check, consistency verification,
+and records new terms to `pending_terms.md`. Do NOT skip this step.
+
 ### Step 9: Learn (Self-Evolution)
 
 After delivering the translation, analyze the source text for terms not in
@@ -239,13 +267,11 @@ our reference database:
 Always use pending_terms.md as the buffer. Only move to confirmed files
 after human verification against server data or official sources.
 
-**To use the learning script directly**:
+**Learning is done automatically by `auto_pipeline.py post`.**
+Only run the learning script manually if the pipeline was skipped:
 ```bash
 python scripts/learn.py source.txt translated.txt --auto
 ```
-
-This will extract unknown terms and append them to pending_terms.md.
-Review and confirm before moving to the main reference files.
 
 ## Special Modes
 
