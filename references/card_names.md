@@ -52,6 +52,8 @@ Verified against server card_data.json (1336 cards, 2026-06-03).
 | Sandstorm | 沙尘暴 | 202205 | 中立 |
 | Caravan Guard | 车队护卫 | 202485 | 中立 |
 | Imke | 伊魅珂 | 202370 | 辛迪加 |
+| Whoreson Senior | 霍桑一世 | — | 辛迪加 |
+| Whoreson Junior | 霍桑二世 | — | 辛迪加 |
 | Regis: Bloodlust | 雷吉斯：血欲化身 | 202195 | 中立 |
 | Arachas Swarm | 蟹蜘蛛 | — | 怪兽(领袖/卡组 slang) |
 | Sabbath (Yaga) | 女巫夜宴 | 203054 | 怪兽 |
