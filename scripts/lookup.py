@@ -17,6 +17,8 @@ from difflib import SequenceMatcher
 
 
 def similarity(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
@@ -265,8 +267,9 @@ def format_result(r: dict) -> str:
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python lookup.py <query> [--fuzzy]")
+        print("Usage: python lookup.py <query> [--fuzzy] [--plain]")
         print("  --fuzzy: Enable fuzzy matching")
+        print("  --plain: Disable emoji in output")
         print()
         print("Examples:")
         print('  python lookup.py "Provision"')
@@ -276,6 +279,7 @@ def main():
 
     query = sys.argv[1]
     fuzzy = "--fuzzy" in sys.argv
+    plain = "--plain" in sys.argv
 
     ref_dir = Path(__file__).parent.parent / "references"
 
@@ -296,7 +300,8 @@ def main():
 
     for file, file_results in by_file.items():
         print(f"\n{'=' * 50}")
-        print(f"📄 {file}")
+        icon = "" if plain else "📄 "
+        print(f"{icon}{file}")
         print(f"{'=' * 50}")
         for r in file_results[:5]:  # Limit to 5 per file
             print(format_result(r))

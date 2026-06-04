@@ -12,30 +12,29 @@ import sys
 from pathlib import Path
 from difflib import SequenceMatcher
 
+from _shared import (
+    extract_abbreviations,
+    extract_capitalized_phrases,
+    extract_card_names,
+)
+
+# Module-level constants
+_SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+
+
 
 def extract_proper_nouns(text: str) -> set[str]:
     """Extract likely Gwent proper nouns (card names, abilities, etc.)."""
     nouns = set()
 
-    # Card names with colons
-    for match in re.finditer(r'\b([A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){0,2}:\s*(?:The\s+)?[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){0,2})\b', text):
-        name = match.group(1).strip()
-        if len(name) <= 40:
-            nouns.add(name)
+    for name in extract_card_names(text):
+        nouns.add(name)
 
-    # Multi-word capitalized phrases
-    for match in re.finditer(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b', text):
-        name = match.group(1).strip()
-        if len(name) >= 4:
-            first = name.split()[0]
-            if first not in {"The", "This", "That", "These", "They", "There", "Then", "When", "What", "Where", "Which", "While", "Although", "However"}:
-                nouns.add(name)
+    for name in extract_capitalized_phrases(text, max_words=3, min_length=4):
+        nouns.add(name)
 
-    # Abbreviations
-    for match in re.finditer(r'\b([A-Z]{2,5})\b', text):
-        abbrev = match.group(1)
-        if abbrev not in {"THE", "AND", "FOR", "ARE", "BUT", "NOT", "YOU", "ALL", "ANY", "CAN", "HAD", "HER", "WAS", "ONE", "OUR", "OUT", "DAY", "GET", "HAS", "HIM", "HIS", "HOW", "ITS", "MAY", "NEW", "NOW", "OLD", "SEE", "TWO", "WAY", "WHO", "MAN", "MEN"}:
-            nouns.add(abbrev)
+    for abbrev in extract_abbreviations(text):
+        nouns.add(abbrev)
 
     return nouns
 
@@ -145,8 +144,7 @@ def generate_report(source: str, translation: str) -> str:
     all_issues = terminology_issues + numeric_issues + completeness_issues
 
     # Sort by severity
-    severity_order = {"high": 0, "medium": 1, "low": 2}
-    all_issues.sort(key=lambda x: severity_order.get(x["severity"], 3))
+    all_issues.sort(key=lambda x: _SEVERITY_ORDER.get(x["severity"], 3))
 
     lines = [
         "# Diff Review Report (审校差异报告)",

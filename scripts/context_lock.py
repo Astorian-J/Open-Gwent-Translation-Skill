@@ -27,10 +27,15 @@ Lock table format:
 """
 
 import json
-import re
 import sys
 from pathlib import Path
 from datetime import datetime
+
+from _shared import (
+    extract_abbreviations,
+    extract_capitalized_phrases,
+    extract_card_names,
+)
 
 
 def load_lock(lock_file: str) -> dict:
@@ -41,7 +46,7 @@ def load_lock(lock_file: str) -> dict:
     return {"document": "", "terms": {}}
 
 
-def save_lock(lock: dict, lock_file: str):
+def save_lock(lock: dict, lock_file: str) -> None:
     """Save lock table to file."""
     Path(lock_file).write_text(json.dumps(lock, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -50,25 +55,14 @@ def extract_terms_from_source(source_text: str) -> dict[str, str]:
     """Extract candidate terms from English source that need locking."""
     terms = {}
 
-    # Card names with colons
-    for match in re.finditer(r'\b([A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){0,2}:\s*(?:The\s+)?[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){0,2})\b', source_text):
-        name = match.group(1).strip()
-        if len(name) <= 40:
-            terms[name] = ""
+    for name in extract_card_names(source_text):
+        terms[name] = ""
 
-    # Multi-word capitalized phrases (potential card names)
-    for match in re.finditer(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b', source_text):
-        name = match.group(1).strip()
-        first = name.split()[0]
-        skip = {"The", "This", "That", "These", "Those", "They", "There", "When", "What", "Where", "Which", "While", "Although", "However"}
-        if first not in skip and len(name) >= 4:
-            terms[name] = ""
+    for name in extract_capitalized_phrases(source_text, max_words=3, min_length=4):
+        terms[name] = ""
 
-    # Abbreviations
-    for match in re.finditer(r'\b([A-Z]{2,5})\b', source_text):
-        abbrev = match.group(1)
-        if abbrev not in {"THE", "AND", "FOR", "ARE", "BUT", "NOT", "YOU", "ALL", "ANY", "CAN", "HAD", "HER", "WAS", "ONE", "OUR", "OUT", "DAY", "GET", "HAS", "HIM", "HIS", "HOW", "ITS", "MAY", "NEW", "NOW", "OLD", "SEE", "TWO", "WAY", "WHO", "MAN", "MEN"}:
-            terms[abbrev] = ""
+    for abbrev in extract_abbreviations(source_text):
+        terms[abbrev] = ""
 
     return terms
 

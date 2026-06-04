@@ -10,6 +10,7 @@ Usage:
 Rules are loaded from references/ directory to stay in sync.
 """
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -237,8 +238,10 @@ ENGLISH_PARENS = re.compile(r'\([^）]*\)')
 # English colon in card-like contexts
 ENGLISH_COLON = re.compile(r'[一-鿿][A-Za-z]+:')
 
-# Abbreviations that should be expanded
-# Note: \b doesn't work with CJK text, use explicit lookaround
+# Abbreviations that should be expanded.
+# Uses explicit lookaround because \b (word boundary) doesn't work reliably
+# with CJK text — we only want to match these abbreviations when surrounded
+# by non-ASCII letters or punctuation.
 ABBREV_PATTERN = re.compile(r'(?<![A-Za-z])(BC|OP|UP|OTB|RSS|CA|GG|BM|PTS|R[123])(?![A-Za-z])')
 
 
@@ -286,8 +289,8 @@ def check_translation(text: str) -> list[str]:
 
     # 4. Check forbidden terms
     for forbid, replace in forbidden_terms.items():
-        if forbid in text:
-            idx = text.index(forbid)
+        for match in re.finditer(re.escape(forbid), text):
+            idx = match.start()
             start = max(0, idx - 10)
             end = min(len(text), idx + len(forbid) + 10)
             ctx = text[start:end].replace('\n', ' ')
@@ -322,14 +325,18 @@ def check_translation(text: str) -> list[str]:
 
     # 8. Check passive voice
     for indicator in PASSIVE_INDICATORS:
-        if indicator in text:
-            idx = text.index(indicator)
+        start_idx = 0
+        while True:
+            idx = text.find(indicator, start_idx)
+            if idx == -1:
+                break
             start = max(0, idx - 15)
             end = min(len(text), idx + len(indicator) + 15)
             ctx = text[start:end].replace('\n', ' ')
             issues.append(
                 f"passive voice: 「{indicator}」detected (context: ...{ctx}...) → use active voice"
             )
+            start_idx = idx + len(indicator)
 
     # 9. Check English parentheses
     eng_parens = ENGLISH_PARENS.findall(text)
@@ -429,17 +436,14 @@ def auto_fix(text: str) -> tuple[str, int]:
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python check_translation.py <file> [--fix]")
-        print("  --fix: auto-fix determinable errors")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Gwent translation terminology checker")
+    parser.add_argument("file", help="File to check")
+    parser.add_argument("--fix", action="store_true", help="Auto-fix determinable errors")
+    args = parser.parse_args()
 
-    filepath = sys.argv[1]
-    do_fix = "--fix" in sys.argv
-
-    path = Path(filepath)
+    path = Path(args.file)
     if not path.exists():
-        print(f"Error: file not found: {filepath}")
+        print(f"Error: file not found: {args.file}")
         sys.exit(1)
 
     text = path.read_text(encoding="utf-8")
@@ -452,12 +456,18 @@ def main():
     else:
         print("No issues found")
 
-    if do_fix:
+    if args.fix:
         fixed_text, fix_count = auto_fix(text)
         if fix_count > 0:
             print(f"\nAuto-fixed {fix_count} issue(s)")
             path.write_text(fixed_text, encoding="utf-8")
             print("Written back to file")
+            # Re-check after fix to determine exit code
+            issues = check_translation(fixed_text)
+            if issues:
+                print(f"\nRemaining issues after fix: {len(issues)}")
+            else:
+                print("\nAll issues resolved after fix")
         else:
             print("\nNo auto-fixable issues")
 

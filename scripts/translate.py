@@ -29,23 +29,33 @@ def run_command(cmd, desc):
             text=True,
             timeout=30,
         )
+        output = result.stdout
+        if result.stderr:
+            output += ("\n" + result.stderr if output else result.stderr)
         if result.returncode == 0 or result.stdout:
-            return True, result.stdout
+            return True, output
         else:
             return False, result.stderr or "No output"
-    except Exception as e:
-        return False, str(e)
+    except subprocess.TimeoutExpired as e:
+        return False, f"Timeout: {e}"
+    except subprocess.CalledProcessError as e:
+        return False, f"Command failed: {e}"
+    except OSError as e:
+        return False, f"OS error: {e}"
 
 
 def step_0_context(args):
     lines = ["=" * 60, "Step 0: Context Setup", "=" * 60, ""]
 
+    VERSION_YEAR_BASE = 2020
+    VERSION_YEAR_EXTENDED = 2021
+
     date = args.date or datetime.now().strftime("%Y-%m")
     year = int(date.split("-")[0])
 
-    if year < 2020:
+    if year < VERSION_YEAR_BASE:
         version_range = "Base game only (11xxxx-16xxxx)"
-    elif year < 2021:
+    elif year < VERSION_YEAR_EXTENDED:
         version_range = "Base + 200xxx + 201xxx + 202xxx"
     else:
         version_range = "All cards including 203xxx"
@@ -216,9 +226,12 @@ def main():
 
     if args.check_only:
         translated_path = Path(args.user_translation) if args.user_translation else source_path
+        if args.user_translation and not translated_path.exists():
+            print(f"Error: User translation file not found: {args.user_translation}")
+            sys.exit(1)
         all_lines.extend(step_4_check(translated_path))
         if args.user_translation:
-            all_lines.extend(step_5_diff_review(source_path, Path(args.user_translation)))
+            all_lines.extend(step_5_diff_review(source_path, translated_path))
         all_lines.extend(step_6_learn(source_path, translated_path))
     else:
         format_lines, _ = step_1_format_extract(source_path)

@@ -7,8 +7,10 @@ Usage:
     python health_check.py [--verbose]
 """
 
+import ast
+import subprocess
 import sys
-import importlib.util
+import tempfile
 from pathlib import Path
 from datetime import datetime
 
@@ -80,20 +82,12 @@ def check_scripts(script_dir: Path) -> list[tuple[str, str]]:
         status, msg = check_file_exists(fpath, desc)
 
         if status == "PASS":
-            # Try to import and check syntax
+            # Check syntax without executing to avoid side effects
             try:
-                spec = importlib.util.spec_from_file_location(fname.replace(".py", ""), fpath)
-                if spec and spec.loader:
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
-                    results.append(("PASS", f"{desc}: {fname} (syntax OK)"))
-                else:
-                    results.append(("WARN", f"{desc}: {fname} (cannot load)"))
+                ast.parse(fpath.read_text(encoding="utf-8"))
+                results.append(("PASS", f"{desc}: {fname} (syntax OK)"))
             except SyntaxError as e:
                 results.append(("FAIL", f"{desc}: {fname} (syntax error: {e})"))
-            except Exception as e:
-                # Import errors are OK for scripts with dependencies
-                results.append(("PASS", f"{desc}: {fname} (syntax OK)"))
         else:
             results.append((status, msg))
 
@@ -182,11 +176,10 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
     # Test check_translation.py with sample text
     check_script = script_dir / "check_translation.py"
     if check_script.exists():
-        import subprocess
         try:
             # Create test file
             test_content = "这张卡要12费用，出场率很高。"
-            test_file = Path("/tmp/test_health_check.txt")
+            test_file = Path(tempfile.gettempdir()) / "test_health_check.txt"
             test_file.write_text(test_content, encoding="utf-8")
 
             result = subprocess.run(
@@ -206,16 +199,11 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
     learn_script = script_dir / "learn.py"
     if learn_script.exists():
         try:
-            # We can't fully test without proper source files, just check it loads
-            spec = importlib.util.spec_from_file_location("learn", learn_script)
-            if spec and spec.loader:
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-                if hasattr(module, "load_all_terms"):
-                    terms = module.load_all_terms()
-                    results.append(("PASS", f"learn.py: Loads {len(terms)} terms successfully"))
-                else:
-                    results.append(("WARN", "learn.py: Missing load_all_terms function"))
+            # Syntax check via ast.parse (no execution, avoids side effects)
+            ast.parse(learn_script.read_text(encoding="utf-8"))
+            results.append(("PASS", "learn.py: Syntax OK"))
+        except SyntaxError as e:
+            results.append(("FAIL", f"learn.py: Syntax error ({e})"))
         except Exception as e:
             results.append(("WARN", f"learn.py: Test failed ({e})"))
 

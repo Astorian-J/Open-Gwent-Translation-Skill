@@ -8,6 +8,7 @@ Usage:
     python backtranslate.py <source_en.txt> <translated_cn.txt> [--detail]
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -145,8 +146,10 @@ def main():
     print()
 
     # Generate placeholder report with heuristics
-    placeholder_back = f"[Back-translation not provided. Original length: {len(original)} chars]"
-    report = generate_report(original, translated, placeholder_back)
+    report = generate_report(
+        original, translated,
+        f"[Back-translation not provided. Original length: {len(original)} chars]"
+    )
 
     if detail:
         print(report)
@@ -155,5 +158,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import re
     main()

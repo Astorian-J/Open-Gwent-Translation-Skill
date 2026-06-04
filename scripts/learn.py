@@ -18,6 +18,14 @@ import sys
 from pathlib import Path
 from collections import Counter
 
+from _shared import (
+    SKIP_ABBREVS_FULL,
+    SKIP_WORDS_FULL,
+    extract_abbreviations,
+    extract_capitalized_phrases,
+    extract_card_names,
+)
+
 
 def _get_ref_path(filename: str) -> Path:
     return Path(__file__).parent.parent / "references" / filename
@@ -160,7 +168,7 @@ def load_pending_terms() -> list[dict]:
             current = {"source": line[4:].strip()}
             in_entry = True
         elif in_entry and line.startswith("- "):
-            key, val = line[2:].split(":", 1)
+            key, _, val = line[2:].partition(":")
             current[key.strip().lower()] = val.strip()
     if current:
         terms.append(current)
@@ -174,344 +182,18 @@ def extract_candidate_terms(source_text: str) -> list[tuple[str, str]]:
     """
     candidates = []
 
-    # Pattern 1: Card names with colons (e.g., "Geralt: Igni", "Syanna: Duchess")
-    # Limit word count to avoid matching full sentences
-    for match in re.finditer(r'\b([A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){0,2}:\s*(?:The\s+)?[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){0,2})\b', source_text):
-        name = match.group(1).strip()
-        # Sanity check: card names should be reasonably short
-        if len(name) <= 40:
-            candidates.append(("card", name))
+    # Pattern 1: Card names with colons
+    for name in extract_card_names(source_text):
+        candidates.append(("card", name))
 
-    # Pattern 2: Multi-word capitalized phrases (potential card names)
-    for match in re.finditer(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,4})\b', source_text):
-        name = match.group(1).strip()
-        # Filter out common words
-        skip_words = {"The", "A", "An", "This", "That", "These", "Those", "It", "Its",
-                      "He", "She", "They", "We", "You", "I", "Me", "My", "His", "Her",
-                      "Their", "Our", "Your", "And", "Or", "But", "If", "Then", "Than",
-                      "When", "Where", "Why", "How", "What", "Who", "Which", "While",
-                      "Because", "Since", "Until", "Although", "However", "Therefore",
-                      "Moreover", "Furthermore", "Nevertheless", "Otherwise", "Instead",
-                      "Meanwhile", "Afterwards", "Previously", "Eventually", "Finally",
-                      "Currently", "Recently", "Usually", "Often", "Sometimes", "Always",
-                      "Never", "Already", "Still", "Yet", "Even", "Just", "Only", "Also",
-                      "Too", "Very", "Quite", "Rather", "Pretty", "Really", "Actually",
-                      "Probably", "Possibly", "Perhaps", "Maybe", "Certainly", "Definitely",
-                      "Absolutely", "Completely", "Totally", "Entirely", "Fully", "Highly",
-                      "Extremely", "Incredibly", "Amazingly", "Surprisingly", "Interestingly",
-                      "Fortunately", "Unfortunately", "Luckily", "Hopefully", "Ideally",
-                      "Basically", "Essentially", "Fundamentally", "Primarily", "Mainly",
-                      "Mostly", "Generally", "Typically", "Normally", "Commonly", "Usually",
-                      "Frequently", "Regularly", "Consistently", "Constantly", "Continuously",
-                      "Repeatedly", "Occasionally", "Rarely", "Seldom", "Hardly", "Barely",
-                      "Scarcely", "Nearly", "Almost", "Approximately", "Roughly", "Around",
-                      "About", "Over", "Under", "Above", "Below", "Between", "Among",
-                      "Within", "Without", "Against", "Across", "Along", "Around", "Behind",
-                      "Beyond", "Beside", "Besides", "Inside", "Outside", "Through",
-                      "Throughout", "Toward", "Towards", "Upon", "Onto", "Into", "Off",
-                      "Over", "Under", "Up", "Down", "In", "Out", "On", "At", "To", "For",
-                      "Of", "With", "From", "By", "About", "Like", "As", "Into", "Through",
-                      "During", "Before", "After", "Above", "Below", "Between", "Among",
-                      "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight",
-                      "Nine", "Ten", "First", "Second", "Third", "Last", "Next", "Previous",
-                      "New", "Old", "Good", "Bad", "Big", "Small", "Long", "Short",
-                      "High", "Low", "Great", "Little", "Large", "Tiny", "Huge", "Vast",
-                      "Many", "Much", "More", "Most", "Some", "Any", "All", "None",
-                      "Each", "Every", "Both", "Either", "Neither", "Other", "Another",
-                      "Same", "Different", "Such", "Same", "Own", "Same", "Well", "Better",
-                      "Best", "Bad", "Worse", "Worst", "Far", "Further", "Furthest",
-                      "Near", "Nearer", "Nearest", "Early", "Earlier", "Earliest",
-                      "Late", "Later", "Latest", "Soon", "Sooner", "Soonest", "Fast",
-                      "Faster", "Fastest", "Slow", "Slower", "Slowest", "Hard", "Harder",
-                      "Hardest", "Easy", "Easier", "Easiest", "Happy", "Happier",
-                      "Happiest", "Sad", "Sadder", "Saddest", "Angry", "Angrier",
-                      "Angriest", "Strong", "Stronger", "Strongest", "Weak", "Weaker",
-                      "Weakest", "Rich", "Richer", "Richest", "Poor", "Poorer",
-                      "Poorest", "Young", "Younger", "Youngest", "Old", "Older",
-                      "Oldest", "Hot", "Hotter", "Hottest", "Cold", "Colder",
-                      "Coldest", "Warm", "Warmer", "Warmest", "Cool", "Cooler",
-                      "Coolest", "Dry", "Drier", "Driest", "Wet", "Wetter",
-                      "Wettest", "Clean", "Cleaner", "Cleanest", "Dirty", "Dirtier",
-                      "Dirtiest", "Deep", "Deeper", "Deepest", "Shallow", "Shallower",
-                      "Shallowest", "Wide", "Wider", "Widest", "Narrow", "Narrower",
-                      "Narrowest", "Thick", "Thicker", "Thickest", "Thin", "Thinner",
-                      "Thinnest", "Heavy", "Heavier", "Heaviest", "Light", "Lighter",
-                      "Lightest", "Bright", "Brighter", "Brightest", "Dark", "Darker",
-                      "Darkest", "Loud", "Louder", "Loudest", "Quiet", "Quieter",
-                      "Quietest", "Sharp", "Sharper", "Sharpest", "Dull", "Duller",
-                      "Dullest", "Smooth", "Smoother", "Smoothest", "Rough", "Rougher",
-                      "Roughest", "Soft", "Softer", "Softest", "Hard", "Harder",
-                      "Hardest", "Tight", "Tighter", "Tightest", "Loose", "Looser",
-                      "Loosest", "Safe", "Safer", "Safest", "Dangerous", "More",
-                      "Most", "Careful", "More", "Most", "Brave", "Braver",
-                      "Bravest", "Clever", "Cleverer", "Cleverest", "Stupid",
-                      "Stupider", "Stupidest", "Friendly", "Friendlier",
-                      "Friendliest", "Lovely", "Lovelier", "Loveliest", "Lively",
-                      "Livelier", "Liveliest", "Lonely", "Lonelier", "Loneliest",
-                      "Ugly", "Uglier", "Ugliest", "Pretty", "Prettier", "Prettiest",
-                      "Healthy", "Healthier", "Healthiest", "Wealthy", "Wealthier",
-                      "Wealthiest", "Hungry", "Hungrier", "Hungriest", "Thirsty",
-                      "Thirstier", "Thirstiest", "Sleepy", "Sleepier", "Sleepiest",
-                      "Funny", "Funnier", "Funniest", "Sunny", "Sunnier", "Sunniest",
-                      "Windy", "Windier", "Windiest", "Rainy", "Rainier", "Rainiest",
-                      "Snowy", "Snowier", "Snowiest", "Cloudy", "Cloudier",
-                      "Cloudiest", "Foggy", "Foggier", "Fogiest", "Dusty", "Dustier",
-                      "Dustiest", "Muddy", "Muddier", "Muddiest", "Bloody",
-                      "Bloodier", "Bloodiest", "Merry", "Merrier", "Merriest",
-                      "Gay", "Gayer", "Gayest", "Blue", "Bluer", "Bluest", "Red",
-                      "Redder", "Reddest", "Green", "Greener", "Greenest",
-                      "Yellow", "Yellower", "Yellowest", "White", "Whiter",
-                      "Whitest", "Black", "Blacker", "Blackest", "Brown",
-                      "Browner", "Brownest", "Gray", "Grayer", "Grayest",
-                      "Purple", "Purpler", "Purplest", "Orange", "Oranger",
-                      "Orangest", "Pink", "Pinker", "Pinkest", "Silver",
-                      "Silverer", "Silverest", "Gold", "Golder", "Goldest",
-                      "Bronze", "Bronzer", "Bronzest", "True", "Truer",
-                      "Truest", "False", "Falser", "Falsest", "Right",
-                      "Righter", "Rightest", "Wrong", "Wronger", "Wrongest",
-                      "Correct", "More", "Most", "Exact", "Exacter",
-                      "Exactest", "Perfect", "More", "Most", "Complete",
-                      "More", "Most", "Whole", "Wholer", "Wholest", "Half",
-                      "Half", "Halves", "Double", "Doubler", "Doublest",
-                      "Triple", "Tripler", "Triplest", "Single", "Singler",
-                      "Singlest", "Several", "Many", "Few", "Fewer",
-                      "Fewest", "Numerous", "More", "Most", "Various",
-                      "Diverse", "Different", "Similar", "Same", "Equal",
-                      "Equivalent", "Alike", "Identical", "Distinct",
-                      "Separate", "Individual", "Personal", "Private",
-                      "Public", "Common", "Shared", "Joint", "Mutual",
-                      "Reciprocal", "Collective", "Universal", "General",
-                      "Specific", "Particular", "Special", "Unique",
-                      "Rare", "Unusual", "Strange", "Weird", "Odd",
-                      "Peculiar", "Curious", "Queer", "Funny", "Suspicious",
-                      "Doubtful", "Uncertain", "Unsure", "Dubious",
-                      "Questionable", "Debatable", "Disputable",
-                      "Controversial", "Contentious", "Problematic",
-                      "Troublesome", "Difficult", "Hard", "Tough",
-                      "Rough", "Challenging", "Demanding", "Taxing",
-                      "Arduous", "Strenuous", "Laborious", "Tedious",
-                      "Tiresome", "Wearisome", "Boring", "Dull",
-                      "Monotonous", "Repetitive", "Routine", "Habitual",
-                      "Customary", "Traditional", "Conventional",
-                      "Orthodox", "Standard", "Normal", "Regular",
-                      "Ordinary", "Average", "Medium", "Moderate",
-                      "Modest", "Reasonable", "Sensible", "Practical",
-                      "Realistic", "Feasible", "Viable", "Possible",
-                      "Achievable", "Attainable", "Accessible",
-                      "Available", "Obtainable", "Reachable", "Within",
-                      "Beyond", "Above", "Over", "Exceeding",
-                      "Surpassing", "Transcending", "Transcendent",
-                      "Superior", "Supreme", "Ultimate", "Final",
-                      "Last", "Terminal", "Conclusive", "Definitive",
-                      "Absolute", "Total", "Complete", "Full",
-                      "Entire", "Whole", "Intact", "Undamaged",
-                      "Unhurt", "Uninjured", "Safe", "Secure",
-                      "Protected", "Guarded", "Defended", "Shielded",
-                      "Sheltered", "Covered", "Hidden", "Concealed",
-                      "Secret", "Private", "Confidential", "Classified",
-                      "Restricted", "Limited", "Bound", "Tied",
-                      "Connected", "Linked", "Related", "Associated",
-                      "Connected", "Affiliated", "Allied", "United",
-                      "Combined", "Joined", "Merged", "Fused",
-                      "Blended", "Mixed", "Merged", "Integrated",
-                      "Incorporated", "Included", "Contained",
-                      "Enclosed", "Surrounded", "Encircled",
-                      "Enclosed", "Wrapped", "Packaged", "Boxed",
-                      "Crated", "Contained", "Held", "Kept",
-                      "Stored", "Saved", "Preserved", "Maintained",
-                      "Sustained", "Supported", "Upheld", "Backed",
-                      "Endorsed", "Approved", "Accepted", "Recognized",
-                      "Acknowledged", "Admitted", "Confessed",
-                      "Declared", "Announced", "Proclaimed",
-                      "Stated", "Said", "Told", "Spoken", "Expressed",
-                      "Voiced", "Articulated", "Pronounced",
-                      "Enunciated", "Uttered", "Murmured",
-                      "Muttered", "Mumbled", "Whispered",
-                      "Mouthed", "Lipped", "Signed", "Gestured",
-                      "Indicated", "Pointed", "Shown", "Displayed",
-                      "Exhibited", "Presented", "Demonstrated",
-                      "Illustrated", "Exemplified", "Represented",
-                      "Symbolized", "Signified", "Meant", "Implied",
-                      "Suggested", "Hinted", "Intimated", "Insinuated",
-                      "Inferred", "Deduced", "Concluded", "Reasoned",
-                      "Thought", "Believed", "Considered", "Deemed",
-                      "Regarded", "Viewed", "Seen", "Looked",
-                      "Watched", "Observed", "Noticed", "Perceived",
-                      "Sensed", "Felt", "Experienced", "Undergone",
-                      "Endured", "Suffered", "Borne", "Withstood",
-                      "Resisted", "Opposed", "Fought", "Battled",
-                      "Struggled", "Strived", "Striven", "Worked",
-                      "Labored", "Toiled", "Slogged", "Plugged",
-                      "Persevered", "Persisted", "Continued",
-                      "Proceeded", "Progressed", "Advanced",
-                      "Moved", "Gone", "Travelled", "Journeyed",
-                      "Voyaged", "Sailed", "Flown", "Ridden",
-                      "Driven", "Walked", "Run", "Jumped",
-                      "Leaped", "Hopped", "Skipped", "Danced",
-                      "Swayed", "Swung", "Rocked", "Rolled",
-                      "Turned", "Spun", "Whirled", "Twisted",
-                      "Bent", "Curved", "Arched", "Bowed",
-                      "Stooped", "Crouched", "Kneeled", "Knelt",
-                      "Sat", "Lain", "Stood", "Risen", "Fallen",
-                      "Dropped", "Descended", "Sunk", "Submerged",
-                      "Dived", "Plunged", "Immersed", "Soaked",
-                      "Drenched", "Saturated", "Filled", "Packed",
-                      "Crammed", "Stuffed", "Crowded", "Congested",
-                      "Overflowing", "Brimming", "Teeming",
-                      "Abounding", "Thriving", "Flourishing",
-                      "Prospering", "Booming", "Blossoming",
-                      "Blooming", "Growing", "Developing",
-                      "Evolving", "Expanding", "Extending",
-                      "Stretching", "Spreading", "Scattering",
-                      "Dispersing", "Distributing", "Sharing",
-                      "Dividing", "Splitting", "Separating",
-                      "Parting", "Breaking", "Cracking",
-                      "Shattering", "Smashing", "Destroying",
-                      "Ruining", "Wrecking", "Damaging",
-                      "Harming", "Hurting", "Injuring",
-                      "Wounding", "Cutting", "Slashing",
-                      "Stabbing", "Piercing", "Penetrating",
-                      "Puncturing", "Perforating", "Drilling",
-                      "Boring", "Digging", "Excavating",
-                      "Mining", "Quarrying", "Extracting",
-                      "Removing", "Taking", "Getting",
-                      "Obtaining", "Acquiring", "Gaining",
-                      "Earning", "Winning", "Achieving",
-                      "Accomplishing", "Fulfilling", "Completing",
-                      "Finishing", "Ending", "Closing",
-                      "Concluding", "Terminating", "Ceasing",
-                      "Stopping", "Halting", "Pausing",
-                      "Resting", "Relaxing", "Sleeping",
-                      "Dreaming", "Imagining", "Fantasizing",
-                      "Visualizing", "Envisioning", "Picturing",
-                      "Conceiving", "Conceptualizing",
-                      "Theorizing", "Hypothesizing",
-                      "Speculating", "Guessing", "Estimating",
-                      "Calculating", "Computing", "Figuring",
-                      "Counting", "Measuring", "Weighing",
-                      "Balancing", "Comparing", "Contrasting",
-                      "Differentiating", "Distinguishing",
-                      "Discriminating", "Separating",
-                      "Categorizing", "Classifying",
-                      "Organizing", "Arranging", "Ordering",
-                      "Sorting", "Ranking", "Rating",
-                      "Evaluating", "Assessing", "Appraising",
-                      "Judging", "Critiquing", "Reviewing",
-                      "Analyzing", "Examining", "Inspecting",
-                      "Investigating", "Exploring", "Studying",
-                      "Researching", "Searching", "Seeking",
-                      "Looking", "Hunting", "Chasing",
-                      "Pursuing", "Following", "Tracking",
-                      "Tracing", "Finding", "Discovering",
-                      "Detecting", "Locating", "Identifying",
-                      "Recognizing", "Remembering", "Recalling",
-                      "Recollecting", "Reminiscing", "Reflecting",
-                      "Contemplating", "Meditating",
-                      "Concentrating", "Focusing", "Attending",
-                      "Listening", "Hearing", "Eavesdropping",
-                      "Overhearing", "Sounding", "Ringing",
-                      "Chiming", "Tolling", "Knocking",
-                      "Tapping", "Rapping", "Patting",
-                      "Touching", "Feeling", "Handling",
-                      "Grasping", "Gripping", "Holding",
-                      "Clutching", "Clinging", "Grabbing",
-                      "Seizing", "Snatching", "Catching",
-                      "Capturing", "Trapping", "Entangling",
-                      "Ensnaring", "Entrapping", "Catching",
-                      "Netting", "Bagging", "Landing",
-                      "Securing", "Obtaining", "Procuring",
-                      "Fetching", "Retrieving", "Recovering",
-                      "Reclaiming", "Regaining", "Restoring",
-                      "Returning", "Bringing", "Carrying",
-                      "Bearing", "Transporting", "Conveying",
-                      "Transmitting", "Sending", "Dispatching",
-                      "Shipping", "Mailing", "Posting",
-                      "Delivering", "Handing", "Passing",
-                      "Transferring", "Moving", "Shifting",
-                      "Sliding", "Gliding", "Slipping",
-                      "Creeping", "Crawling", "Climbing",
-                      "Scaling", "Ascending", "Clambering",
-                      "Scrambling", "Struggling", "Striving",
-                      "Trying", "Attempting", "Endeavoring",
-                      "Undertaking", "Venturing", "Daring",
-                      "Risking", "Gambling", "Betting",
-                      "Wagering", "Staking", "Pledging",
-                      "Promising", "Vowing", "Swearing",
-                      "Oathing", "Pledging", "Committing",
-                      "Dedicating", "Devoting", "Consecrating",
-                      "Sacrificing", "Offering", "Giving",
-                      "Donating", "Contributing", "Providing",
-                      "Supplying", "Furnishing", "Equipping",
-                      "Arming", "Preparing", "Readying",
-                      "Setting", "Fixing", "Establishing",
-                      "Founding", "Creating", "Making",
-                      "Building", "Constructing", "Erecting",
-                      "Raising", "Lifting", "Hoisting",
-                      "Elevating", "Uplifting", "Boosting",
-                      "Increasing", "Raising", "Growing",
-                      "Expanding", "Enlarging", "Magnifying",
-                      "Amplifying", "Intensifying", "Strengthening",
-                      "Reinforcing", "Fortifying", "Consolidating",
-                      "Solidifying", "Hardening", "Toughening",
-                      "Tempering", "Annealing", "Forging",
-                      "Casting", "Molding", "Shaping",
-                      "Forming", "Fashioning", "Crafting",
-                      "Designing", "Planning", "Scheming",
-                      "Plotting", "Conspiring", "Colluding",
-                      "Cooperating", "Collaborating",
-                      "Coordinating", "Synchronizing",
-                      "Harmonizing", "Aligning", "Matching",
-                      "Pairing", "Coupling", "Linking",
-                      "Connecting", "Joining", "Uniting",
-                      "Combining", "Integrating", "Fusing",
-                      "Merging", "Blending", "Mixing",
-                      "Stirring", "Shaking", "Agitating",
-                      "Disturbing", "Perturbing", "Disrupting",
-                      "Interrupting", "Disturbing", "Bothering",
-                      "Annoying", "Irritating", "Aggravating",
-                      "Exasperating", "Infuriating",
-                      "Enraging", "Angering", "Provoking",
-                      "Inciting", "Instigating", "Fomenting",
-                      "Stirring", "Rousing", "Awakening",
-                      "Waking", "Arising", "Emerging",
-                      "Appearing", "Materializing",
-                      "Manifesting", "Showing", "Displaying",
-                      "Exhibiting", "Revealing", "Disclosing",
-                      "Exposing", "Uncovering", "Unveiling",
-                      "Unmasking", "Unearthing", "Digging",
-                      "Excavating", "Mining", "Extracting",
-                      "Deriving", "Obtaining", "Getting",
-                      "Acquiring", "Gaining", "Winning",
-                      "Earning", "Deserving", "Meriting",
-                      "Warranting", "Justifying", "Validating",
-                      "Confirming", "Verifying", "Authenticating",
-                      "Certifying", "Attesting", "Testifying",
-                      "Witnessing", "Seeing", "Observing",
-                      "Noticing", "Perceiving", "Sensing",
-                      "Feeling", "Experiencing", "Undergoing",
-                      "Suffering", "Enduring", "Tolerating",
-                      "Enduring", "Bearing", "Withstanding",
-                      "Resisting", "Opposing", "Defying",
-                      "Challenging", "Confronting", "Facing",
-                      "Meeting", "Encountering", "Experiencing",
-                      "Undergoing", "Suffering", "Enduring"}
-        first_word = name.split()[0]
-        if first_word in skip_words or len(name) < 4:
-            continue
+    # Pattern 2: Multi-word capitalized phrases
+    for name in extract_capitalized_phrases(
+        source_text, max_words=4, min_length=4, skip_words=SKIP_WORDS_FULL
+    ):
         candidates.append(("phrase", name))
 
-    # Pattern 3: All-caps abbreviations (2-5 chars)
-    for match in re.finditer(r'\b([A-Z]{2,5})\b', source_text):
-        abbrev = match.group(1)
-        # Skip common non-Gwent abbreviations
-        skip_abbrevs = {"THE", "AND", "FOR", "ARE", "BUT", "NOT", "YOU",
-                        "ALL", "ANY", "CAN", "HAD", "HER", "WAS", "ONE",
-                        "OUR", "OUT", "DAY", "GET", "HAS", "HIM", "HIS",
-                        "HOW", "ITS", "MAY", "NEW", "NOW", "OLD", "SEE",
-                        "TWO", "WAY", "WHO", "BOY", "DID", "EYE", "MAN",
-                        "MEN", "MRS", "MRS", "MRS", "MRS", "MRS"}
-        if abbrev in skip_abbrevs:
-            continue
+    # Pattern 3: All-caps abbreviations
+    for abbrev in extract_abbreviations(source_text, skip_abbrevs=SKIP_ABBREVS_FULL):
         candidates.append(("abbrev", abbrev))
 
     # Pattern 4: Words with special Gwent notation
@@ -519,6 +201,7 @@ def extract_candidate_terms(source_text: str) -> list[tuple[str, str]]:
         candidates.append(("phrase", match.group(0)))
 
     return candidates
+
 
 
 def find_unknown_terms(source_text: str, translated_text: str) -> list[dict]:
@@ -606,20 +289,26 @@ def preview_new_terms(source_text: str, translated_text: str) -> list[dict]:
 
 
 def add_to_pending(terms: list[dict]) -> int:
-    """Add terms to pending_terms.md. Returns count added."""
+    """Add terms to pending_terms.md. Returns count added.
+
+    Uses atomic write (temp file + rename) to avoid corruption
+    if two processes run simultaneously.
+    """
+    import os
+    import tempfile
+
     pending_path = _get_ref_path("pending_terms.md")
 
     # Create file with header if not exists
     if not pending_path.exists():
-        pending_path.write_text(
+        content = (
             "# Pending Terms (待审核术语)\n\n"
             "Terms discovered during translation that need human review.\n"
             "After verification, move confirmed entries to the appropriate reference file.\n\n"
-            "---\n\n",
-            encoding="utf-8"
+            "---\n\n"
         )
-
-    content = pending_path.read_text(encoding="utf-8")
+    else:
+        content = pending_path.read_text(encoding="utf-8")
 
     # Check for duplicates
     existing_sources = set()
@@ -628,12 +317,25 @@ def add_to_pending(terms: list[dict]) -> int:
             existing_sources.add(line[4:].strip().lower())
 
     added = 0
-    with open(pending_path, "a", encoding="utf-8") as f:
-        for term in terms:
-            if term["source"].lower() in existing_sources:
-                continue
-            f.write(format_pending_entry(term))
-            added += 1
+    for term in terms:
+        if term["source"].lower() in existing_sources:
+            continue
+        content += format_pending_entry(term)
+        added += 1
+
+    if added > 0:
+        # Atomic write: temp file + rename
+        temp_fd, temp_path = tempfile.mkstemp(
+            dir=str(pending_path.parent), suffix=".md"
+        )
+        try:
+            with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+                f.write(content)
+            os.replace(temp_path, pending_path)
+        except Exception:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            raise
 
     return added
 

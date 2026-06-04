@@ -67,9 +67,11 @@ def extract_skeleton(text: str) -> dict:
         # Table
         if "|" in stripped and stripped.startswith("|"):
             rows = []
+            separators = []
             while i < len(lines) and "|" in lines[i]:
                 row = lines[i].strip()
                 if "---" in row:
+                    separators.append(row)
                     i += 1
                     continue
                 cells = [c.strip() for c in row.split("|")]
@@ -80,7 +82,8 @@ def extract_skeleton(text: str) -> dict:
             if rows:
                 blocks.append({
                     "type": "table",
-                    "rows": rows
+                    "rows": rows,
+                    "separator": separators[0] if separators else None
                 })
             continue
 
@@ -98,10 +101,13 @@ def extract_skeleton(text: str) -> dict:
         # Numbered list
         if re.match(r'^[\s]*\d+\.[\s]', stripped):
             content = re.sub(r'^[\s]*\d+\.[\s]', '', line)
+            number_match = re.match(r'^[\s]*(\d+)\.', stripped)
+            number = int(number_match.group(1)) if number_match else 1
             blocks.append({
                 "type": "numbered_item",
                 "content": content,
-                "indent": len(line) - len(line.lstrip())
+                "indent": len(line) - len(line.lstrip()),
+                "number": number
             })
             i += 1
             continue
@@ -167,16 +173,22 @@ def restore_skeleton(skeleton: dict, translated_blocks: list[str]) -> str:
 
         elif block["type"] == "numbered_item":
             indent = " " * block.get("indent", 0)
-            lines.append(f"{indent}1. {content}")
+            number = block.get("number", 1)
+            lines.append(f"{indent}{number}. {content}")
 
         elif block["type"] == "table":
             # For tables, content should be a list of cell translations
             if isinstance(content, list):
-                for row in content:
+                for idx, row in enumerate(content):
                     if isinstance(row, list):
                         lines.append("| " + " | ".join(row) + " |")
                     else:
                         lines.append(str(row))
+                    # Insert separator after first row if available
+                    if idx == 0:
+                        sep = block.get("separator")
+                        if sep:
+                            lines.append(sep)
             else:
                 # Fallback: just append as-is
                 lines.append(str(content))
