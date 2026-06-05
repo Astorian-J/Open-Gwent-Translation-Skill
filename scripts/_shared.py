@@ -17,6 +17,16 @@ CARD_NAME_PATTERN = re.compile(
 
 ABBREVIATION_PATTERN = re.compile(r'\b([A-Z]{2,5})\b')
 
+# Function words (articles, prepositions, conjunctions) that can appear
+# between capitalized words in card names (e.g., "Geralt of Rivia",
+# "Filavandrel aén Fidháil", "Horst Borsodi").
+FUNCTION_WORDS: frozenset[str] = frozenset({
+    "of", "the", "in", "a", "an", "to", "for", "and", "or",
+    "de", "en", "el", "il", "la", "na", "van", "von", "zu",
+    "var", "aep", "di", "du", "del", "den", "der", "dos",
+    "aén", "áen",  # Elven function words (e.g., Filavandrel aén Fidháil)
+})
+
 # --- Skip sets ---
 
 # Minimal skip words used by context_lock.py and diff_review.py.
@@ -216,6 +226,64 @@ def extract_card_names(text: str, max_length: int = 40) -> Iterator[str]:
         name = match.group(1).strip()
         if len(name) <= max_length:
             yield name
+
+
+def extract_card_names_no_colon(
+    text: str,
+    max_words: int = 5,
+    min_length: int = 4,
+    skip_words: frozenset[str] | None = None,
+) -> Iterator[str]:
+    """Extract card names WITHOUT colons from text.
+
+    Matches patterns like "Paulie Dahlberg", "Horst Borsodi",
+    "Geralt of Rivia", "Filavandrel aén Fidháil".
+
+    Allows function words (of, the, de, van, von, etc.) between
+    capitalized words.
+    """
+    if skip_words is None:
+        skip_words = SKIP_WORDS_MINIMAL
+
+    func_pattern = '|'.join(re.escape(w) for w in FUNCTION_WORDS)
+    # Match: CapitalizedWord + (space + (function_word | CapitalizedWord)) repeated
+    pattern = re.compile(
+        rf'\b([A-Z][a-zA-Z]*(?:\s+(?:{func_pattern}|[A-Z][a-zA-Z]*))'
+        rf'{{1,{max_words}}})\b'
+    )
+    for match in pattern.finditer(text):
+        name = match.group(1).strip()
+        if len(name) >= min_length:
+            first = name.split()[0]
+            if first not in skip_words:
+                yield name
+
+
+def extract_terms_from_markdown(text: str) -> Iterator[str]:
+    """Extract candidate terms from Markdown headers and bold text.
+
+    Markdown headers (## Title) and bold markers (**Name**) often contain
+    card names that paragraph scanners miss.
+    """
+    for line in text.split('\n'):
+        stripped = line.strip()
+
+        # Markdown headers
+        if stripped.startswith('#'):
+            clean = re.sub(r'^#+\s*', '', stripped).strip()
+            clean = re.sub(r'\*\*', '', clean).strip()
+            for name in extract_card_names(clean):
+                yield name
+            for name in extract_card_names_no_colon(clean):
+                yield name
+
+        # Bold text lines (e.g., "**Paulie Dahlberg (6 → 7)**")
+        if '**' in stripped:
+            clean = re.sub(r'\*\*', '', stripped).strip()
+            for name in extract_card_names(clean):
+                yield name
+            for name in extract_card_names_no_colon(clean):
+                yield name
 
 
 def extract_capitalized_phrases(

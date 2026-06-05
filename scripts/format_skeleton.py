@@ -124,7 +124,8 @@ def extract_skeleton(text: str) -> dict:
             l = lines[i]
             s = l.strip()
             if not s or s.startswith("#") or s.startswith(">") or \
-               s.startswith("|") or re.match(r'^[\s]*[-*+\d]', s):
+               s.startswith("|") or re.match(r'^[\s]*[-*+][\s]', s) or \
+               re.match(r'^[\s]*\d+\.[\s]', s):
                 break
             para_lines.append(l)
             i += 1
@@ -134,6 +135,10 @@ def extract_skeleton(text: str) -> dict:
                 "type": "paragraph",
                 "content": "\n".join(para_lines)
             })
+        else:
+            # This line was skipped by paragraph scanner but not handled above.
+            # Skip it to avoid infinite loop.
+            i += 1
         continue
 
     return {"blocks": blocks}

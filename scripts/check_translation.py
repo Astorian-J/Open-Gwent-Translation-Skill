@@ -418,6 +418,117 @@ def check_translation(text: str) -> list[str]:
                 f"({info['notes']}) (context: ...{ctx}...)"
             )
 
+    # 13. Check English residue (untranslated card names)
+    residue_issues = check_english_residue(text)
+    issues.extend(residue_issues)
+
+    return issues
+
+
+def check_english_residue(text: str) -> list[str]:
+    """Scan translated text for untranslated English card names.
+
+    Extracts English capitalized phrases from the Chinese translation,
+    looks them up in card_names.md, and reports any matches as
+    likely missed translations.
+    """
+    issues = []
+
+    # Load card database
+    card_file = _get_ref_path("card_names.md")
+    if not card_file.exists():
+        return issues
+
+    card_map = {}
+    card_text = card_file.read_text(encoding="utf-8")
+    for line in card_text.split("\n"):
+        line = line.strip()
+        if line.startswith("|") and "---" not in line and "English" not in line:
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) >= 4 and parts[1] and parts[2]:
+                en = parts[1]
+                cn = parts[2]
+                if en not in ("English", "—", "") and cn not in ("Chinese", "—", ""):
+                    card_map[en.lower()] = (en, cn)
+
+    if not card_map:
+        return issues
+
+    # Extract English phrases using shared logic (supports function words)
+    import sys
+    script_dir = Path(__file__).parent
+    sys.path.insert(0, str(script_dir))
+    from _shared import (
+        extract_card_names,
+        extract_card_names_no_colon,
+        SKIP_WORDS_MINIMAL,
+    )
+
+    candidates = set()
+
+    # 1. Card names WITH colons (e.g., "Saskia: Commander")
+    for name in extract_card_names(text):
+        candidates.add(name.strip())
+
+    # 2. Card names WITHOUT colons, multi-word (e.g., "Paulie Dahlberg")
+    for name in extract_card_names_no_colon(text, max_words=5, min_length=4):
+        candidates.add(name.strip())
+
+    # 3. Simple 2-4 capitalized-word sequences (fallback)
+    pattern = re.compile(
+        r'\b([A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){1,3})\b'
+    )
+    for match in pattern.finditer(text):
+        candidates.add(match.group(1).strip())
+
+    # 4. Single capitalized words (e.g., "Geralt", "Ciri", "Schirru")
+    #    Must be length >= 4 and not a common skip word
+    single_word_pattern = re.compile(r'\b([A-Z][a-zA-Z]{3,})\b')
+    for match in single_word_pattern.finditer(text):
+        word = match.group(1)
+        if word not in SKIP_WORDS_MINIMAL:
+            candidates.add(word)
+
+    # Non-card-name filters
+    skip_patterns = [
+        re.compile(r'^\d+$'),                    # Pure numbers
+        re.compile(r'[@#]'),                     # Player IDs / tags
+        re.compile(r'https?://|www\.|\.com'),   # URLs
+        re.compile(r'^v?\d+\.\d+'),             # Version numbers like v12.8
+        re.compile(r'^[A-Z]$'),                  # Single letter
+        re.compile(r'^(BC|OP|UP|OTB|RSS|CA|GG|BM|PTS|R[123]|MO|NR|NG|SK|ST|SY|NE)$'),
+                                                  # Known abbreviations
+    ]
+
+    found = set()
+    for phrase in candidates:
+        # Apply filters
+        if any(p.match(phrase) for p in skip_patterns):
+            continue
+
+        # Check against card database
+        key = phrase.lower()
+        if key in card_map:
+            en, cn = card_map[key]
+            if phrase not in found:
+                found.add(phrase)
+                issues.append(
+                    f"English residue: 「{phrase}」→ 「{cn}」 "
+                    f"(found in card_names.md, may be untranslated)"
+                )
+        else:
+            # Try partial match for colon-style card names
+            # e.g., "Geralt" might match "Geralt: Igni"
+            for db_key, (db_en, db_cn) in card_map.items():
+                if key in db_key or db_key in key:
+                    if phrase not in found:
+                        found.add(phrase)
+                        issues.append(
+                            f"English residue: 「{phrase}」→ 「{db_cn}」 "
+                            f"(matches {db_en} in card_names.md)"
+                        )
+                    break
+
     return issues
 
 

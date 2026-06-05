@@ -45,6 +45,12 @@ python scripts/auto_pipeline.py pre source.md --date YYYY-MM --type general
 This automatically performs Step 0~3 (context setup, reference loading,
 context lock, and format skeleton extraction). Do NOT run these steps manually.
 
+> **TRANSLATION DISCIPLINE**: When the pipeline outputs a **card name quick reference table**
+> (a list of English card names and their Chinese translations found in the source),
+> you **MUST** use this table as your sole reference for card names during translation.
+> Do NOT rely on memory. Do NOT skip unfamiliar names. Every card name in the table
+> must be translated using the provided Chinese term.
+
 ---
 
 ### Step 0: Context Setup
@@ -201,6 +207,7 @@ Before output, verify based on direction:
 - [ ] Passive voice converted to active
 - [ ] Arabic numerals throughout
 - [ ] Card names match card_names.md (confirmed section)
+- [ ] **No English residue**: All card names from the quick reference table are translated to Chinese
 - [ ] Ambiguous card names include full subtitle (check ambiguous_names.md)
 - [ ] Abbreviations expanded on first use (BC, OP, CA, etc.)
 - [ ] Chinese parentheses 「（）」used, not English ()
@@ -211,6 +218,7 @@ Before output, verify based on direction:
 **CN → EN checklist**:
 - [ ] "人口" translated as "provision" (formal), "cost" only for SY Tribute
 - [ ] "Y人口X战力" translated as "X for Y" (correct order)
+- [ ] **No Chinese residue**: All Chinese card names are translated to English (verify with card_names.md reverse lookup)
 - [ ] English parentheses () used, not Chinese 「（）」
 - [ ] English colon ":" in card names (e.g., "Geralt: Igni")
 - [ ] Community slang preserved: 气宗 → "no unit", 互口岛 → "armor abuse"

@@ -35,6 +35,8 @@ from _shared import (
     extract_abbreviations,
     extract_capitalized_phrases,
     extract_card_names,
+    extract_card_names_no_colon,
+    extract_terms_from_markdown,
 )
 
 
@@ -55,12 +57,23 @@ def extract_terms_from_source(source_text: str) -> dict[str, str]:
     """Extract candidate terms from English source that need locking."""
     terms = {}
 
+    # Card names with colons (e.g., "Geralt: Igni")
     for name in extract_card_names(source_text):
         terms[name] = ""
 
+    # Card names without colons (e.g., "Paulie Dahlberg", "Horst Borsodi")
+    for name in extract_card_names_no_colon(source_text, max_words=5, min_length=4):
+        terms[name] = ""
+
+    # Terms from Markdown headers and bold text (often missed by paragraph scanners)
+    for name in extract_terms_from_markdown(source_text):
+        terms[name] = ""
+
+    # Capitalized phrases (potential card names / abilities)
     for name in extract_capitalized_phrases(source_text, max_words=3, min_length=4):
         terms[name] = ""
 
+    # Abbreviations
     for abbrev in extract_abbreviations(source_text):
         terms[abbrev] = ""
 

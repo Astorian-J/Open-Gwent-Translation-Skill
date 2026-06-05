@@ -207,6 +207,27 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
         except Exception as e:
             results.append(("WARN", f"learn.py: Test failed ({e})"))
 
+    # Test English residue detection
+    check_script = script_dir / "check_translation.py"
+    if check_script.exists():
+        try:
+            test_content = "这张卡很强。Geralt 和 Ciri 都可以带。"
+            test_file = Path(tempfile.gettempdir()) / "test_residue.txt"
+            test_file.write_text(test_content, encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(check_script), str(test_file)],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if "English residue" in result.stdout:
+                results.append(("PASS", "check_translation.py: English residue detection works"))
+            else:
+                results.append(("WARN", "check_translation.py: English residue not detected in test"))
+        except Exception as e:
+            results.append(("WARN", f"check_translation.py: Residue test failed ({e})"))
+
     return results
 
 

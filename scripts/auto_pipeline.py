@@ -16,6 +16,7 @@ does not need to remember individual steps.
 """
 
 import argparse
+import re
 import subprocess
 import sys
 import tempfile
@@ -24,6 +25,78 @@ from pathlib import Path
 
 def get_script_dir() -> Path:
     return Path(__file__).parent
+
+
+def build_card_lookup_table(source_path: Path) -> list[tuple[str, str]]:
+    """Build a quick reference table of card names found in the source text.
+
+    Returns: list of (english_name, chinese_name) tuples.
+    """
+    from _shared import (
+        extract_abbreviations,
+        extract_capitalized_phrases,
+        extract_card_names,
+        extract_card_names_no_colon,
+        extract_terms_from_markdown,
+    )
+
+    source_text = source_path.read_text(encoding="utf-8")
+
+    # Extract candidate card names from source
+    candidates = set()
+    for name in extract_card_names(source_text):
+        candidates.add(name.strip())
+    for name in extract_card_names_no_colon(source_text, max_words=5, min_length=4):
+        candidates.add(name.strip())
+    for name in extract_terms_from_markdown(source_text):
+        candidates.add(name.strip())
+    for name in extract_capitalized_phrases(source_text, max_words=3, min_length=4):
+        candidates.add(name.strip())
+
+    if not candidates:
+        return []
+
+    # Load card_names.md and build EN -> CN mapping
+    ref_dir = get_script_dir().parent / "references"
+    card_file = ref_dir / "card_names.md"
+    if not card_file.exists():
+        return []
+
+    card_map = {}
+    text = card_file.read_text(encoding="utf-8")
+    for line in text.split("\n"):
+        line = line.strip()
+        if line.startswith("|") and "---" not in line and "English" not in line:
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) >= 4 and parts[1] and parts[2]:
+                en = parts[1]
+                cn = parts[2]
+                if en not in ("English", "—", "") and cn not in ("Chinese", "—", ""):
+                    card_map[en.lower()] = (en, cn)
+
+    # Match candidates against card database
+    results = []
+    for cand in sorted(candidates):
+        key = cand.lower()
+        if key in card_map:
+            results.append(card_map[key])
+        else:
+            # Try partial match (e.g., "Geralt" matches "Geralt: Igni")
+            for db_key, (db_en, db_cn) in card_map.items():
+                if key in db_key or db_key in key:
+                    if (db_en, db_cn) not in results:
+                        results.append((db_en, db_cn))
+                    break
+
+    # Remove duplicates while preserving order
+    seen = set()
+    unique = []
+    for en, cn in results:
+        if en.lower() not in seen:
+            seen.add(en.lower())
+            unique.append((en, cn))
+
+    return unique
 
 
 def run_script(name: str, args: list[str]) -> tuple[bool, str]:
@@ -75,17 +148,30 @@ def pre_translation(source_path: Path, date: str | None, article_type: str) -> s
         lines.append(f"    ⚠ Context lock skipped or failed: {out.strip()}")
     lines.append("")
 
-    # Step 3: Terminology lookup summary
-    lines.append("[3/3] Pre-translation summary")
-    lines.append(f"    Source file: {source_path}")
-    lines.append(f"    Skeleton:    {skeleton_file}")
-    lines.append(f"    Lock table:  {lock_file}")
+    # Step 3: Build card name quick reference table
+    lines.append("[3/3] Building card name quick reference...")
+    quick_ref = build_card_lookup_table(source_path)
+    if quick_ref:
+        lines.append(f"    ✓ Found {len(quick_ref)} card name(s) in source:")
+        lines.append("")
+        lines.append("    | English | Chinese |")
+        lines.append("    |---------|---------|")
+        for en, cn in quick_ref[:30]:
+            lines.append(f"    | {en} | {cn} |")
+        if len(quick_ref) > 30:
+            lines.append(f"    | ... ({len(quick_ref) - 30} more) | ... |")
+    else:
+        lines.append("    ℹ No card names detected in source")
     lines.append("")
-    lines.append("Next steps for the agent:")
+
+    # Summary
+    lines.append("-" * 50)
+    lines.append("Pre-translation complete. Next steps for the agent:")
     lines.append("    1. Read SKILL.md Step 1-4 for translation guidelines")
-    lines.append("    2. Perform the translation")
-    lines.append("    3. Save translation to a file (e.g., translated.txt)")
-    lines.append("    4. Run: python auto_pipeline.py post source.md translated.txt")
+    lines.append("    2. Use the card name quick reference table above")
+    lines.append("    3. Perform the translation")
+    lines.append("    4. Save translation to a file (e.g., translated.txt)")
+    lines.append("    5. Run: python auto_pipeline.py post source.md translated.txt")
     lines.append("")
 
     return "\n".join(lines)
@@ -130,6 +216,45 @@ def post_translation(source_path: Path, translated_path: Path) -> str:
     return "\n".join(lines)
 
 
+def scan_translation(translated_path: Path) -> str:
+    """Standalone scan mode: check a translated file for English residue.
+
+    This is the final defense line after translation. It scans the translated
+    text for any remaining English card names and reports them with suggested
+    Chinese translations.
+    """
+    lines = [
+        "=" * 60,
+        "GWENT TRANSLATION — ENGLISH RESIDUE SCAN",
+        "=" * 60,
+        "",
+        f"File: {translated_path}",
+        "",
+    ]
+
+    # Import directly to avoid subprocess overhead and get structured data
+    sys.path.insert(0, str(get_script_dir()))
+    from check_translation import check_english_residue
+
+    text = translated_path.read_text(encoding="utf-8")
+    issues = check_english_residue(text)
+
+    if issues:
+        lines.append(f"⚠️  Found {len(issues)} English residue(s):")
+        lines.append("")
+        for issue in issues:
+            lines.append(f"  - {issue}")
+        lines.append("")
+        lines.append("-" * 50)
+        lines.append("Action required: Replace the above English card names")
+        lines.append("with their Chinese translations before delivery.")
+    else:
+        lines.append("✅ No English residue found. Translation is clean.")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Gwent Translation Auto-Pipeline")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -144,7 +269,19 @@ def main():
     post.add_argument("source", help="Original source file")
     post.add_argument("translated", help="Translated file")
 
+    scan = subparsers.add_parser("scan", help="Scan translated file for English residue")
+    scan.add_argument("translated", help="Translated file to scan")
+
     args = parser.parse_args()
+
+    if args.command == "scan":
+        translated_path = Path(args.translated)
+        if not translated_path.exists():
+            print(f"Error: Translated file not found: {args.translated}")
+            sys.exit(1)
+        report = scan_translation(translated_path)
+        print(report)
+        sys.exit(0)
 
     source_path = Path(args.source)
     if not source_path.exists():
