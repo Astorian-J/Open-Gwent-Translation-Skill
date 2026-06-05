@@ -231,6 +231,20 @@ def find_unknown_terms(source_text: str, translated_text: str) -> list[dict]:
         if found_parent:
             continue
 
+        # For colon-style card names, if the prefix is a known standalone card
+        # and the suffix doesn't appear in ANY card name in the database,
+        # skip it as a likely sentence fragment (not a real card).
+        # This catches cases like "Syanna: Duchess" where "Syanna" is a card
+        # but "Duchess" is not a card subtitle.
+        if term_type == "card" and ":" in term_text:
+            parts = term_text.split(":", 1)
+            prefix = parts[0].strip().lower()
+            suffix = parts[1].strip().lower() if len(parts) > 1 else ""
+            if prefix in known and suffix:
+                suffix_in_db = any(suffix in k for k in known)
+                if not suffix_in_db:
+                    continue
+
         # Check if already in pending
         pending = load_pending_terms()
         in_pending = any(p.get("source", "").lower() == key for p in pending)
