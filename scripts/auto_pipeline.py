@@ -105,7 +105,15 @@ def run_script(name: str, args: list[str]) -> tuple[bool, str]:
     if not script.exists():
         return False, f"Script not found: {script}"
     cmd = [sys.executable, str(script)] + args
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired as e:
+        output = e.stdout or ""
+        if e.stderr:
+            output += "\n[stderr] " + e.stderr
+        output += "\n[timeout] Script exceeded 120s and was terminated."
+        return False, output
+
     output = result.stdout
     if result.stderr:
         output += "\n[stderr] " + result.stderr
