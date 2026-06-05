@@ -1287,6 +1287,7 @@ Verified against server card_data.json (1260 cards, 2026-06-05).
 | Carapace | 坚硬甲壳 | 131101 | 怪兽 |
 | Force of Nature | 自然之力 | 132103 | 怪兽 |
 | Fruits of Ysgith | 沼泽果实 | 202117 | 怪兽 |
+| Gernichora | 格尼阔拉 | — | 怪兽 |
 | Overwhelming Hunger | 无尽渴望 | 202572 | 怪兽 |
 | White Frost | 白霜降临 | 200055 | 怪兽 |
 | Call of Harmony | 和谐之唤 | 202188 | 松鼠党 |
