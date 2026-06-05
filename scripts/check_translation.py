@@ -136,8 +136,8 @@ def load_abbreviations():
 
 
 def load_ambiguous_names():
-    """Load ambiguous card names (base name -> list of full names)"""
-    ambiguous = {}
+    """Load ambiguous card names (base name -> list of (en, cn) tuples)."""
+    ambiguous: dict[str, list[tuple[str, str]]] = {}
     ambig_file = _get_ref_path("ambiguous_names.md")
     if not ambig_file.exists():
         return ambiguous
@@ -154,8 +154,11 @@ def load_ambiguous_names():
                 ambiguous[current_base] = []
         elif current_base and line.startswith("|") and "---" not in line and "Full Name" not in line:
             parts = [p.strip() for p in line.split("|")]
-            if len(parts) >= 3 and parts[1] and parts[1] != "Full Name":
-                ambiguous[current_base].append(parts[1])
+            if len(parts) >= 4 and parts[1] and parts[1] != "Full Name":
+                en = parts[1]
+                cn = parts[2] if len(parts) > 2 else ""
+                if en:
+                    ambiguous[current_base].append((en, cn))
 
     return ambiguous
 
@@ -308,8 +311,8 @@ def check_translation(text: str) -> list[str]:
     # 6. Check ambiguous card names (base name without subtitle)
     for base_name, versions in ambiguous.items():
         if base_name in text:
-            # Check if any full version is present
-            has_full = any(v in text for v in versions)
+            # Check if any full version (EN or CN) is present in the text
+            has_full = any(en in text or (cn and cn in text) for en, cn in versions)
             if not has_full:
                 issues.append(
                     f"ambiguous name: 「{base_name}」has multiple versions ({len(versions)}). "

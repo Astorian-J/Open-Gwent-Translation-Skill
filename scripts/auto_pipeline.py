@@ -166,12 +166,20 @@ def pre_translation(source_path: Path, date: str | None, article_type: str) -> s
 
     # Summary
     lines.append("-" * 50)
-    lines.append("Pre-translation complete. Next steps for the agent:")
-    lines.append("    1. Read SKILL.md Step 1-4 for translation guidelines")
-    lines.append("    2. Use the card name quick reference table above")
-    lines.append("    3. Perform the translation")
-    lines.append("    4. Save translation to a file (e.g., translated.txt)")
-    lines.append("    5. Run: python auto_pipeline.py post source.md translated.txt")
+    lines.append("Pre-translation complete.")
+    lines.append("")
+
+    # Mandatory next-step reminder — designed to be unmissable by LLMs
+    lines.append("🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴")
+    lines.append("🔴  MANDATORY NEXT STEP — DO NOT SKIP                        🔴")
+    lines.append("🔴                                                             🔴")
+    lines.append("🔴  1. Perform the translation using the quick reference above 🔴")
+    lines.append("🔴  2. Save translation to a file (e.g., translated.txt)       🔴")
+    lines.append("🔴  3. Run: python auto_pipeline.py post source.md translated.txt")
+    lines.append("🔴                                                             🔴")
+    lines.append("🔴  You MUST run 'post' after translation. Do NOT deliver      🔴")
+    lines.append("🔴  the translation without running post first.               🔴")
+    lines.append("🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴 🔴")
     lines.append("")
 
     return "\n".join(lines)
@@ -213,6 +221,17 @@ def post_translation(source_path: Path, translated_path: Path) -> str:
             lines.append(line)
     lines.append("")
 
+    # Mandatory next-step reminder
+    lines.append("🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡")
+    lines.append("🟡  MANDATORY NEXT STEP — DO NOT SKIP                        🟡")
+    lines.append("🟡                                                             🟡")
+    lines.append("🟡  Run: python scripts/completeness_guard.py                 🟡")
+    lines.append("🟡                                                             🟡")
+    lines.append("🟡  You MUST run the guard BEFORE delivering the translation  🟡")
+    lines.append("🟡  to the user. Do NOT ignore guard output.                  🟡")
+    lines.append("🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡 🟡")
+    lines.append("")
+
     return "\n".join(lines)
 
 
@@ -248,8 +267,13 @@ def scan_translation(translated_path: Path) -> str:
         lines.append("-" * 50)
         lines.append("Action required: Replace the above English card names")
         lines.append("with their Chinese translations before delivery.")
+        lines.append("")
+        lines.append("🔴 After fixing, re-run: python auto_pipeline.py scan translated.txt")
     else:
         lines.append("✅ No English residue found. Translation is clean.")
+        lines.append("")
+        lines.append("If you have not yet run post-processing:")
+        lines.append("  python auto_pipeline.py post source.md translated.txt")
 
     lines.append("")
     return "\n".join(lines)
