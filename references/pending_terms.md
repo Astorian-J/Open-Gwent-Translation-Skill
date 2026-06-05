@@ -12,9 +12,4 @@ Rules for confirming:
 
 ---
 
-### Syanna: Duchess
-- Type: card
-- Suggested: (translate and verify)
-- Confidence: low
-- Discovered: 2026-06-03
-- Status: pending review
+# (empty — all pending terms reviewed and resolved)
