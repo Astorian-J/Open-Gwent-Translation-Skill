@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+"""Term Authority Enforcer.
+
+Validates that a translated text uses the official translations locked during
+pre-processing. Catches terms left untranslated (including abbreviations and
+aliases) and ambiguous names that were not disambiguated.
+
+Usage:
+    python term_enforcer.py translated.txt --lock lock.json
+    python term_enforcer.py translated.txt --source source.md
+    python term_enforcer.py translated.txt --lock lock.json --json
+"""
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+from _shared import json_output
+
+
+def build_lock_from_source(source_path: Path) -> Path:
+    """Run context_lock.py build and return the generated lock file path."""
+    lock_file = Path(tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", prefix="gwent_lock_enforcer_", delete=False
+    ).name)
+    result = subprocess.run(
+        [sys.executable, str(Path(__file__).parent / "context_lock.py"),
+         "build", str(source_path), "--output", str(lock_file)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"context_lock.py build failed: {result.stderr or result.stdout}")
+    return lock_file
+
+
+def load_lock(lock_file: Path) -> dict:
+    """Load a context lock file."""
+    return json.loads(lock_file.read_text(encoding="utf-8"))
+
+
+def count_occurrences(text: str, targets: list[str]) -> int:
+    """Count how many times any of the targets appears as a whole word/phrase."""
+    count = 0
+    text_lower = text.lower()
+    for target in targets:
+        target = target.strip().lower()
+        if not target:
+            continue
+        # Use word boundary for short terms; substring match for longer phrases.
+        if len(target) <= 3:
+            pattern = rf"\b{re.escape(target)}\b"
+        else:
+            pattern = rf"{re.escape(target)}"
+        count += len(re.findall(pattern, text_lower))
+    return count
+
+
+def get_context_snippet(text: str, target: str, radius: int = 30) -> str:
+    """Return a short snippet around the first occurrence of target."""
+    text_lower = text.lower()
+    target_lower = target.lower()
+    if len(target) <= 3:
+        pattern = rf"\b{re.escape(target_lower)}\b"
+    else:
+        pattern = rf"{re.escape(target_lower)}"
+    match = re.search(pattern, text_lower)
+    if not match:
+        return ""
+    start = max(0, match.start() - radius)
+    end = min(len(text), match.end() + radius)
+    snippet = text[start:end].replace("\n", " ")
+    return snippet.strip()
+
+
+def enforce_terms(translated_path: Path, lock: dict) -> dict:
+    """Check translated text against the lock table.
+
+    Returns:
+        dict with violation_count, violations, pass_count, locked_terms_checked.
+    """
+    translation = translated_path.read_text(encoding="utf-8")
+    violations: list[dict] = []
+    passed = 0
+    checked = 0
+
+    for term, info in lock.get("terms", {}).items():
+        status = info.get("status", "pending")
+        variants = info.get("variants", [])
+
+        if status == "ambiguous" and variants:
+            checked += 1
+            variant_cns = [v["cn"] for v in variants if v.get("cn")]
+            found = any(vcn in translation for vcn in variant_cns)
+            if found:
+                passed += 1
+            else:
+                expected = " / ".join(variant_cns)
+                violations.append({
+                    "term": term,
+                    "canonical_en": info.get("canonical_en", term),
+                    "expected_cn": expected,
+                    "found_in_translation": "",
+                    "issue_type": "ambiguous_not_disambiguated",
+                    "context": get_context_snippet(translation, term),
+                    "severity": "error",
+                })
+            continue
+
+        if status not in ("confirmed", "auto_locked"):
+            continue
+
+        cn_term = info.get("cn", "")
+        if not cn_term:
+            continue
+
+        checked += 1
+        canonical_en = info.get("canonical_en", term)
+        cn_variants = [v.strip() for v in cn_term.split("/") if v.strip()]
+
+        # Targets that should NOT appear in the target-language text.
+        en_targets = [canonical_en, term]
+        for abbrev in info.get("abbrevs", []):
+            en_targets.append(abbrev.strip())
+        for alias in info.get("aliases", []):
+            en_targets.append(alias.strip())
+
+        en_in_translation = count_occurrences(translation, en_targets)
+        cn_in_translation = count_occurrences(translation, cn_variants)
+
+        if cn_in_translation > 0:
+            passed += 1
+        elif en_in_translation > 0:
+            # English/abbreviation/alias still present — untranslated.
+            violations.append({
+                "term": term,
+                "canonical_en": canonical_en,
+                "expected_cn": cn_term,
+                "found_in_translation": ", ".join(
+                    t for t in en_targets
+                    if count_occurrences(translation, [t]) > 0
+                ) or "(english term)",
+                "issue_type": "term_left_untranslated",
+                "context": get_context_snippet(translation, term),
+                "severity": "error",
+            })
+        else:
+            # Neither official CN nor EN/abbrev appears — term may be missing
+            # or translated literally with an unrecognized phrase.
+            violations.append({
+                "term": term,
+                "canonical_en": canonical_en,
+                "expected_cn": cn_term,
+                "found_in_translation": "",
+                "issue_type": "term_missing_or_literal",
+                "context": get_context_snippet(translation, term),
+                "severity": "warning",
+            })
+
+    return {
+        "violation_count": len(violations),
+        "violations": violations,
+        "pass_count": passed,
+        "locked_terms_checked": checked,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Term Authority Enforcer")
+    parser.add_argument("translated", help="Translated file to check")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--lock", help="Context lock JSON file")
+    group.add_argument("--source", help="Source file (auto-build lock)")
+    parser.add_argument("--json", action="store_true", help="Output structured JSON")
+    args = parser.parse_args()
+
+    translated_path = Path(args.translated)
+    if not translated_path.exists():
+        if args.json:
+            json_output(None, errors=[f"translated file not found: {args.translated}"], exit_code=1)
+        print(f"Error: translated file not found: {args.translated}")
+        sys.exit(1)
+
+    if args.lock:
+        lock_file = Path(args.lock)
+        if not lock_file.exists():
+            if args.json:
+                json_output(None, errors=[f"lock file not found: {args.lock}"], exit_code=1)
+            print(f"Error: lock file not found: {args.lock}")
+            sys.exit(1)
+    else:
+        source_path = Path(args.source)
+        if not source_path.exists():
+            if args.json:
+                json_output(None, errors=[f"source file not found: {args.source}"], exit_code=1)
+            print(f"Error: source file not found: {args.source}")
+            sys.exit(1)
+        lock_file = build_lock_from_source(source_path)
+
+    lock = load_lock(lock_file)
+    result = enforce_terms(translated_path, lock)
+
+    if args.json:
+        json_output(result, exit_code=1 if result["violation_count"] > 0 else 0)
+
+    print("=" * 60)
+    print("TERM AUTHORITY ENFORCEMENT")
+    print("=" * 60)
+    print()
+    print(f"Checked: {result['locked_terms_checked']} locked terms")
+    print(f"Passed:  {result['pass_count']}")
+    print(f"Issues:  {result['violation_count']}")
+    print()
+
+    if result["violations"]:
+        print("VIOLATIONS")
+        print("-" * 60)
+        for v in result["violations"]:
+            print(f"- {v['term']} ({v['issue_type']})")
+            print(f"  Expected: 「{v['expected_cn']}」")
+            if v["found_in_translation"]:
+                print(f"  Found:    「{v['found_in_translation']}」")
+            if v.get("context"):
+                print(f"  Context:  ...{v['context']}...")
+            print()
+        print("[BLOCKED] Term authority violations must be resolved before finalizing.")
+        sys.exit(1)
+
+    print("[PASS] All locked terms correctly translated.")
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

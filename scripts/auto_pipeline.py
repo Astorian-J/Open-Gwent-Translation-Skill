@@ -24,7 +24,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import json_output
+from _shared import json_output, TermAuthority
 
 
 # Scripts that already support --json in Phase 1.
@@ -115,6 +115,65 @@ def build_card_lookup_table(source_path: Path) -> list[tuple[str, str]]:
     return results
 
 
+def build_term_authority_report(lock_file: Path) -> dict:
+    """Build the mandatory term authority report from a context lock file.
+
+    The lock file is produced by context_lock.py build and contains terms
+    with status: auto_locked, ambiguous, or pending.
+    """
+    default = {
+        "locked_count": 0,
+        "ambiguous_count": 0,
+        "pending_count": 0,
+        "locked_terms": [],
+        "ambiguous_terms": [],
+        "pending_terms": [],
+    }
+    if not lock_file.exists():
+        return default
+
+    try:
+        lock = json.loads(lock_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return default
+
+    locked_terms: list[dict] = []
+    ambiguous_terms: list[dict] = []
+    pending_terms: list[dict] = []
+
+    for term, info in lock.get("terms", {}).items():
+        status = info.get("status", "pending")
+        if status == "auto_locked":
+            locked_terms.append({
+                "extracted": term,
+                "canonical_en": info.get("canonical_en", term),
+                "chinese": info.get("cn", ""),
+                "type": info.get("type", ""),
+                "source_ref": info.get("source_ref", ""),
+                "aliases": info.get("aliases", []),
+                "abbrevs": info.get("abbrevs", []),
+            })
+        elif status == "ambiguous":
+            ambiguous_terms.append({
+                "extracted": term,
+                "canonical_en": info.get("canonical_en", term),
+                "type": info.get("type", ""),
+                "source_ref": info.get("source_ref", ""),
+                "variants": info.get("variants", []),
+            })
+        else:
+            pending_terms.append({"extracted": term, "status": status})
+
+    return {
+        "locked_count": len(locked_terms),
+        "ambiguous_count": len(ambiguous_terms),
+        "pending_count": len(pending_terms),
+        "locked_terms": locked_terms,
+        "ambiguous_terms": ambiguous_terms,
+        "pending_terms": pending_terms,
+    }
+
+
 def run_script(name: str, args: list[str], json_mode: bool = False) -> tuple[bool, str, dict | None]:
     """Run a sub-script and return (success, output, parsed_json).
 
@@ -180,7 +239,10 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
     if not ok:
         all_ok = False
 
-    # Step 3: Build card name quick reference table
+    # Step 3: Build term authority report from lock file
+    term_authority = build_term_authority_report(lock_file)
+
+    # Step 4: Build card name quick reference table
     quick_ref = build_card_lookup_table(source_path)
 
     if json_mode:
@@ -195,6 +257,7 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
             "lock_path": str(lock_file),
             "card_references_found": len(quick_ref),
             "card_references": [{"english": en, "chinese": cn} for en, cn in quick_ref],
+            "term_authority": term_authority,
         }
         return data, all_ok
 
@@ -225,19 +288,65 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
         lines.append(f"    [WARN] Context lock skipped or failed: {out.strip()}")
     lines.append("")
 
-    lines.append("[3/3] Building card name quick reference...")
-    if quick_ref:
-        lines.append(f"    [OK] Found {len(quick_ref)} card name(s) in source:")
+    lines.append("[3/3] Building mandatory term lock table...")
+    lines.append(f"    [OK] {term_authority['locked_count']} locked, "
+                 f"{term_authority['ambiguous_count']} ambiguous, "
+                 f"{term_authority['pending_count']} pending")
+    lines.append("")
+
+    if term_authority["locked_terms"]:
+        lines.append("    MANDATORY TERM LOCK TABLE")
+        lines.append("    Use these exact translations. Do not translate literally.")
         lines.append("")
+        lines.append("    | Extracted | Canonical EN | Chinese | Source |")
+        lines.append("    |-----------|--------------|---------|--------|")
+        for item in term_authority["locked_terms"][:30]:
+            aliases = ", ".join(item.get("aliases", []))
+            abbrevs = ", ".join(item.get("abbrevs", []))
+            extras = ""
+            if aliases:
+                extras += f" aliases={aliases}"
+            if abbrevs:
+                extras += f" abbrevs={abbrevs}"
+            lines.append(
+                f"    | {item['extracted']} | {item['canonical_en']} | "
+                f"{item['chinese']} | {item['source_ref']}{extras} |"
+            )
+        if len(term_authority["locked_terms"]) > 30:
+            lines.append(
+                f"    | ... ({len(term_authority['locked_terms']) - 30} more) | ... | ... | ... |"
+            )
+        lines.append("")
+
+    if term_authority["ambiguous_terms"]:
+        lines.append("    AMBIGUOUS NAMES — disambiguate with full subtitle")
+        for item in term_authority["ambiguous_terms"][:10]:
+            variants = " / ".join(v["cn"] for v in item.get("variants", []) if v.get("cn"))
+            lines.append(f"    - {item['extracted']} ({item['canonical_en']}): {variants}")
+        if len(term_authority["ambiguous_terms"]) > 10:
+            lines.append(f"    - ... ({len(term_authority['ambiguous_terms']) - 10} more)")
+        lines.append("")
+
+    if term_authority["pending_terms"]:
+        lines.append("    PENDING TERMS — not in reference database")
+        for item in term_authority["pending_terms"][:10]:
+            lines.append(f"    - {item['extracted']}")
+        if len(term_authority["pending_terms"]) > 10:
+            lines.append(f"    - ... ({len(term_authority['pending_terms']) - 10} more)")
+        lines.append("")
+
+    if quick_ref:
+        lines.append("    Card name quick reference:")
         lines.append("    | English | Chinese |")
         lines.append("    |---------|---------|")
-        for en, cn in quick_ref[:30]:
+        for en, cn in quick_ref[:20]:
             lines.append(f"    | {en} | {cn} |")
-        if len(quick_ref) > 30:
-            lines.append(f"    | ... ({len(quick_ref) - 30} more) | ... |")
+        if len(quick_ref) > 20:
+            lines.append(f"    | ... ({len(quick_ref) - 20} more) | ... |")
+        lines.append("")
     else:
-        lines.append("    [INFO] No card names detected in source")
-    lines.append("")
+        lines.append("    [INFO] No additional card names detected in source")
+        lines.append("")
 
     lines.append("-" * 50)
     lines.append("Pre-translation complete.")

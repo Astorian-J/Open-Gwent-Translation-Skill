@@ -14,7 +14,9 @@ Exit code:
 """
 
 import argparse
+import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -159,12 +161,57 @@ def check_chinese_residue(text: str, ref_dir: Path) -> list[str]:
     return issues
 
 
+def check_context_lock_terms(translated_path: Path, source_path: Path | None) -> list[str]:
+    """Delegate context-lock term enforcement to term_enforcer.py.
+
+    If no source file is provided, the check cannot run automatically.
+    """
+    if source_path is None:
+        return []
+
+    script = Path(__file__).parent / "term_enforcer.py"
+    if not script.exists():
+        return []
+
+    result = subprocess.run(
+        [sys.executable, str(script), str(translated_path), "--source", str(source_path), "--json"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if result.returncode == 0:
+        return []
+
+    try:
+        parsed = json.loads(result.stdout)
+    except (json.JSONDecodeError, ValueError):
+        return []
+
+    data = parsed.get("data", {})
+    issues: list[str] = []
+    for v in data.get("violations", []):
+        msg = f"{v['issue_type']}: 「{v['term']}」expected 「{v['expected_cn']}」"
+        if v.get("found_in_translation"):
+            msg += f", found 「{v['found_in_translation']}」"
+        issues.append(msg)
+    return issues
+
+
 def run_phase_c_check(
     text: str,
     direction: str,
     ref_dir: Path,
+    translated_path: Path | None = None,
+    source_path: Path | None = None,
 ) -> tuple[list[str], list[str]]:
     """Run Phase C rules against text.
+
+    Args:
+        text: Translated text content.
+        direction: "encn" or "cnen".
+        ref_dir: References directory.
+        translated_path: Path to translated file (needed for term_enforcer).
+        source_path: Path to source file (needed for term_enforcer).
 
     Returns:
         (automated_issues, manual_warnings)
@@ -212,6 +259,12 @@ def run_phase_c_check(
             elif rid == "encn-06":
                 for issue in check_ambiguous_names(text, ref_dir):
                     automated_issues.append(f"[{rid}] {issue}")
+            elif rid == "encn-10":
+                if translated_path and source_path:
+                    for issue in check_context_lock_terms(translated_path, source_path):
+                        automated_issues.append(f"[{rid}] {issue}")
+                else:
+                    manual_warnings.append(f"[{rid}] {rule['description']} — {message}")
             elif rid == "cnen-03":
                 for issue in check_chinese_residue(text, ref_dir):
                     automated_issues.append(f"[{rid}] {issue}")
@@ -249,6 +302,7 @@ def main() -> None:
         choices=["encn", "cnen"],
         help="Translation direction (auto-detected if omitted)",
     )
+    parser.add_argument("--source", help="Source file for term authority check")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     args = parser.parse_args()
 
@@ -262,8 +316,11 @@ def main() -> None:
     text = file_path.read_text(encoding="utf-8")
     direction = args.direction or detect_direction(text)
     ref_dir = Path(__file__).parent.parent / "references"
+    source_path = Path(args.source) if args.source else None
 
-    automated_issues, manual_warnings = run_phase_c_check(text, direction, ref_dir)
+    automated_issues, manual_warnings = run_phase_c_check(
+        text, direction, ref_dir, translated_path=file_path, source_path=source_path
+    )
 
     if args.json:
         data = {

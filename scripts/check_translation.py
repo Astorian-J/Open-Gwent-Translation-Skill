@@ -11,7 +11,9 @@ Rules are loaded from references/ directory to stay in sync.
 """
 
 import argparse
+import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -562,6 +564,36 @@ def auto_fix(text: str) -> tuple[str, int]:
     return fixed, count
 
 
+def check_term_authority_violations(translated_path: Path, source_path: Path) -> list[str]:
+    """Run term_enforcer.py and return formatted issue strings."""
+    script = Path(__file__).parent / "term_enforcer.py"
+    if not script.exists():
+        return []
+
+    result = subprocess.run(
+        [sys.executable, str(script), str(translated_path), "--source", str(source_path), "--json"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if result.returncode == 0:
+        return []
+
+    try:
+        parsed = json.loads(result.stdout)
+    except (json.JSONDecodeError, ValueError):
+        return []
+
+    data = parsed.get("data", {})
+    issues: list[str] = []
+    for v in data.get("violations", []):
+        msg = f"term authority: 「{v['term']}」expected 「{v['expected_cn']}」"
+        if v.get("found_in_translation"):
+            msg += f", found 「{v['found_in_translation']}」"
+        issues.append(msg)
+    return issues
+
+
 # Issue prefixes used to derive structured categories for --json output.
 ISSUE_CATEGORIES = {
     "provision mix:": "provision_mix",
@@ -579,6 +611,7 @@ ISSUE_CATEGORIES = {
     "homophone:": "homophone",
     "deck abbreviation:": "deck_abbreviation",
     "English residue:": "english_residue",
+    "term authority:": "term_authority_violation",
 }
 
 
@@ -593,6 +626,7 @@ def categorize_issue(issue: str) -> dict[str, str]:
 def main():
     parser = argparse.ArgumentParser(description="Gwent translation terminology checker")
     parser.add_argument("file", help="File to check")
+    parser.add_argument("--source", help="Source file for term authority enforcement")
     parser.add_argument("--fix", action="store_true", help="Auto-fix provision-terminology errors only (费→人口)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     args = parser.parse_args()
@@ -606,6 +640,13 @@ def main():
 
     text = path.read_text(encoding="utf-8")
     issues = check_translation(text)
+
+    if args.source:
+        source_path = Path(args.source)
+        if source_path.exists():
+            issues.extend(check_term_authority_violations(path, source_path))
+        else:
+            issues.append(f"term authority: source file not found: {args.source}")
 
     # Apply auto-fix before emitting any output so JSON reports accurate counts.
     auto_fixed_count = 0

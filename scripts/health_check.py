@@ -87,6 +87,10 @@ def check_scripts(script_dir: Path) -> list[tuple[str, str]]:
         ("format_skeleton.py", "Format skeleton"),
         ("diff_review.py", "Diff review"),
         ("backtranslate.py", "Back-translation"),
+        ("term_enforcer.py", "Term authority enforcer"),
+        ("auto_pipeline.py", "Auto pipeline"),
+        ("completeness_guard.py", "Completeness guard"),
+        ("phase_c_check.py", "Phase C checker"),
     ]
 
     for fname, desc in required_scripts:

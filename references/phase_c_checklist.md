@@ -26,7 +26,7 @@ Manual rules are surfaced as warnings that a human must confirm.
 | encn-07 | Abbreviations expanded on first use | manual | competitive_terms.md | abbreviation used — confirm it is expanded on first use | Requires semantic/contextual judgment |
 | encn-08 | Chinese parentheses used, not English () | regex_forbidden | `\([^）]*\)` | English parentheses: 「{match}」— use Chinese brackets 「（）」 | English parens in Chinese text |
 | encn-09 | Chinese colon "：" in card names | regex_forbidden | `[一-鿿][A-Za-z]+:` | English colon after Chinese: 「{match}」— use Chinese colon "：" | e.g. "杰洛特:Igni" |
-| encn-10 | Context lock terms used consistently | manual | context_lock.json | context lock terms — verify consistency throughout article | Requires semantic consistency check |
+| encn-10 | Context lock terms used consistently | reference | context_lock.json | context lock violation: {issue} | Requires --source to run term_enforcer.py |
 
 ## CN → EN Rules
 

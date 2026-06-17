@@ -49,11 +49,17 @@ python scripts/auto_pipeline.py pre source.md --date YYYY-MM --type general
 This automatically performs context setup, reference loading, context lock,
 and format skeleton extraction. These steps should not be run manually.
 
-> **TRANSLATION DISCIPLINE**: When the pipeline outputs a **card name quick reference table**
-> (a list of English card names and their Chinese translations found in the source),
-> use this table as your sole reference for card names during translation.
-> Do not rely on memory or skip unfamiliar names. Every card name in the table
-> should be translated using the provided Chinese term.
+> **TRANSLATION DISCIPLINE**: The pipeline outputs a **MANDATORY TERM LOCK TABLE** in
+> `term_authority.locked_terms`. You MUST use the provided Chinese translations exactly
+> as given. This table includes card names, terminology, and resolved abbreviations/aliases
+> (e.g., "OTB" → "Off the Books" → "黑市买卖").
+>
+> **DO NOT translate locked terms literally.** If a term appears in the lock table, use
+> its provided Chinese translation. If a term is marked **ambiguous**, use the full
+> subtitle form (e.g., "Geralt: Igni", not just "Geralt").
+>
+> Terms marked **pending** are not in the reference database. Translate them using your
+> judgment, then add them to the lock table if they recur.
 
 ---
 
@@ -103,6 +109,7 @@ For detailed step-by-step guidance, see `references/translation_workflow.md`.
 - [ ] Abbreviations expanded on first use (BC, OP, CA, etc.)
 - [ ] Chinese parentheses 「（）」used, not English ()
 - [ ] Chinese colon "：" in card names
+- [ ] **Term authority compliance**: All locked terms from the pre-translation table are used with their official translations. No literal translations of abbreviations or aliases.
 - [ ] Context lock terms used consistently throughout article
 
 **CN → EN**:
@@ -119,12 +126,12 @@ The above checklist is also available in machine-checkable form in
 `references/phase_c_checklist.md`. After saving your translation, run:
 
 ```bash
-python scripts/phase_c_check.py translated.txt
+python scripts/phase_c_check.py translated.txt --source source.md
 ```
 
-This executes all automated rules and lists any manual items that still
-require review. The final `completeness_guard.py` gate also runs
-Phase C checks automatically.
+For `encn-10` (term authority), the `--source` flag is required; without it the check
+falls back to a manual warning. The final `completeness_guard.py` gate also runs
+term authority checks automatically when `--source` is provided.
 
 ---
 

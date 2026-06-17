@@ -8,6 +8,7 @@ across learn.py, context_lock.py, and diff_review.py.
 import re
 import sys
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 # --- JSON output helper (agent-agnostic) ---
@@ -339,3 +340,497 @@ def parse_markdown_table(text: str, min_columns: int = 3) -> list[dict[str, str]
         rows.append(row)
 
     return rows
+
+
+# --- Unified Term Authority ---
+
+
+class TermAuthority:
+    """Unified resolver for Gwent terms, card names, aliases, and abbreviations.
+
+    Loads all reference files under `references/` and provides a single lookup
+    interface. This is the source-of-truth layer used by `context_lock.py`,
+    `auto_pipeline.py`, `term_enforcer.py`, and other scripts.
+
+    The authority is read-only: it never writes to reference files. It resolves
+    English terms, Chinese terms, aliases, abbreviations, and misspellings to
+    their canonical English + Chinese pair.
+    """
+
+    def __init__(self, ref_dir: "Path | str | None" = None) -> None:
+        if ref_dir is None:
+            ref_dir = Path(__file__).parent.parent / "references"
+        self.ref_dir = Path(ref_dir)
+
+        # canonical_en_lower -> entry dict
+        self._entries: dict[str, dict] = {}
+        # cn -> entry dict (multiple CN may map to same EN; first wins)
+        self._cn_entries: dict[str, dict] = {}
+        # alias/abbreviation -> canonical_en_lower
+        self._alias_to_en: dict[str, str] = {}
+        self._abbrev_to_en: dict[str, str] = {}
+        # wrong_cn -> correct_cn (from renamed/corrected and fuzzy fixes)
+        self._cn_corrections: dict[str, str] = {}
+        # base name lower -> list of variant dicts
+        self._ambiguous: dict[str, list[dict]] = {}
+
+        self._loaded = False
+        self._load_all()
+
+    def _load_all(self) -> None:
+        if self._loaded:
+            return
+        self._load_card_names()
+        self._load_terminology_map()
+        self._load_reverse_terminology_map()
+        self._load_competitive_terms()
+        self._load_keywords_map()
+        self._load_ambiguous_names()
+        self._load_cn_fuzzy_fixes()
+        self._load_correction_guide()
+        self._loaded = True
+
+    # -- registration helpers --
+
+    def _register(
+        self,
+        en: str,
+        cn: str,
+        source: str,
+        term_type: str,
+        aliases: list[str] | None = None,
+        abbrevs: list[str] | None = None,
+    ) -> None:
+        """Register a canonical EN <-> CN mapping."""
+        en = en.strip()
+        cn = cn.strip()
+        if not en or not cn:
+            return
+
+        en_lower = en.lower()
+        entry = self._entries.get(en_lower)
+        if entry is None:
+            entry = {
+                "canonical_en": en,
+                "cn": cn,
+                "source": source,
+                "type": term_type,
+                "aliases": list(aliases or []),
+                "abbrevs": list(abbrevs or []),
+            }
+            self._entries[en_lower] = entry
+        else:
+            # Same canonical EN seen again; merge aliases/abbrevs, prefer earlier CN.
+            for alias in aliases or []:
+                if alias not in entry["aliases"]:
+                    entry["aliases"].append(alias)
+            for abbrev in abbrevs or []:
+                if abbrev not in entry["abbrevs"]:
+                    entry["abbrevs"].append(abbrev)
+
+        if cn not in self._cn_entries:
+            self._cn_entries[cn] = entry
+
+        for alias in aliases or []:
+            self._add_alias(alias, en)
+        for abbrev in abbrevs or []:
+            self._add_abbrev(abbrev, en)
+
+    def _add_alias(self, alias: str, canonical_en: str) -> None:
+        alias = alias.strip().lower()
+        canonical = canonical_en.strip().lower()
+        if alias and canonical and alias != canonical:
+            self._alias_to_en[alias] = canonical
+
+    def _add_abbrev(self, abbrev: str, canonical_en: str) -> None:
+        abbrev = abbrev.strip().upper()
+        canonical = canonical_en.strip().lower()
+        if abbrev and canonical:
+            self._abbrev_to_en[abbrev] = canonical
+
+    def _add_cn_correction(self, wrong: str, correct: str) -> None:
+        wrong = wrong.strip()
+        correct = correct.strip()
+        if wrong and correct and wrong != correct:
+            self._cn_corrections[wrong] = correct
+
+    # -- reference loaders --
+
+    def _load_card_names(self) -> None:
+        path = self.ref_dir / "card_names.md"
+        if not path.exists():
+            return
+
+        text = path.read_text(encoding="utf-8")
+        rows = parse_markdown_table(text, min_columns=3)
+
+        # Verified cards and leaders share similar schemas.
+        for row in rows:
+            en = row.get("english", "").strip()
+            cn = row.get("chinese", "").strip()
+            if not en or not cn or en.lower() == "english":
+                continue
+            self._register(en, cn, "card_names.md", "card")
+
+        # Leader aliases: Alias | Maps To | Notes
+        # We map alias -> canonical EN, then copy canonical's CN.
+        in_aliases = False
+        for line in text.split("\n"):
+            line = line.strip()
+            if line.startswith("## Leader Aliases"):
+                in_aliases = True
+                continue
+            if in_aliases and line.startswith("## "):
+                break
+            if not in_aliases:
+                continue
+            if not line.startswith("|") or "---" in line or "Alias" in line:
+                continue
+            parts = [p.strip() for p in line.split("|")]
+            # Remove leading/trailing empty slots introduced by outer pipes.
+            if parts and not parts[0]:
+                parts = parts[1:]
+            if parts and not parts[-1]:
+                parts = parts[:-1]
+            if len(parts) < 3:
+                continue
+            alias, maps_to = parts[0], parts[1]
+            if not alias or not maps_to:
+                continue
+            maps_to_lower = maps_to.lower()
+            if maps_to_lower in self._entries:
+                entry = self._entries[maps_to_lower]
+                self._register(
+                    maps_to,
+                    entry["cn"],
+                    "card_names.md",
+                    "leader_alias",
+                    aliases=[alias],
+                )
+            else:
+                # Alias points to an EN not in the verified list; register alias as EN.
+                self._register(alias, maps_to, "card_names.md", "leader_alias")
+
+        # Renamed / Corrected: Skill原版 | 修正后 | 说明
+        in_renamed = False
+        for line in text.split("\n"):
+            line = line.strip()
+            if "Renamed / Corrected" in line:
+                in_renamed = True
+                continue
+            if in_renamed and line.startswith("## "):
+                break
+            if not in_renamed:
+                continue
+            if not line.startswith("|") or "---" in line or "Skill原版" in line:
+                continue
+            parts = [p.strip() for p in line.split("|")]
+            # Remove leading/trailing empty slots introduced by outer pipes.
+            if parts and not parts[0]:
+                parts = parts[1:]
+            if parts and not parts[-1]:
+                parts = parts[:-1]
+            if len(parts) < 3:
+                continue
+            wrong, correct = parts[0], parts[1]
+            self._add_cn_correction(wrong, correct)
+
+    def _load_terminology_map(self) -> None:
+        path = self.ref_dir / "terminology_map.md"
+        if not path.exists():
+            return
+
+        text = path.read_text(encoding="utf-8")
+        rows = parse_markdown_table(text, min_columns=2)
+
+        for row in rows:
+            # Columns vary: "English | Chinese | Notes" or "Forbidden | Must Use | Example"
+            en = row.get("english", "").strip() or row.get("forbidden", "").strip()
+            cn = row.get("chinese", "").strip() or row.get("must_use", "").strip()
+            if not en or not cn or en.lower() in ("english", "forbidden"):
+                continue
+            self._register(en, cn, "terminology_map.md", "terminology")
+
+    def _load_reverse_terminology_map(self) -> None:
+        path = self.ref_dir / "reverse_terminology_map.md"
+        if not path.exists():
+            return
+
+        text = path.read_text(encoding="utf-8")
+        rows = parse_markdown_table(text, min_columns=2)
+
+        for row in rows:
+            cn = row.get("chinese", "").strip()
+            en = row.get("english", "").strip()
+            if not cn or not en or cn.lower() == "chinese":
+                continue
+            self._register(en, cn, "reverse_terminology_map.md", "terminology")
+
+    def _load_competitive_terms(self) -> None:
+        path = self.ref_dir / "competitive_terms.md"
+        if not path.exists():
+            return
+
+        text = path.read_text(encoding="utf-8")
+        rows = parse_markdown_table(text, min_columns=2)
+
+        for row in rows:
+            en = row.get("english", "").strip() or row.get("english_deck_name", "").strip()
+            cn = row.get("chinese", "").strip() or row.get("community_chinese", "").strip()
+            abbrev = row.get("abbreviations", "").strip()
+            if not en or not cn or en.lower() == "english":
+                continue
+
+            abbrevs: list[str] = []
+            aliases: list[str] = []
+            if abbrev:
+                for a in abbrev.split(","):
+                    a = a.strip()
+                    if a:
+                        abbrevs.append(a)
+
+            # Community deck names section may use "English Deck Name" -> "Community Chinese".
+            term_type = "competitive"
+            if row.get("english_deck_name"):
+                term_type = "deck_name"
+
+            self._register(en, cn, "competitive_terms.md", term_type, aliases=aliases, abbrevs=abbrevs)
+
+    def _load_keywords_map(self) -> None:
+        path = self.ref_dir / "keywords_map.md"
+        if not path.exists():
+            return
+
+        text = path.read_text(encoding="utf-8")
+        rows = parse_markdown_table(text, min_columns=2)
+
+        for row in rows:
+            en = row.get("english", "").strip()
+            cn = row.get("chinese", "").strip()
+            if not en or not cn or en.lower() == "english":
+                continue
+            self._register(en, cn, "keywords_map.md", "keyword")
+
+    def _load_ambiguous_names(self) -> None:
+        path = self.ref_dir / "ambiguous_names.md"
+        if not path.exists():
+            return
+
+        text = path.read_text(encoding="utf-8")
+        current_base_en: str | None = None
+
+        for line in text.split("\n"):
+            line = line.strip()
+            if line.startswith("## "):
+                # Header format: "## 杰洛特 (Geralt) — 6 versions"
+                match = re.search(r"\(([A-Za-z][A-Za-z\s':]*)\)", line)
+                if match:
+                    current_base_en = match.group(1).strip()
+                continue
+
+            if not line.startswith("|") or "---" in line or "Full Name" in line:
+                continue
+            if current_base_en is None:
+                continue
+
+            parts = [p.strip() for p in line.split("|")]
+            # Remove leading/trailing empty slots introduced by outer pipes.
+            if parts and not parts[0]:
+                parts = parts[1:]
+            if parts and not parts[-1]:
+                parts = parts[:-1]
+            if len(parts) < 3:
+                continue
+            full_en, cn = parts[0], parts[1]
+            if not full_en or not cn or full_en.lower() == "full name":
+                continue
+
+            base_lower = current_base_en.lower()
+            variant = {"en": full_en, "cn": cn}
+            self._ambiguous.setdefault(base_lower, []).append(variant)
+
+            # Also register the full name as a canonical card if not already present.
+            self._register(full_en, cn, "ambiguous_names.md", "card")
+
+    def _load_cn_fuzzy_fixes(self) -> None:
+        path = self.ref_dir / "cn_fuzzy_fixes.md"
+        if not path.exists():
+            return
+
+        text = path.read_text(encoding="utf-8")
+        rows = parse_markdown_table(text, min_columns=2)
+
+        for row in rows:
+            wrong = row.get("wrong", "").strip()
+            correct = row.get("correct", "").strip()
+            if not wrong or not correct or wrong.lower() == "wrong":
+                continue
+            self._add_cn_correction(wrong, correct)
+            # If correct is a known CN, register wrong-CN as alias for the EN.
+            if correct in self._cn_entries:
+                entry = self._cn_entries[correct]
+                self._add_alias(wrong, entry["canonical_en"])
+
+    def _load_correction_guide(self) -> None:
+        path = self.ref_dir / "correction_guide.md"
+        if not path.exists():
+            return
+
+        text = path.read_text(encoding="utf-8")
+        rows = parse_markdown_table(text, min_columns=2)
+
+        for row in rows:
+            wrong = row.get("wrong", "").strip()
+            right = row.get("right", "").strip()
+            if not wrong or not right or wrong.lower() == "wrong":
+                continue
+            # Correction guide Section 1 is EN wrong -> EN right; others may be mixed.
+            # We treat "right" as canonical EN if it maps to a known CN; otherwise store as alias.
+            right_lower = right.lower()
+            if right_lower in self._entries:
+                entry = self._entries[right_lower]
+                self._register(
+                    right,
+                    entry["cn"],
+                    "correction_guide.md",
+                    "terminology",
+                    aliases=[wrong],
+                )
+            else:
+                self._add_alias(wrong, right)
+
+    # -- public API --
+
+    def resolve(self, term: str) -> dict | None:
+        """Resolve any term (EN, CN, alias, abbreviation) to canonical info.
+
+        Returns a dict with keys:
+            canonical_en: str
+            cn: str
+            source: str
+            type: str
+            aliases: list[str]
+            abbrevs: list[str]
+            variants: list[dict]  # only populated for ambiguous base names
+            match_type: str       # exact, alias, abbreviation, cn_exact, cn_correction, ambiguous_base
+        """
+        if not term or not term.strip():
+            return None
+
+        original = term.strip()
+        key = original.lower()
+
+        # Direct English match.
+        if key in self._entries:
+            return self._make_result(self._entries[key], "exact")
+
+        # Alias -> English.
+        if key in self._alias_to_en:
+            canonical_key = self._alias_to_en[key]
+            if canonical_key in self._entries:
+                return self._make_result(self._entries[canonical_key], "alias")
+
+        # Abbreviation -> English.
+        upper = original.upper()
+        if upper in self._abbrev_to_en:
+            canonical_key = self._abbrev_to_en[upper]
+            if canonical_key in self._entries:
+                return self._make_result(self._entries[canonical_key], "abbreviation")
+
+        # Direct Chinese match.
+        if original in self._cn_entries:
+            return self._make_result(self._cn_entries[original], "cn_exact")
+
+        # Chinese correction.
+        if original in self._cn_corrections:
+            corrected = self._cn_corrections[original]
+            if corrected in self._cn_entries:
+                return self._make_result(self._cn_entries[corrected], "cn_correction")
+
+        # Ambiguous base name.
+        if key in self._ambiguous:
+            return {
+                "canonical_en": original,
+                "cn": "",
+                "source": "ambiguous_names.md",
+                "type": "ambiguous",
+                "aliases": [],
+                "abbrevs": [],
+                "variants": list(self._ambiguous[key]),
+                "match_type": "ambiguous_base",
+            }
+
+        return None
+
+    def _make_result(self, entry: dict, match_type: str) -> dict:
+        return {
+            "canonical_en": entry["canonical_en"],
+            "cn": entry["cn"],
+            "source": entry["source"],
+            "type": entry["type"],
+            "aliases": list(entry.get("aliases", [])),
+            "abbrevs": list(entry.get("abbrevs", [])),
+            "variants": [],
+            "match_type": match_type,
+        }
+
+    def get_all_for_text(self, text: str) -> list[dict]:
+        """Extract and resolve all known terms from a source text."""
+        candidates: set[str] = set()
+        for name in extract_card_names(text):
+            candidates.add(name.strip())
+        for name in extract_card_names_no_colon(text, max_words=5, min_length=4):
+            candidates.add(name.strip())
+        for name in extract_terms_from_markdown(text):
+            candidates.add(name.strip())
+        for name in extract_capitalized_phrases(text, max_words=3, min_length=4):
+            candidates.add(name.strip())
+        for abbrev in extract_abbreviations(text):
+            candidates.add(abbrev.strip())
+
+        # Single-word ambiguous base names (e.g. "Geralt", "Regis") are not caught
+        # by the regex extractors above. Scan for them directly.
+        text_lower = text.lower()
+        for base_lower, variants in self._ambiguous.items():
+            # Match as a whole word to avoid false positives.
+            if re.search(rf"\b{re.escape(base_lower)}\b", text_lower):
+                candidates.add(base_lower.title() if base_lower else base_lower)
+
+        # Sort by length descending so full names are resolved before abbreviations.
+        candidates = sorted(candidates, key=lambda x: (-len(x), x.lower()))
+
+        results: list[dict] = []
+        seen: set[tuple[str, str]] = set()
+        for cand in candidates:
+            resolved = self.resolve(cand)
+            if not resolved:
+                continue
+            seen_key = (resolved["canonical_en"].lower(), resolved["cn"])
+            if seen_key in seen:
+                continue
+            seen.add(seen_key)
+            results.append({"term": cand, **resolved})
+
+        return results
+
+    def get_canonical(self, term: str) -> str | None:
+        """Return canonical EN for a term, or None if unknown."""
+        resolved = self.resolve(term)
+        return resolved["canonical_en"] if resolved else None
+
+    def get_cn(self, term: str) -> str | None:
+        """Return official Chinese for a term, or None if unknown/ambiguous."""
+        resolved = self.resolve(term)
+        return resolved["cn"] if resolved else None
+
+
+# Cached module-level instance for scripts that need repeated lookups.
+_term_authority_cache: dict[str, TermAuthority] = {}
+
+
+def get_term_authority(ref_dir: "Path | str | None" = None) -> TermAuthority:
+    """Return a cached TermAuthority instance for the given references directory."""
+    key = str(ref_dir) if ref_dir else "default"
+    if key not in _term_authority_cache:
+        _term_authority_cache[key] = TermAuthority(ref_dir)
+    return _term_authority_cache[key]

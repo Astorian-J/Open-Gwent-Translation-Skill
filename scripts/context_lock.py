@@ -40,6 +40,7 @@ from _shared import (
     extract_card_names_no_colon,
     extract_terms_from_markdown,
     json_output,
+    TermAuthority,
 )
 
 
@@ -84,9 +85,14 @@ def extract_terms_from_source(source_text: str) -> dict[str, str]:
 
 
 def build_lock(source_file: str, lock_file: str) -> dict:
-    """Build a new lock table from source text."""
+    """Build a new lock table from source text.
+
+    Official translations are pre-filled from TermAuthority when available.
+    Unknown terms remain pending for manual resolution.
+    """
     source_text = Path(source_file).read_text(encoding="utf-8")
-    candidates = extract_terms_from_source(source_text)
+    ref_dir = Path(__file__).parent.parent / "references"
+    authority = TermAuthority(ref_dir)
 
     lock = {
         "document": Path(source_file).stem,
@@ -94,12 +100,35 @@ def build_lock(source_file: str, lock_file: str) -> dict:
         "terms": {}
     }
 
-    for term, _ in candidates.items():
-        lock["terms"][term] = {
-            "cn": "",
-            "status": "pending",
-            "first_seen": "auto-detected"
-        }
+    for resolved in authority.get_all_for_text(source_text):
+        term = resolved["term"]
+        if resolved["match_type"] == "ambiguous_base":
+            lock["terms"][term] = {
+                "canonical_en": resolved["canonical_en"],
+                "cn": "",
+                "status": "ambiguous",
+                "first_seen": "auto-detected",
+                "source_ref": resolved["source"],
+                "type": resolved["type"],
+                "variants": resolved.get("variants", []),
+            }
+        elif resolved["cn"]:
+            lock["terms"][term] = {
+                "canonical_en": resolved["canonical_en"],
+                "cn": resolved["cn"],
+                "status": "auto_locked",
+                "first_seen": "auto-detected",
+                "source_ref": resolved["source"],
+                "type": resolved["type"],
+                "aliases": resolved.get("aliases", []),
+                "abbrevs": resolved.get("abbrevs", []),
+            }
+        else:
+            lock["terms"][term] = {
+                "cn": "",
+                "status": "pending",
+                "first_seen": "auto-detected"
+            }
 
     save_lock(lock, lock_file)
     return lock
@@ -116,14 +145,38 @@ def check_translation(translation_file: str, lock_file: str) -> dict:
     for en_term, info in lock["terms"].items():
         cn_term = info.get("cn", "")
         status = info.get("status", "pending")
+        variants = info.get("variants", [])
 
-        if status != "confirmed" or not cn_term:
+        if status == "ambiguous" and variants:
+            variant_cns = [v["cn"] for v in variants if v.get("cn")]
+            found = any(vcn in translation for vcn in variant_cns)
+            if found:
+                confirmed.append(en_term)
+            else:
+                expected = " / ".join(variant_cns)
+                violations.append({
+                    "term": en_term,
+                    "expected": expected,
+                    "issue": "Ambiguous name not disambiguated in translation"
+                })
+            continue
+
+        if status not in ("confirmed", "auto_locked") or not cn_term:
             continue
 
         # Check if any variant of the Chinese term appears in the translation.
-        variants = [v.strip() for v in cn_term.split("/")]
-        found_cn = any(v in translation for v in variants)
-        found_en = en_term.lower() in translation.lower()
+        cn_variants = [v.strip() for v in cn_term.split("/")]
+        found_cn = any(v in translation for v in cn_variants)
+        translation_lower = translation.lower()
+        found_en = en_term.lower() in translation_lower
+        for abbrev in info.get("abbrevs", []):
+            if abbrev.strip().lower() in translation_lower:
+                found_en = True
+                break
+        for alias in info.get("aliases", []):
+            if alias.strip().lower() in translation_lower:
+                found_en = True
+                break
 
         if found_cn:
             confirmed.append(en_term)
@@ -142,8 +195,14 @@ def check_translation(translation_file: str, lock_file: str) -> dict:
                 "issue": "Locked term missing from translation"
             })
 
-    confirmed_count = len([t for t in lock['terms'].values() if t.get('status') == 'confirmed'])
-    pending = [(en, info) for en, info in lock["terms"].items() if info.get("status") != "confirmed"]
+    confirmed_count = len([
+        t for t in lock['terms'].values()
+        if t.get('status') in ("confirmed", "auto_locked")
+    ])
+    pending = [
+        (en, info) for en, info in lock["terms"].items()
+        if info.get("status") not in ("confirmed", "auto_locked")
+    ]
 
     return {
         "lock_file": lock_file,

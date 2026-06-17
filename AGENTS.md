@@ -15,11 +15,11 @@ python scripts/auto_pipeline.py pre source.md --date 2026-05 --type general --js
 # 3. Post-process and verify
 python scripts/auto_pipeline.py post source.md translated.txt --json
 
-# 4. Run Phase C self-check
-python scripts/phase_c_check.py translated.txt --json
+# 4. Run Phase C self-check (requires --source for term authority)
+python scripts/phase_c_check.py translated.txt --source source.md --json
 
-# 5. Final check
-python scripts/completeness_guard.py translated.txt --json
+# 5. Final check (requires --source for term authority)
+python scripts/completeness_guard.py translated.txt --source source.md --json
 ```
 
 ## Installation
@@ -41,9 +41,10 @@ automated phases and use the returned data to guide any manual work.
 |-------|---------|-------------|
 | A. Pre-translation | `auto_pipeline.py pre` | Agent |
 | B. Translation | Agent's own translation step | Agent |
-| C. Self-check | `phase_c_check.py` | Agent |
-| D. Post-translation | `auto_pipeline.py post` | Agent |
-| E. Completeness guard | `completeness_guard.py` | Agent |
+| C. Self-check | `phase_c_check.py --source source.md` | Agent |
+| D. Term authority | `term_enforcer.py --source source.md` | Agent (also run by guard) |
+| E. Post-translation | `auto_pipeline.py post` | Agent |
+| F. Completeness guard | `completeness_guard.py --source source.md` | Agent |
 
 ## Global Conventions
 
@@ -97,9 +98,41 @@ JSON data:
   "card_references_found": 12,
   "card_references": [
     {"english": "Geralt: Igni", "chinese": "杰洛特：伊格尼法印"}
-  ]
+  ],
+  "term_authority": {
+    "locked_count": 45,
+    "ambiguous_count": 3,
+    "pending_count": 2,
+    "locked_terms": [
+      {
+        "extracted": "OTB",
+        "canonical_en": "Off the Books",
+        "chinese": "黑市买卖",
+        "type": "abbreviation",
+        "source_ref": "competitive_terms.md",
+        "aliases": [],
+        "abbrevs": ["OTB"]
+      }
+    ],
+    "ambiguous_terms": [
+      {
+        "extracted": "Geralt",
+        "canonical_en": "Geralt",
+        "type": "ambiguous",
+        "source_ref": "ambiguous_names.md",
+        "variants": [
+          {"en": "Geralt: Igni", "cn": "杰洛特：伊格尼法印"}
+        ]
+      }
+    ],
+    "pending_terms": []
+  }
 }
 ```
+
+The `term_authority` block is the **mandatory translation reference** for this
+article. Agents must use the provided `chinese` values for all `locked_terms`
+and must disambiguate all `ambiguous_terms` with a full subtitle variant.
 
 #### `post`
 
@@ -139,10 +172,12 @@ JSON data:
 
 ### `check_translation.py`
 
-Detailed terminology checker.
+Detailed terminology checker. Optionally accepts a source file to run term
+authority enforcement.
 
 ```bash
 python scripts/check_translation.py translated.txt --json
+python scripts/check_translation.py translated.txt --source source.md --json
 ```
 
 JSON data:
@@ -165,7 +200,8 @@ JSON data:
 Issue categories include: `provision_mix`, `identical_numbers`,
 `suspicious_order`, `forbidden_term`, `outdated_card_name`, `ambiguous_name`,
 `chinese_numerals`, `passive_voice`, `english_parentheses`, `english_colon`,
-`abbreviation`, `typo`, `homophone`, `deck_abbreviation`, `english_residue`.
+`abbreviation`, `typo`, `homophone`, `deck_abbreviation`, `english_residue`,
+`term_authority_violation`.
 
 ### `phase_c_check.py`
 
@@ -174,9 +210,12 @@ Runs the structured Phase C self-check rules from
 
 ```bash
 python scripts/phase_c_check.py translated.txt --direction encn --json
+python scripts/phase_c_check.py translated.txt --source source.md --direction encn --json
 ```
 
 Direction is auto-detected if omitted. Choices: `encn` (EN→CN), `cnen` (CN→EN).
+The `--source` flag is required for the automated `encn-10` term authority check;
+without it, the rule falls back to a manual warning.
 
 JSON data:
 
@@ -197,11 +236,15 @@ JSON data:
 
 ### `completeness_guard.py`
 
-Final check. Combines terminology, residue, and Phase C checks.
+Final check. Combines terminology, residue, Phase C, and term authority checks.
 
 ```bash
 python scripts/completeness_guard.py translated.txt --json
+python scripts/completeness_guard.py translated.txt --source source.md --json
 ```
+
+The `--source` flag is required for the `term_authority` check; without it,
+term authority enforcement is skipped.
 
 JSON data:
 
@@ -213,10 +256,47 @@ JSON data:
     {"name": "file_exists", "passed": true, "issue_count": 0, "message": "..."},
     {"name": "terminology", "passed": false, "issue_count": 3, "message": "..."},
     {"name": "residue_scan", "passed": true, "issue_count": 0, "message": "..."},
-    {"name": "phase_c", "passed": false, "issue_count": 1, "message": "..."}
+    {"name": "phase_c", "passed": false, "issue_count": 1, "message": "..."},
+    {"name": "term_authority", "passed": false, "issue_count": 2, "message": "..."}
   ]
 }
 ```
+
+### `term_enforcer.py`
+
+Term authority enforcement. Validates that locked terms from the pre-translation
+phase are correctly used in the translation.
+
+```bash
+python scripts/term_enforcer.py translated.txt --lock lock.json --json
+python scripts/term_enforcer.py translated.txt --source source.md --json
+```
+
+JSON data:
+
+```json
+{
+  "violation_count": 2,
+  "violations": [
+    {
+      "term": "Off the Books",
+      "canonical_en": "Off the Books",
+      "expected_cn": "黑市买卖",
+      "found_in_translation": "OTB",
+      "issue_type": "term_left_untranslated",
+      "context": "...",
+      "severity": "error"
+    }
+  ],
+  "pass_count": 43,
+  "locked_terms_checked": 45
+}
+```
+
+Issue types:
+- `term_left_untranslated`: English term, abbreviation, or alias left in the target text.
+- `term_missing_or_literal`: Locked term is absent or possibly translated with an unrecognized phrase.
+- `ambiguous_not_disambiguated`: Ambiguous base name used without specifying the variant.
 
 ### `health_check.py`
 
@@ -246,6 +326,7 @@ The following scripts also support `--json` and can be used independently:
 
 - `scripts/lookup.py` — Search reference files for a term.
 - `scripts/context_lock.py` — Build/check per-document terminology locks.
+- `scripts/term_enforcer.py` — Enforce locked terms in a translation.
 - `scripts/format_skeleton.py` — Extract/restore Markdown structure.
 - `scripts/diff_review.py` — Compare source and translation.
 - `scripts/learn.py` — Discover new terms from source+translation pairs.
@@ -267,6 +348,10 @@ All translation rules and data live in `references/`:
 ## Notes for Agent Implementers
 
 - Do not finalize a translation while `completeness_guard.py` reports BLOCKED.
+- Always pass `--source source.md` to `completeness_guard.py` and
+  `phase_c_check.py` so that term authority enforcement runs automatically.
+- Use the `term_authority.locked_terms` block from `auto_pipeline.py pre` as the
+  mandatory translation reference; never translate those terms literally.
 - `phase_c_check.py` returns `ready: true` when automated checks pass, but
   manual warnings may still require review.
 - `auto_pipeline.py post` may add new terms to `references/pending_terms.md`.

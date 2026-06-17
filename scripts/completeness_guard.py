@@ -123,13 +123,49 @@ def run_phase_c_check(file_path: Path, json_mode: bool) -> tuple[bool, int]:
     return issue_count == 0 and result.returncode == 0, issue_count
 
 
+def run_term_authority_check(file_path: Path, source_path: Path | None, json_mode: bool) -> tuple[bool, int]:
+    """Run term_enforcer.py and return (pass, violation_count).
+
+    If no source_path is provided, the check is skipped.
+    """
+    if source_path is None:
+        return True, 0
+
+    script = Path(__file__).parent / "term_enforcer.py"
+    if not script.exists():
+        return True, 0
+
+    if json_mode:
+        ok, parsed, _ = run_script_json("term_enforcer.py", [str(file_path), "--source", str(source_path)])
+        if parsed and "data" in parsed:
+            return ok, parsed["data"].get("violation_count", 0)
+        return ok, 0
+
+    result = subprocess.run(
+        [sys.executable, str(script), str(file_path), "--source", str(source_path)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    output = result.stdout.strip()
+    issue_count = 0
+    if "Issues:" in output:
+        try:
+            issue_count = int(output.split("Issues:")[1].strip().split()[0])
+        except (IndexError, ValueError):
+            pass
+    return issue_count == 0 and result.returncode == 0, issue_count
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Completeness Guard — Final gate before translation finalization")
     parser.add_argument("file", help="Translated file to check")
+    parser.add_argument("--source", help="Source file for term authority enforcement")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     args = parser.parse_args()
 
     file_path = Path(args.file)
+    source_path = Path(args.source) if args.source else None
     if not file_path.exists():
         if args.json:
             json_output(
@@ -175,6 +211,13 @@ def main() -> None:
     except Exception as e:
         checks.append({"name": "phase_c", "passed": False, "issue_count": 0, "message": f"Phase C check failed: {e}"})
 
+    # Check 5: Term authority enforcement
+    try:
+        passed, count = run_term_authority_check(file_path, source_path, args.json)
+        checks.append({"name": "term_authority", "passed": passed, "issue_count": count, "message": "Term authority checks passed" if passed else f"Term authority: {count} violation(s)"})
+    except Exception as e:
+        checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "message": f"Term authority check failed: {e}"})
+
     all_pass = all(c["passed"] for c in checks)
 
     if args.json:
@@ -197,10 +240,11 @@ def main() -> None:
         ("Running terminology check", checks[1]),
         ("Running English residue scan", checks[2]),
         ("Running Phase C self-check", checks[3]),
+        ("Running term authority enforcement", checks[4]),
     ]
 
     for idx, (label, check) in enumerate(check_labels, start=1):
-        print(f"[{idx}/4] {label:40} ", end="", flush=True)
+        print(f"[{idx}/5] {label:40} ", end="", flush=True)
         if check["passed"]:
             print("[PASS]")
         else:

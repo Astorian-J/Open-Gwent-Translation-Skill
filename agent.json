@@ -12,12 +12,19 @@
       {
         "name": "pre",
         "command": "python scripts/auto_pipeline.py pre {source} --date {date} --type {type} --json",
-        "required_args": ["source"],
+        "required_args": [
+          "source"
+        ],
         "optional_args": {
           "date": "YYYY-MM",
           "type": "meta | bc-proposal | card-analysis | patch-notes | general"
         },
-        "state_outputs": ["skeleton_path", "lock_path", "card_references"]
+        "state_outputs": [
+          "skeleton_path",
+          "lock_path",
+          "card_references",
+          "term_authority"
+        ]
       },
       {
         "name": "translate",
@@ -25,21 +32,38 @@
       },
       {
         "name": "phase_c_check",
-        "command": "python scripts/phase_c_check.py {translated} --direction {direction} --json",
-        "required_args": ["translated"],
+        "command": "python scripts/phase_c_check.py {translated} --source {source} --direction {direction} --json",
+        "required_args": [
+          "translated",
+          "source"
+        ],
         "optional_args": {
           "direction": "encn | cnen (auto-detected if omitted)"
         }
       },
       {
+        "name": "term_authority",
+        "command": "python scripts/term_enforcer.py {translated} --source {source} --json",
+        "required_args": [
+          "translated",
+          "source"
+        ]
+      },
+      {
         "name": "post",
         "command": "python scripts/auto_pipeline.py post {source} {translated} --json",
-        "required_args": ["source", "translated"]
+        "required_args": [
+          "source",
+          "translated"
+        ]
       },
       {
         "name": "guard",
-        "command": "python scripts/completeness_guard.py {translated} --json",
-        "required_args": ["translated"]
+        "command": "python scripts/completeness_guard.py {translated} --source {source} --json",
+        "required_args": [
+          "translated",
+          "source"
+        ]
       }
     ]
   },
@@ -49,173 +73,541 @@
       "script": "scripts/auto_pipeline.py",
       "subcommand": "pre",
       "args": [
-        {"name": "source", "required": true, "type": "file_path"},
-        {"name": "--date", "required": false, "type": "string", "format": "YYYY-MM"},
-        {"name": "--type", "required": false, "choices": ["meta", "bc-proposal", "card-analysis", "patch-notes", "general"]},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "source",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--date",
+          "required": false,
+          "type": "string",
+          "format": "YYYY-MM"
+        },
+        {
+          "name": "--type",
+          "required": false,
+          "choices": [
+            "meta",
+            "bc-proposal",
+            "card-analysis",
+            "patch-notes",
+            "general"
+          ]
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["command", "source", "date", "type", "skeleton_extracted", "skeleton_path", "lock_built", "lock_path", "card_references_found", "card_references"]
+      "json_output": [
+        "command",
+        "source",
+        "date",
+        "type",
+        "skeleton_extracted",
+        "skeleton_path",
+        "lock_built",
+        "lock_path",
+        "card_references_found",
+        "card_references",
+        "term_authority"
+      ]
     },
     {
       "name": "auto_pipeline post",
       "script": "scripts/auto_pipeline.py",
       "subcommand": "post",
       "args": [
-        {"name": "source", "required": true, "type": "file_path"},
-        {"name": "translated", "required": true, "type": "file_path"},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "source",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "translated",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["command", "source", "translated", "terminology_issue_count", "new_terms_learned", "health_check_passed"]
+      "json_output": [
+        "command",
+        "source",
+        "translated",
+        "terminology_issue_count",
+        "new_terms_learned",
+        "health_check_passed"
+      ]
     },
     {
       "name": "auto_pipeline scan",
       "script": "scripts/auto_pipeline.py",
       "subcommand": "scan",
       "args": [
-        {"name": "translated", "required": true, "type": "file_path"},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "translated",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["command", "translated", "english_residue_count", "residues"]
+      "json_output": [
+        "command",
+        "translated",
+        "english_residue_count",
+        "residues"
+      ]
     },
     {
       "name": "check_translation",
       "script": "scripts/check_translation.py",
       "args": [
-        {"name": "file", "required": true, "type": "file_path"},
-        {"name": "--fix", "required": false, "type": "flag"},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "file",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--source",
+          "required": false,
+          "type": "file_path"
+        },
+        {
+          "name": "--fix",
+          "required": false,
+          "type": "flag"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["issue_count", "auto_fixable_count", "auto_fixed_count", "issues"]
+      "json_output": [
+        "issue_count",
+        "auto_fixable_count",
+        "auto_fixed_count",
+        "issues"
+      ]
     },
     {
       "name": "phase_c_check",
       "script": "scripts/phase_c_check.py",
       "args": [
-        {"name": "file", "required": true, "type": "file_path"},
-        {"name": "--direction", "required": false, "choices": ["encn", "cnen"]},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "file",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--source",
+          "required": false,
+          "type": "file_path"
+        },
+        {
+          "name": "--direction",
+          "required": false,
+          "choices": [
+            "encn",
+            "cnen"
+          ]
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["direction", "automated_failed", "automated_issues", "manual_warning_count", "manual_warnings", "ready"]
+      "json_output": [
+        "direction",
+        "automated_failed",
+        "automated_issues",
+        "manual_warning_count",
+        "manual_warnings",
+        "ready"
+      ],
+      "command": "python scripts/phase_c_check.py {file} --source {source} --direction {direction} --json"
     },
     {
       "name": "completeness_guard",
       "script": "scripts/completeness_guard.py",
       "args": [
-        {"name": "file", "required": true, "type": "file_path"},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "file",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--source",
+          "required": false,
+          "type": "file_path"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["all_passed", "blocked", "checks"]
+      "json_output": [
+        "all_passed",
+        "blocked",
+        "checks"
+      ],
+      "command": "python scripts/completeness_guard.py {file} --source {source} --json"
     },
     {
       "name": "health_check",
       "script": "scripts/health_check.py",
       "args": [
-        {"name": "--verbose", "required": false, "type": "flag"},
-        {"name": "--json", "required": false, "type": "flag"},
-        {"name": "--no-color", "required": false, "type": "flag"}
+        {
+          "name": "--verbose",
+          "required": false,
+          "type": "flag"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        },
+        {
+          "name": "--no-color",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["pass_count", "fail_count", "warn_count", "info_count", "results"]
+      "json_output": [
+        "pass_count",
+        "fail_count",
+        "warn_count",
+        "info_count",
+        "results"
+      ]
     },
     {
       "name": "lookup",
       "script": "scripts/lookup.py",
       "args": [
-        {"name": "query", "required": true, "type": "string"},
-        {"name": "--fuzzy", "required": false, "type": "flag"},
-        {"name": "--plain", "required": false, "type": "flag"},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "query",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "--fuzzy",
+          "required": false,
+          "type": "flag"
+        },
+        {
+          "name": "--plain",
+          "required": false,
+          "type": "flag"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["query", "fuzzy", "result_count", "results"]
+      "json_output": [
+        "query",
+        "fuzzy",
+        "result_count",
+        "results"
+      ]
     },
     {
       "name": "context_lock build",
       "script": "scripts/context_lock.py",
       "subcommand": "build",
       "args": [
-        {"name": "source", "required": true, "type": "file_path"},
-        {"name": "--output", "required": false, "type": "file_path"},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "source",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--output",
+          "required": false,
+          "type": "file_path"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["lock_file", "term_count", "document"]
+      "json_output": [
+        "lock_file",
+        "term_count",
+        "document"
+      ]
     },
     {
       "name": "context_lock check",
       "script": "scripts/context_lock.py",
       "subcommand": "check",
       "args": [
-        {"name": "translation", "required": true, "type": "file_path"},
-        {"name": "--lock", "required": false, "type": "file_path"},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "translation",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--lock",
+          "required": false,
+          "type": "file_path"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["lock_file", "confirmed_count", "found_in_translation", "violation_count", "violations", "pending_count", "pending_terms"]
+      "json_output": [
+        "lock_file",
+        "confirmed_count",
+        "found_in_translation",
+        "violation_count",
+        "violations",
+        "pending_count",
+        "pending_terms"
+      ]
     },
     {
       "name": "context_lock add",
       "script": "scripts/context_lock.py",
       "subcommand": "add",
       "args": [
-        {"name": "en_term", "required": true, "type": "string"},
-        {"name": "cn_term", "required": true, "type": "string"},
-        {"name": "--lock", "required": false, "type": "file_path"},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "en_term",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "cn_term",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "--lock",
+          "required": false,
+          "type": "file_path"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["term", "translation", "lock_file"]
+      "json_output": [
+        "term",
+        "translation",
+        "lock_file"
+      ]
     },
     {
       "name": "format_skeleton extract",
       "script": "scripts/format_skeleton.py",
       "subcommand": "extract",
       "args": [
-        {"name": "input", "required": true, "type": "file_path"},
-        {"name": "--output", "required": false, "type": "file_path"},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "input",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--output",
+          "required": false,
+          "type": "file_path"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["command", "input", "output", "block_count", "chunk_count"]
+      "json_output": [
+        "command",
+        "input",
+        "output",
+        "block_count",
+        "chunk_count"
+      ]
     },
     {
       "name": "format_skeleton restore",
       "script": "scripts/format_skeleton.py",
       "subcommand": "restore",
       "args": [
-        {"name": "skeleton", "required": true, "type": "file_path"},
-        {"name": "translated", "required": true, "type": "file_path"},
-        {"name": "--output", "required": false, "type": "file_path"},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "skeleton",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "translated",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--output",
+          "required": false,
+          "type": "file_path"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["command", "skeleton", "translated", "output", "block_count"]
+      "json_output": [
+        "command",
+        "skeleton",
+        "translated",
+        "output",
+        "block_count"
+      ]
     },
     {
       "name": "diff_review",
       "script": "scripts/diff_review.py",
       "args": [
-        {"name": "source", "required": true, "type": "file_path"},
-        {"name": "translation", "required": true, "type": "file_path"},
-        {"name": "--output", "required": false, "type": "file_path"},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "source",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "translation",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--output",
+          "required": false,
+          "type": "file_path"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["source_length", "source_sentences", "translation_length", "translation_sentences", "issue_count", "issues"]
+      "json_output": [
+        "source_length",
+        "source_sentences",
+        "translation_length",
+        "translation_sentences",
+        "issue_count",
+        "issues"
+      ]
     },
     {
       "name": "learn",
       "script": "scripts/learn.py",
       "args": [
-        {"name": "source", "required": true, "type": "file_path"},
-        {"name": "translated", "required": true, "type": "file_path"},
-        {"name": "--auto", "required": false, "type": "flag"},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "source",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "translated",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--auto",
+          "required": false,
+          "type": "flag"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["new_terms_found", "auto_write", "added_to_pending", "terms"]
+      "json_output": [
+        "new_terms_found",
+        "auto_write",
+        "added_to_pending",
+        "terms"
+      ]
     },
     {
       "name": "backtranslate",
       "script": "scripts/backtranslate.py",
       "args": [
-        {"name": "source", "required": true, "type": "file_path"},
-        {"name": "translated", "required": true, "type": "file_path"},
-        {"name": "backtranslated", "required": false, "type": "file_path"},
-        {"name": "--json", "required": false, "type": "flag"}
+        {
+          "name": "source",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "translated",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "backtranslated",
+          "required": false,
+          "type": "file_path"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
       ],
-      "json_output": ["original_sentences", "translated_sentences", "backtranslated_sentences", "issue_count", "issues"]
+      "json_output": [
+        "original_sentences",
+        "translated_sentences",
+        "backtranslated_sentences",
+        "issue_count",
+        "issues"
+      ]
+    },
+    {
+      "name": "term_enforcer",
+      "script": "scripts/term_enforcer.py",
+      "args": [
+        {
+          "name": "translated",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--source",
+          "required": false,
+          "type": "file_path"
+        },
+        {
+          "name": "--lock",
+          "required": false,
+          "type": "file_path"
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
+      ],
+      "json_output": [
+        "violation_count",
+        "violations",
+        "pass_count",
+        "locked_terms_checked"
+      ]
     }
   ]
 }
