@@ -122,7 +122,7 @@
 | row stack | 排叠 | | Multiple cards same row |
 | row punish | 排惩 | | Punish stacked rows |
 | tall punish | 大怪惩罚 | | Punish high-power units |
-| seize | 策反 / 操控 | | Take enemy unit |
+| seize | 抓捕 | | Take enemy unit |
 | swap | 交换 | | Exchange units/cards |
 | move | 移动 | | Change unit's row |
 | transform | 转化 | | Change into different card |

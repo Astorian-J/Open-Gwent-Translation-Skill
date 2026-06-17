@@ -44,8 +44,8 @@ Cards with multiple versions. When source text uses only the base name (e.g., "R
 | Full Name | Chinese | Clue |
 |-----------|---------|------|
 | Dandelion | 丹德里恩 | Base version (NR) |
-| Dandelion: Vainglory | 丹德里恩：传奇诗人 | Neutral, draw/play context |
-| Dandelion: Poet | 丹德里恩：虚妄荣光 | Neutral, support context |
+| Dandelion: Vainglory | 丹德里恩：虚妄荣光 | Neutral, draw/play context |
+| Dandelion: Poet | 丹德里恩：传奇诗人 | Neutral, support context |
 
 ## 卓尔坦 (Zoltan) — 3 versions
 

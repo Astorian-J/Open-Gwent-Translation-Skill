@@ -4,16 +4,20 @@ Gwent Terminology Lookup.
 Quick search across all reference files.
 
 Usage:
-    python lookup.py <query> [--fuzzy]
+    python lookup.py <query> [--fuzzy] [--plain] [--json]
     python lookup.py "Provision"
     python lookup.py "杰洛特" --fuzzy
     python lookup.py "部署"
 """
 
+import argparse
 import re
 import sys
 from pathlib import Path
 from difflib import SequenceMatcher
+
+sys.path.insert(0, str(Path(__file__).parent))
+from _shared import json_output
 
 
 def similarity(a: str, b: str) -> float:
@@ -145,7 +149,7 @@ def search_references(query: str, ref_dir: Path, fuzzy: bool = False) -> list[di
     return deduped
 
 
-def format_result(r: dict) -> str:
+def format_result(r: dict, plain: bool = False) -> str:
     """Format a single search result."""
     lines = []
     file = r["file"]
@@ -230,18 +234,15 @@ def format_result(r: dict) -> str:
         if clue:
             lines.append(f"    Context: {clue}")
 
-    elif file == "correction_guide.md":
-        wrong = row.get("wrong", "")
-        right = row.get("right", "")
-        if wrong and right:
-            lines.append(f"    ❌ {wrong} → ✅ {right}")
-
-    elif file == "common_pitfalls.md":
+    elif file in ("correction_guide.md", "common_pitfalls.md"):
         wrong = row.get("wrong", "")
         right = row.get("right", "")
         issue = row.get("issue", "")
         if wrong and right:
-            lines.append(f"    ❌ {wrong} → ✅ {right}")
+            if plain:
+                lines.append(f"    [WRONG] {wrong} → [RIGHT] {right}")
+            else:
+                lines.append(f"    [WRONG] {wrong} → [RIGHT] {right}")
         if issue:
             lines.append(f"    Issue: {issue}")
 
@@ -251,7 +252,7 @@ def format_result(r: dict) -> str:
         ftype = row.get("type", "")
         notes = row.get("notes", "")
         if wrong and correct:
-            icon = {"别字": "✏️", "同音": "🔊", "漏字": "📝", "音近": "🎵"}.get(ftype, "📌")
+            icon = {"别字": "[TYP]", "同音": "[HOM]", "漏字": "[MISS]", "音近": "[SIM]"}.get(ftype, "[FIX]")
             lines.append(f"    {icon} 「{wrong}」→ 「{correct}」 ({ftype})")
         if notes:
             lines.append(f"    Notes: {notes}")
@@ -266,32 +267,32 @@ def format_result(r: dict) -> str:
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python lookup.py <query> [--fuzzy] [--plain]")
-        print("  --fuzzy: Enable fuzzy matching")
-        print("  --plain: Disable emoji in output")
-        print()
-        print("Examples:")
-        print('  python lookup.py "Provision"')
-        print('  python lookup.py "杰洛特"')
-        print('  python lookup.py "部署"')
-        sys.exit(1)
-
-    query = sys.argv[1]
-    fuzzy = "--fuzzy" in sys.argv
-    plain = "--plain" in sys.argv
+    parser = argparse.ArgumentParser(description="Gwent Terminology Lookup")
+    parser.add_argument("query", help="Search query")
+    parser.add_argument("--fuzzy", action="store_true", help="Enable fuzzy matching")
+    parser.add_argument("--plain", action="store_true", help="Disable emoji in output")
+    parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
+    args = parser.parse_args()
 
     ref_dir = Path(__file__).parent.parent / "references"
+    results = search_references(args.query, ref_dir, args.fuzzy)
 
-    results = search_references(query, ref_dir, fuzzy)
+    if args.json:
+        data = {
+            "query": args.query,
+            "fuzzy": args.fuzzy,
+            "result_count": len(results),
+            "results": results,
+        }
+        json_output(data, exit_code=0 if results else 1)
 
     if not results:
-        print(f"No results found for '{query}'")
-        if not fuzzy:
+        print(f"No results found for '{args.query}'")
+        if not args.fuzzy:
             print("Try with --fuzzy for approximate matching")
         sys.exit(1)
 
-    print(f"Results for '{query}': {len(results)} found\n")
+    print(f"Results for '{args.query}': {len(results)} found\n")
 
     # Group by file
     by_file = {}
@@ -300,11 +301,11 @@ def main():
 
     for file, file_results in by_file.items():
         print(f"\n{'=' * 50}")
-        icon = "" if plain else "📄 "
+        icon = "" if args.plain else "📄 "
         print(f"{icon}{file}")
         print(f"{'=' * 50}")
         for r in file_results[:5]:  # Limit to 5 per file
-            print(format_result(r))
+            print(format_result(r, plain=args.plain))
             print()
 
         if len(file_results) > 5:

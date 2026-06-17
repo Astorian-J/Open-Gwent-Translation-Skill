@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
 """
 Diff Review Mode (审校差异模式).
-Compares user's translation against source to find issues without retranslating.
+Compares a translation against source to find issues without retranslating.
 
 Usage:
-    python diff_review.py <source_en.txt> <user_translation.txt> [--output report.md]
+    python diff_review.py <source_en.txt> <translation.txt> [--output report.md] [--json]
 """
 
+import argparse
+import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from difflib import SequenceMatcher
 
+sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
     extract_abbreviations,
     extract_capitalized_phrases,
     extract_card_names,
+    json_output,
 )
 
 # Module-level constants
@@ -135,7 +140,46 @@ def check_completeness(source: str, translation: str) -> list[dict]:
     return issues
 
 
-def generate_report(source: str, translation: str) -> str:
+def run_full_checker(translation_file: str, json_mode: bool = False) -> list[dict]:
+    """Run the standalone terminology checker and return structured issues."""
+    issues = []
+    script = Path(__file__).parent / "check_translation.py"
+    if not script.exists():
+        return issues
+
+    cmd = [sys.executable, str(script), translation_file]
+    if json_mode:
+        cmd.append("--json")
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+
+    if json_mode:
+        try:
+            parsed = json.loads(result.stdout)
+            for issue in parsed.get("data", {}).get("issues", []):
+                issues.append({
+                    "severity": issue.get("severity", "medium"),
+                    "type": issue.get("category", "terminology_checker"),
+                    "detail": issue.get("message", ""),
+                    "suggestion": "See check_translation.py output for details",
+                })
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return issues
+
+    for line in result.stdout.split("\n"):
+        if line.strip().startswith("-"):
+            # Heuristic: treat any checker output line as a medium-severity issue.
+            issues.append({
+                "severity": "medium",
+                "type": "terminology_checker",
+                "detail": line.strip()[2:].strip(),
+                "suggestion": "See check_translation.py output for details",
+            })
+    return issues
+
+
+def generate_report(source: str, translation: str, translation_file: str | None = None, json_mode: bool = False) -> str | dict:
     """Generate a comprehensive diff review report."""
     terminology_issues = check_terminology(source, translation)
     numeric_issues = check_numerics(source, translation)
@@ -143,14 +187,30 @@ def generate_report(source: str, translation: str) -> str:
 
     all_issues = terminology_issues + numeric_issues + completeness_issues
 
+    if translation_file:
+        all_issues.extend(run_full_checker(translation_file, json_mode=json_mode))
+
     # Sort by severity
     all_issues.sort(key=lambda x: _SEVERITY_ORDER.get(x["severity"], 3))
+
+    source_sentences = len([s for s in source.split('.') if s.strip()])
+    translation_sentences = len([s for s in translation.split('。') if s.strip()])
+
+    if json_mode:
+        return {
+            "source_length": len(source),
+            "source_sentences": source_sentences,
+            "translation_length": len(translation),
+            "translation_sentences": translation_sentences,
+            "issue_count": len(all_issues),
+            "issues": all_issues,
+        }
 
     lines = [
         "# Diff Review Report (审校差异报告)",
         "",
-        f"Source length: {len(source)} chars | {len([s for s in source.split('.') if s.strip()])} sentences",
-        f"Translation length: {len(translation)} chars | {len([s for s in translation.split('。') if s.strip()])} sentences",
+        f"Source length: {len(source)} chars | {source_sentences} sentences",
+        f"Translation length: {len(translation)} chars | {translation_sentences} sentences",
         f"Issues found: {len(all_issues)}",
         "",
     ]
@@ -192,26 +252,38 @@ def generate_report(source: str, translation: str) -> str:
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python diff_review.py <source_en.txt> <user_translation.txt> [--output report.md]")
+    parser = argparse.ArgumentParser(description="Diff Review Mode")
+    parser.add_argument("source", help="English source file")
+    parser.add_argument("translation", help="Translated file")
+    parser.add_argument("--output", help="Write report to file")
+    parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
+    args = parser.parse_args()
+
+    source_path = Path(args.source)
+    translation_path = Path(args.translation)
+
+    if not source_path.exists():
+        if args.json:
+            json_output(None, errors=[f"source file not found: {args.source}"], exit_code=1)
+        print(f"Error: source file not found: {args.source}")
+        sys.exit(1)
+    if not translation_path.exists():
+        if args.json:
+            json_output(None, errors=[f"translation file not found: {args.translation}"], exit_code=1)
+        print(f"Error: translation file not found: {args.translation}")
         sys.exit(1)
 
-    source_file = sys.argv[1]
-    translation_file = sys.argv[2]
-    output_file = None
-    if "--output" in sys.argv:
-        idx = sys.argv.index("--output")
-        if idx + 1 < len(sys.argv):
-            output_file = sys.argv[idx + 1]
+    source = source_path.read_text(encoding="utf-8")
+    translation = translation_path.read_text(encoding="utf-8")
 
-    source = Path(source_file).read_text(encoding="utf-8")
-    translation = Path(translation_file).read_text(encoding="utf-8")
+    report = generate_report(source, translation, translation_file=args.translation, json_mode=args.json)
 
-    report = generate_report(source, translation)
+    if args.json:
+        json_output(report, exit_code=1 if report["issue_count"] > 0 else 0)
 
-    if output_file:
-        Path(output_file).write_text(report, encoding="utf-8")
-        print(f"Report written to {output_file}")
+    if args.output:
+        Path(args.output).write_text(report, encoding="utf-8")
+        print(f"Report written to {args.output}")
     else:
         print(report)
 

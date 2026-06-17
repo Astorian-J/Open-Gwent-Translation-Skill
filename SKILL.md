@@ -9,6 +9,8 @@ agent_created: true
 
 # Gwent Translation Style (昆特牌翻译风格)
 
+> For non-Claude agents and programmatic usage, see [AGENTS.md](AGENTS.md).
+
 ## Overview
 
 Bidirectional translation for Gwent articles between English and Chinese.
@@ -30,8 +32,8 @@ and reads like a native Gwent player wrote it. Casual but not stiff.
 
 ## Translation Workflow
 
-> ⚠️ **MANDATORY**: Every translation **MUST** execute the full pipeline below.
-> Do NOT skip steps. Do NOT manually call sub-scripts one by one.
+> **IMPORTANT**: The full pipeline below is required for every translation.
+> Skipping steps or calling sub-scripts manually may produce inconsistent results.
 > Use the single automation command provided at each phase.
 
 ---
@@ -45,13 +47,13 @@ python scripts/auto_pipeline.py pre source.md --date YYYY-MM --type general
 ```
 
 This automatically performs context setup, reference loading, context lock,
-and format skeleton extraction. Do NOT run these steps manually.
+and format skeleton extraction. These steps should not be run manually.
 
 > **TRANSLATION DISCIPLINE**: When the pipeline outputs a **card name quick reference table**
 > (a list of English card names and their Chinese translations found in the source),
-> you **MUST** use this table as your sole reference for card names during translation.
-> Do NOT rely on memory. Do NOT skip unfamiliar names. Every card name in the table
-> must be translated using the provided Chinese term.
+> use this table as your sole reference for card names during translation.
+> Do not rely on memory or skip unfamiliar names. Every card name in the table
+> should be translated using the provided Chinese term.
 
 ---
 
@@ -89,7 +91,7 @@ For detailed step-by-step guidance, see `references/translation_workflow.md`.
 
 ### Phase C: Self-Check (Before Output)
 
-**You MUST run this checklist BEFORE delivering the translation:**
+**Run this checklist before finalizing the translation:**
 
 **EN → CN**:
 - [ ] No "费/费用" in formal provision contexts
@@ -113,6 +115,17 @@ For detailed step-by-step guidance, see `references/translation_workflow.md`.
 - [ ] Oral verbs mapped naturally: 赚翻 → "generates huge value", 撑过 → "survives"
 - [ ] Tone: casual but not broken English. Reads like a native player wrote it
 
+The above checklist is also available in machine-checkable form in
+`references/phase_c_checklist.md`. After saving your translation, run:
+
+```bash
+python scripts/phase_c_check.py translated.txt
+```
+
+This executes all automated rules and lists any manual items that still
+require review. The final `completeness_guard.py` gate also runs
+Phase C checks automatically.
+
 ---
 
 ### Phase D: Post-Translation (Verification & Learning)
@@ -124,7 +137,8 @@ python scripts/auto_pipeline.py post source.md translated.txt
 ```
 
 This automatically performs terminology check, consistency verification,
-and records new terms to `pending_terms.md`. Do NOT skip this step.
+and records new terms to `pending_terms.md`. Skipping this step may leave
+unrecorded terms.
 
 If you need to re-scan a translated file for English residue only:
 ```bash
@@ -135,14 +149,14 @@ python scripts/auto_pipeline.py scan translated.txt
 
 ### Phase E: Completeness Guard (Final Gate)
 
-**Before you present the final translation to the user, run:**
+**Before finalizing the translation, run:**
 
 ```bash
-python scripts/completeness_guard.py
+python scripts/completeness_guard.py translated.txt
 ```
 
-If this script reports any missing steps, you MUST complete them before
-delivering the translation. Do NOT ignore guard output.
+If this script reports any missing steps, resolve them before
+marking the translation complete. The guard output should not be ignored.
 
 ---
 

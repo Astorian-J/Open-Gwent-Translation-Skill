@@ -8,15 +8,26 @@ Usage:
 """
 
 import ast
+import argparse
+import os
+import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from datetime import datetime
 
+sys.path.insert(0, str(Path(__file__).parent))
+from _shared import json_output, parse_markdown_table
+
+
+_no_color = False
+
 
 def color(status: str) -> str:
     """Return color code for terminal output."""
+    if _no_color or not sys.stdout.isatty():
+        return ""
     colors = {
         "PASS": "\033[32m",   # Green
         "FAIL": "\033[31m",   # Red
@@ -55,6 +66,7 @@ def check_reference_files(ref_dir: Path) -> list[tuple[str, str]]:
         ("cn_fuzzy_fixes.md", "Chinese fuzzy fixes"),
         ("pending_terms.md", "Pending terms buffer"),
         ("changelog.md", "Changelog"),
+        ("phase_c_checklist.md", "Phase C checklist"),
     ]
 
     for fname, desc in required_refs:
@@ -118,9 +130,9 @@ def check_skill_file(skill_path: Path) -> list[tuple[str, str]]:
         else:
             results.append(("FAIL", f"SKILL.md: Missing {section}"))
 
-    # Check step count
-    step_count = text.count("### Step")
-    results.append(("INFO", f"SKILL.md: {step_count} workflow steps defined"))
+    # Check for workflow phases (SKILL.md uses Phase A/B/C/D/E)
+    phase_count = text.count("### Phase")
+    results.append(("INFO", f"SKILL.md: {phase_count} workflow phases defined"))
 
     # Check for special modes
     if "Diff Review Mode" in text:
@@ -139,9 +151,15 @@ def check_data_integrity(ref_dir: Path) -> list[tuple[str, str]]:
     card_file = ref_dir / "card_names.md"
     if card_file.exists():
         text = card_file.read_text(encoding="utf-8")
-        verified_count = text.count("|") // 3  # Rough estimate
+        verified_count = sum(
+            1 for line in text.split("\n")
+            if line.strip().startswith("|")
+            and "---" not in line
+            and "English" not in line
+            and len([p for p in line.split("|") if p.strip()]) >= 2
+        )
         if "Verified" in text:
-            results.append(("PASS", f"card_names.md: Has verified section (~{verified_count} entries)"))
+            results.append(("PASS", f"card_names.md: Has verified section ({verified_count} entries)"))
         else:
             results.append(("WARN", "card_names.md: No verified section header"))
 
@@ -149,8 +167,9 @@ def check_data_integrity(ref_dir: Path) -> list[tuple[str, str]]:
     term_file = ref_dir / "terminology_map.md"
     if term_file.exists():
         text = term_file.read_text(encoding="utf-8")
-        table_count = text.count("|---|")
-        results.append(("PASS", f"terminology_map.md: {table_count} tables found"))
+        rows = parse_markdown_table(text, min_columns=2)
+        table_count = len(rows)
+        results.append(("PASS", f"terminology_map.md: {table_count} rows found"))
 
     # Check pending_terms.md is not too large
     pending_file = ref_dir / "pending_terms.md"
@@ -169,6 +188,87 @@ def check_data_integrity(ref_dir: Path) -> list[tuple[str, str]]:
     return results
 
 
+def check_phase_c_checklist(ref_dir: Path) -> list[tuple[str, str]]:
+    """Validate phase_c_checklist.md structure and regex patterns."""
+    results = []
+    checklist = ref_dir / "phase_c_checklist.md"
+    if not checklist.exists():
+        results.append(("FAIL", "phase_c_checklist.md: missing"))
+        return results
+
+    text = checklist.read_text(encoding="utf-8")
+    rows = parse_markdown_table(text, min_columns=5)
+    if not rows:
+        results.append(("WARN", "phase_c_checklist.md: no rule rows parsed"))
+        return results
+
+    required_keys = {"id", "description", "check_type", "pattern", "issue_message"}
+    regex_types = {"regex", "regex_forbidden", "regex_required"}
+    seen_ids: set[str] = set()
+    regex_ok_count = 0
+    regex_fail_count = 0
+
+    for idx, row in enumerate(rows, start=1):
+        missing = required_keys - set(row.keys())
+        if missing:
+            results.append((
+                "FAIL",
+                f"phase_c_checklist.md row {idx}: missing columns {', '.join(sorted(missing))}",
+            ))
+            continue
+
+        rid = row.get("id", "").strip()
+        if not rid:
+            results.append(("FAIL", f"phase_c_checklist.md row {idx}: empty rule ID"))
+            continue
+        if rid in seen_ids:
+            results.append(("FAIL", f"phase_c_checklist.md: duplicate rule ID '{rid}'"))
+        seen_ids.add(rid)
+
+        check_type = row.get("check_type", "").strip().lower()
+        if check_type not in {
+            "regex",
+            "regex_forbidden",
+            "regex_required",
+            "reference",
+            "manual",
+        }:
+            results.append((
+                "WARN",
+                f"phase_c_checklist.md: rule '{rid}' has unknown check_type '{check_type}'",
+            ))
+
+        pattern = row.get("pattern", "").strip()
+        if check_type in regex_types:
+            raw = pattern.strip("`")
+            raw = raw.replace("\\|", "|")
+            if not raw:
+                results.append((
+                    "FAIL",
+                    f"phase_c_checklist.md: rule '{rid}' has empty regex pattern",
+                ))
+                regex_fail_count += 1
+                continue
+            try:
+                re.compile(raw)
+                regex_ok_count += 1
+            except re.error as e:
+                results.append((
+                    "FAIL",
+                    f"phase_c_checklist.md: rule '{rid}' invalid regex: {e}",
+                ))
+                regex_fail_count += 1
+
+    results.append((
+        "INFO",
+        f"phase_c_checklist.md: {len(rows)} rules, {regex_ok_count} valid regex patterns",
+    ))
+    if regex_fail_count == 0 and len(seen_ids) == len(rows):
+        results.append(("PASS", "phase_c_checklist.md: structure and regex patterns valid"))
+
+    return results
+
+
 def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
     """Run basic test cases on scripts."""
     results = []
@@ -179,19 +279,24 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
         try:
             # Create test file
             test_content = "这张卡要12费用，出场率很高。"
-            test_file = Path(tempfile.gettempdir()) / "test_health_check.txt"
-            test_file.write_text(test_content, encoding="utf-8")
-
-            result = subprocess.run(
-                [sys.executable, str(check_script), str(test_file)],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode != 0 and "forbidden term" in result.stdout:
-                results.append(("PASS", "check_translation.py: Detects errors correctly"))
-            else:
-                results.append(("WARN", "check_translation.py: Unexpected test result"))
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".txt", encoding="utf-8", delete=False
+            ) as tf:
+                tf.write(test_content)
+                test_file = Path(tf.name)
+            try:
+                result = subprocess.run(
+                    [sys.executable, str(check_script), str(test_file)],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if result.returncode != 0 and "forbidden term" in result.stdout:
+                    results.append(("PASS", "check_translation.py: Detects errors correctly"))
+                else:
+                    results.append(("WARN", "check_translation.py: Unexpected test result"))
+            finally:
+                test_file.unlink(missing_ok=True)
         except Exception as e:
             results.append(("WARN", f"check_translation.py: Test failed ({e})"))
 
@@ -212,19 +317,24 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
     if check_script.exists():
         try:
             test_content = "这张卡很强。Geralt 和 Ciri 都可以带。"
-            test_file = Path(tempfile.gettempdir()) / "test_residue.txt"
-            test_file.write_text(test_content, encoding="utf-8")
-
-            result = subprocess.run(
-                [sys.executable, str(check_script), str(test_file)],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if "English residue" in result.stdout:
-                results.append(("PASS", "check_translation.py: English residue detection works"))
-            else:
-                results.append(("WARN", "check_translation.py: English residue not detected in test"))
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".txt", encoding="utf-8", delete=False
+            ) as tf:
+                tf.write(test_content)
+                test_file = Path(tf.name)
+            try:
+                result = subprocess.run(
+                    [sys.executable, str(check_script), str(test_file)],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if "English residue" in result.stdout:
+                    results.append(("PASS", "check_translation.py: English residue detection works"))
+                else:
+                    results.append(("WARN", "check_translation.py: English residue not detected in test"))
+            finally:
+                test_file.unlink(missing_ok=True)
         except Exception as e:
             results.append(("WARN", f"check_translation.py: Residue test failed ({e})"))
 
@@ -232,81 +342,78 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
 
 
 def main():
-    verbose = "--verbose" in sys.argv
+    parser = argparse.ArgumentParser(description="Gwent Translation Skill Health Check")
+    parser.add_argument("--verbose", action="store_true", help="Show detailed output")
+    parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
+    parser.add_argument("--no-color", action="store_true", help="Disable ANSI color codes in output")
+    args = parser.parse_args()
+
+    global _no_color
+    _no_color = args.no_color or os.environ.get("NO_COLOR", "").strip() != ""
 
     base_dir = Path(__file__).parent.parent
     ref_dir = base_dir / "references"
     script_dir = base_dir / "scripts"
     skill_file = base_dir / "SKILL.md"
 
-    print(f"Gwent Translation Skill Health Check")
-    print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Base dir: {base_dir}")
-    print()
-
     all_results = []
 
-    # 1. Reference files
-    print("=" * 50)
-    print("Reference Files")
-    print("=" * 50)
-    results = check_reference_files(ref_dir)
-    all_results.extend(results)
-    for status, msg in results:
-        print(f"  [{color(status)}{status}{color('RESET')}] {msg}")
-    print()
+    def run_section(name: str, func) -> list[tuple[str, str]]:
+        results = func()
+        all_results.extend(results)
+        return results
 
-    # 2. Scripts
-    print("=" * 50)
-    print("Scripts")
-    print("=" * 50)
-    results = check_scripts(script_dir)
-    all_results.extend(results)
-    for status, msg in results:
-        print(f"  [{color(status)}{status}{color('RESET')}] {msg}")
-    print()
+    ref_results = run_section("Reference Files", lambda: check_reference_files(ref_dir))
+    script_results = run_section("Scripts", lambda: check_scripts(script_dir))
+    skill_results = run_section("SKILL.md Structure", lambda: check_skill_file(skill_file))
+    data_results = run_section("Data Integrity", lambda: check_data_integrity(ref_dir))
+    phase_c_results = run_section("Phase C Checklist", lambda: check_phase_c_checklist(ref_dir))
+    test_results = run_section("Functional Tests", lambda: run_test_cases(script_dir))
 
-    # 3. SKILL.md
-    print("=" * 50)
-    print("SKILL.md Structure")
-    print("=" * 50)
-    results = check_skill_file(skill_file)
-    all_results.extend(results)
-    for status, msg in results:
-        print(f"  [{color(status)}{status}{color('RESET')}] {msg}")
-    print()
-
-    # 4. Data integrity
-    print("=" * 50)
-    print("Data Integrity")
-    print("=" * 50)
-    results = check_data_integrity(ref_dir)
-    all_results.extend(results)
-    for status, msg in results:
-        print(f"  [{color(status)}{status}{color('RESET')}] {msg}")
-    print()
-
-    # 5. Functional tests
-    print("=" * 50)
-    print("Functional Tests")
-    print("=" * 50)
-    results = run_test_cases(script_dir)
-    all_results.extend(results)
-    for status, msg in results:
-        print(f"  [{color(status)}{status}{color('RESET')}] {msg}")
-    print()
-
-    # Summary
-    print("=" * 50)
-    print("Summary")
-    print("=" * 50)
     pass_count = sum(1 for s, _ in all_results if s == "PASS")
     fail_count = sum(1 for s, _ in all_results if s == "FAIL")
     warn_count = sum(1 for s, _ in all_results if s == "WARN")
     info_count = sum(1 for s, _ in all_results if s == "INFO")
 
-    total = len([s for s, _ in all_results if s in ("PASS", "FAIL", "WARN")])
+    if args.json:
+        data = {
+            "pass_count": pass_count,
+            "fail_count": fail_count,
+            "warn_count": warn_count,
+            "info_count": info_count,
+            "results": [
+                {"status": status, "message": msg}
+                for status, msg in all_results
+            ],
+        }
+        json_output(data, exit_code=1 if fail_count > 0 else 0)
 
+    print(f"Gwent Translation Skill Health Check")
+    print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Base dir: {base_dir}")
+    print()
+
+    sections = [
+        ("Reference Files", ref_results),
+        ("Scripts", script_results),
+        ("SKILL.md Structure", skill_results),
+        ("Data Integrity", data_results),
+        ("Phase C Checklist", phase_c_results),
+        ("Functional Tests", test_results),
+    ]
+
+    for name, results in sections:
+        print("=" * 50)
+        print(name)
+        print("=" * 50)
+        for status, msg in results:
+            print(f"  [{color(status)}{status}{color('RESET')}] {msg}")
+        print()
+
+    # Summary
+    print("=" * 50)
+    print("Summary")
+    print("=" * 50)
     print(f"  PASS: {pass_count}")
     if fail_count:
         print(f"  {color('FAIL')}FAIL{color('RESET')}: {fail_count}")

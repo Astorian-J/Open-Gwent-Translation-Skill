@@ -84,6 +84,8 @@
 | revert | 改回去 | |
 | full-fledged buff | 全面的增强 | |
 | two-step change | 两步走的改动 | |
+| wide punish | 铺场惩罚 | 针对对手铺场（宽版）的解场手段，区别于单解 |
+| highroll | 天胡 / 上限发挥 / 狗运 | Casual: 天胡, Analysis: 上限发挥, Complaint: 狗运 |
 | abusive combo | 赖皮的组合技 | Bilibili style |
 | alternative | 替代选项/替代方案 | |
 | highlight | 让它更亮眼 | |

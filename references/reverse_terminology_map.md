@@ -37,6 +37,8 @@ For translating Chinese Gwent articles into English.
 | 破烂怪 | Fruits midrange | |
 | 蟹蜘蛛 | Arachas Swarm | |
 | 毒奶 | enemy boost (NG) / poison | Context-dependent |
+| 铺场惩罚 | wide punish | Board-wide removal / punish |
+| 天胡 / 上限发挥 / 狗运 | highroll | Context-dependent: casual/analysis/complaint |
 | 赖皮的组合技 | abusive combo | |
 | 改回去 | revert | More natural than "change back" |
 

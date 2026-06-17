@@ -23,11 +23,15 @@ Skeleton format:
     }
 """
 
+import argparse
 import json
 import re
 import sys
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).parent))
+from _shared import json_output
 
 
 def extract_skeleton(text: str) -> dict:
@@ -149,108 +153,152 @@ def restore_skeleton(skeleton: dict, translated_blocks: list[str]) -> str:
     lines = []
     t_idx = 0
 
+    def next_chunk() -> str | None:
+        """Return the next translated chunk, or None if exhausted."""
+        nonlocal t_idx
+        if t_idx >= len(translated_blocks):
+            return None
+        chunk = translated_blocks[t_idx]
+        t_idx += 1
+        return chunk
+
     for block in skeleton["blocks"]:
-        if block["type"] == "empty":
+        btype = block["type"]
+
+        if btype == "empty":
             lines.append("")
             continue
 
-        if t_idx >= len(translated_blocks):
-            # No more translated content, keep original
-            content = block.get("content", "")
-        else:
-            content = translated_blocks[t_idx]
-            t_idx += 1
+        if btype == "table":
+            # Tables consume one chunk per row; each chunk contains cells joined by ' ||| '.
+            for idx, original_row in enumerate(block["rows"]):
+                row_text = next_chunk()
+                if row_text is None:
+                    cells = original_row
+                else:
+                    cells = [c.strip() for c in row_text.split(" ||| ")]
+                    # If the translator produced the wrong number of cells, fall back to original.
+                    if len(cells) != len(original_row):
+                        cells = original_row
+                lines.append("| " + " | ".join(cells) + " |")
+                if idx == 0:
+                    sep = block.get("separator")
+                    if sep:
+                        lines.append(sep)
+            continue
 
-        if block["type"] == "heading":
+        content = next_chunk()
+        if content is None:
+            content = block.get("content", "")
+
+        if btype == "heading":
             prefix = "#" * block["level"]
             lines.append(f"{prefix} {content}")
 
-        elif block["type"] == "paragraph":
+        elif btype == "paragraph":
             lines.append(content)
 
-        elif block["type"] == "blockquote":
+        elif btype == "blockquote":
             for cl in content.split("\n"):
                 lines.append(f"> {cl}")
 
-        elif block["type"] == "list_item":
+        elif btype == "list_item":
             indent = " " * block.get("indent", 0)
             lines.append(f"{indent}- {content}")
 
-        elif block["type"] == "numbered_item":
+        elif btype == "numbered_item":
             indent = " " * block.get("indent", 0)
             number = block.get("number", 1)
             lines.append(f"{indent}{number}. {content}")
 
-        elif block["type"] == "table":
-            # For tables, content should be a list of cell translations
-            if isinstance(content, list):
-                for idx, row in enumerate(content):
-                    if isinstance(row, list):
-                        lines.append("| " + " | ".join(row) + " |")
-                    else:
-                        lines.append(str(row))
-                    # Insert separator after first row if available
-                    if idx == 0:
-                        sep = block.get("separator")
-                        if sep:
-                            lines.append(sep)
-            else:
-                # Fallback: just append as-is
-                lines.append(str(content))
-
-        elif block["type"] == "raw":
+        elif btype == "raw":
             lines.append(content)
 
     return "\n".join(lines)
 
 
 def split_into_chunks(skeleton: dict) -> list[str]:
-    """Extract just the text content for translation."""
+    """Extract just the text content for translation.
+
+    Table rows are emitted as single chunks with cells joined by ' ||| '
+    so that restore_skeleton can reconstruct the table structure.
+    """
     chunks = []
     for block in skeleton["blocks"]:
         if block["type"] in ("heading", "paragraph", "blockquote", "list_item", "numbered_item"):
             chunks.append(block["content"])
         elif block["type"] == "table":
             for row in block["rows"]:
-                for cell in row:
-                    chunks.append(cell)
+                chunks.append(" ||| ".join(row))
         elif block["type"] == "raw":
             chunks.append(block["content"])
     return chunks
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage:")
-        print("  python format_skeleton.py extract input.md --output skeleton.json")
-        print("  python format_skeleton.py restore skeleton.json translated.txt --output result.md")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Format Skeleton Extractor / Restorer")
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
-    command = sys.argv[1]
+    extract = subparsers.add_parser("extract", help="Extract skeleton from Markdown")
+    extract.add_argument("input", help="Input Markdown file")
+    extract.add_argument("--output", default="skeleton.json", help="Output skeleton file")
+    extract.add_argument("--json", action="store_true", help="Output structured JSON")
 
-    if command == "extract":
-        input_file = sys.argv[2]
-        output_file = sys.argv[4] if len(sys.argv) > 4 and sys.argv[3] == "--output" else "skeleton.json"
+    restore = subparsers.add_parser("restore", help="Restore Markdown from skeleton")
+    restore.add_argument("skeleton", help="Skeleton JSON file")
+    restore.add_argument("translated", help="Translated chunks file")
+    restore.add_argument("--output", default="result.md", help="Output Markdown file")
+    restore.add_argument("--json", action="store_true", help="Output structured JSON")
 
-        text = Path(input_file).read_text(encoding="utf-8")
+    args = parser.parse_args()
+
+    if args.command == "extract":
+        input_path = Path(args.input)
+        if not input_path.exists():
+            if args.json:
+                json_output(None, errors=[f"input file not found: {args.input}"], exit_code=1)
+            print(f"Error: input file not found: {args.input}")
+            sys.exit(1)
+        text = input_path.read_text(encoding="utf-8")
         skeleton = extract_skeleton(text)
-        Path(output_file).write_text(json.dumps(skeleton, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"Extracted {len(skeleton['blocks'])} blocks to {output_file}")
+        Path(args.output).write_text(json.dumps(skeleton, ensure_ascii=False, indent=2), encoding="utf-8")
+        chunk_count = len(split_into_chunks(skeleton))
+        if args.json:
+            json_output({
+                "command": "extract",
+                "input": str(args.input),
+                "output": str(args.output),
+                "block_count": len(skeleton["blocks"]),
+                "chunk_count": chunk_count,
+            }, exit_code=0)
+        print(f"Extracted {len(skeleton['blocks'])} blocks ({chunk_count} chunks) to {args.output}")
 
-    elif command == "restore":
-        skeleton_file = sys.argv[2]
-        translated_file = sys.argv[3]
-        output_file = sys.argv[5] if len(sys.argv) > 5 and sys.argv[4] == "--output" else "result.md"
-
-        skeleton = json.loads(Path(skeleton_file).read_text(encoding="utf-8"))
-        translated_lines = Path(translated_file).read_text(encoding="utf-8").strip().split("\n---CHUNK---\n")
+    elif args.command == "restore":
+        skeleton_path = Path(args.skeleton)
+        translated_path = Path(args.translated)
+        if not skeleton_path.exists():
+            if args.json:
+                json_output(None, errors=[f"skeleton file not found: {args.skeleton}"], exit_code=1)
+            print(f"Error: skeleton file not found: {args.skeleton}")
+            sys.exit(1)
+        if not translated_path.exists():
+            if args.json:
+                json_output(None, errors=[f"translated file not found: {args.translated}"], exit_code=1)
+            print(f"Error: translated file not found: {args.translated}")
+            sys.exit(1)
+        skeleton = json.loads(skeleton_path.read_text(encoding="utf-8"))
+        translated_lines = translated_path.read_text(encoding="utf-8").strip().split("\n---CHUNK---\n")
         result = restore_skeleton(skeleton, translated_lines)
-        Path(output_file).write_text(result, encoding="utf-8")
-        print(f"Restored to {output_file}")
-
-    else:
-        print(f"Unknown command: {command}")
-        sys.exit(1)
+        Path(args.output).write_text(result, encoding="utf-8")
+        if args.json:
+            json_output({
+                "command": "restore",
+                "skeleton": str(args.skeleton),
+                "translated": str(args.translated),
+                "output": str(args.output),
+                "block_count": len(skeleton["blocks"]),
+            }, exit_code=0)
+        print(f"Restored to {args.output}")
 
 
 if __name__ == "__main__":

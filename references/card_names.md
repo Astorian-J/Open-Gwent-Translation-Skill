@@ -953,7 +953,7 @@ Verified against server card_data.json (1260 cards, 2026-06-05).
 | Crimson Curse | 猩红诅咒 | 202190 |
 | Cursed Damsel | 受诅咒的少女 | 203082 |
 | Cyclops | 独眼巨人 | 200037 |
-| Dagon: Promised | 达冈：应许者 | 203199 |
+| Dagon: The Promised One | 达冈：应许者 | 203199 |
 | Desert Banshee | 沙漠女妖 | 202529 |
 | Dettlaff van der Eretein | 狄拉夫·艾瑞廷 | 202888 |
 | Dettlaff: Higher Vampire | 狄拉夫：高阶吸血鬼 | 202291 |
@@ -1287,6 +1287,7 @@ Verified against server card_data.json (1260 cards, 2026-06-05).
 | Carapace | 坚硬甲壳 | 131101 | 怪兽 |
 | Force of Nature | 自然之力 | 132103 | 怪兽 |
 | Fruits of Ysgith | 沼泽果实 | 202117 | 怪兽 |
+| Gernichora | 格尼阔拉 | — | 怪兽 |
 | Overwhelming Hunger | 无尽渴望 | 202572 | 怪兽 |
 | White Frost | 白霜降临 | 200055 | 怪兽 |
 | Call of Harmony | 和谐之唤 | 202188 | 松鼠党 |

@@ -15,6 +15,14 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+from _shared import (
+    extract_card_names,
+    extract_card_names_no_colon,
+    json_output,
+    SKIP_WORDS_MINIMAL,
+)
+
 # --- Load rules from references ---
 
 
@@ -27,18 +35,10 @@ def load_forbidden_terms():
     terms = {}
     guide = _get_ref_path("correction_guide.md")
     if not guide.exists():
-        return {
-            "费": "人口",
-            "费用": "人口",
-            "消耗": "人口",
-            "出场率": "登场率",
-            "协同效应": "康博",
-            "惩罚卡牌": "解场卡",
-            "修血": "蹭血",
-            "站住": "撑过",
-            "存活": "撑过",
-            "未被解掉": "对手不管她",
-        }
+        raise FileNotFoundError(
+            f"Correction guide not found: {guide}. "
+            "Run from the project root or verify the references directory."
+        )
 
     text = guide.read_text(encoding="utf-8")
     in_section = False
@@ -458,9 +458,6 @@ def check_english_residue(text: str) -> list[str]:
         return issues
 
     # Extract English phrases using shared logic (supports function words)
-    import sys
-    script_dir = Path(__file__).parent
-    sys.path.insert(0, str(script_dir))
     from _shared import (
         extract_card_names,
         extract_card_names_no_colon,
@@ -521,22 +518,38 @@ def check_english_residue(text: str) -> list[str]:
                 )
         else:
             # Try partial match for colon-style card names
-            # e.g., "Geralt" might match "Geralt: Igni"
-            for db_key, (db_en, db_cn) in card_map.items():
-                if key in db_key or db_key in key:
-                    if phrase not in found:
-                        found.add(phrase)
-                        issues.append(
-                            f"English residue: 「{phrase}」→ 「{db_cn}」 "
-                            f"(matches {db_en} in card_names.md)"
-                        )
-                    break
+            # e.g., "Geralt" might match multiple "Geralt: ..." variants.
+            # Collect all matches so the user sees every possible translation.
+            partial_hits = [
+                (db_en, db_cn)
+                for db_key, (db_en, db_cn) in card_map.items()
+                if key in db_key or db_key in key
+            ]
+            if partial_hits:
+                # Report once per phrase, listing all matching variants.
+                variants = ", ".join(f"{db_en} → {db_cn}" for db_en, db_cn in partial_hits[:5])
+                if len(partial_hits) > 5:
+                    variants += f", ... ({len(partial_hits) - 5} more)"
+                if phrase not in found:
+                    found.add(phrase)
+                    issues.append(
+                        f"English residue: 「{phrase}」may be untranslated. "
+                        f"Matches: {variants}"
+                    )
 
     return issues
 
 
 def auto_fix(text: str) -> tuple[str, int]:
-    """Auto-fix deterministic errors. Returns (fixed_text, count)."""
+    """Auto-fix deterministic provision-terminology errors.
+
+    Currently handles:
+      - "X费换Y战力" -> "X人口换Y战力"
+      - "X费Y战力"   -> "X人口Y战力"
+
+    Other issues (forbidden terms, outdated names, Chinese numerals, etc.)
+    require manual review and are not auto-fixed.
+    """
     fixed = text
     count = 0
 
@@ -549,19 +562,70 @@ def auto_fix(text: str) -> tuple[str, int]:
     return fixed, count
 
 
+# Issue prefixes used to derive structured categories for --json output.
+ISSUE_CATEGORIES = {
+    "provision mix:": "provision_mix",
+    "identical numbers:": "identical_numbers",
+    "suspicious order:": "suspicious_order",
+    "forbidden term:": "forbidden_term",
+    "outdated card name:": "outdated_card_name",
+    "ambiguous name:": "ambiguous_name",
+    "Chinese numerals:": "chinese_numerals",
+    "passive voice:": "passive_voice",
+    "English parentheses:": "english_parentheses",
+    "English colon:": "english_colon",
+    "abbreviation:": "abbreviation",
+    "typo:": "typo",
+    "homophone:": "homophone",
+    "deck abbreviation:": "deck_abbreviation",
+    "English residue:": "english_residue",
+}
+
+
+def categorize_issue(issue: str) -> dict[str, str]:
+    """Map a human-readable issue string to a structured category."""
+    for prefix, category in ISSUE_CATEGORIES.items():
+        if issue.startswith(prefix):
+            return {"category": category, "severity": "error", "message": issue}
+    return {"category": "unknown", "severity": "error", "message": issue}
+
+
 def main():
     parser = argparse.ArgumentParser(description="Gwent translation terminology checker")
     parser.add_argument("file", help="File to check")
-    parser.add_argument("--fix", action="store_true", help="Auto-fix determinable errors")
+    parser.add_argument("--fix", action="store_true", help="Auto-fix provision-terminology errors only (费→人口)")
+    parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     args = parser.parse_args()
 
     path = Path(args.file)
     if not path.exists():
+        if args.json:
+            json_output(None, errors=[f"file not found: {args.file}"], exit_code=1)
         print(f"Error: file not found: {args.file}")
         sys.exit(1)
 
     text = path.read_text(encoding="utf-8")
     issues = check_translation(text)
+
+    # Apply auto-fix before emitting any output so JSON reports accurate counts.
+    auto_fixed_count = 0
+    if args.fix:
+        fixed_text, fix_count = auto_fix(text)
+        auto_fixed_count = fix_count
+        if fix_count > 0:
+            path.write_text(fixed_text, encoding="utf-8")
+            issues = check_translation(fixed_text)
+
+    if args.json:
+        structured = [categorize_issue(i) for i in issues]
+        auto_fixable = sum(1 for i in structured if i["category"] == "provision_mix")
+        data = {
+            "issue_count": len(issues),
+            "auto_fixable_count": auto_fixable,
+            "auto_fixed_count": auto_fixed_count,
+            "issues": structured,
+        }
+        json_output(data, exit_code=1 if issues else 0)
 
     if issues:
         print(f"Found {len(issues)} issue(s):")
@@ -571,19 +635,15 @@ def main():
         print("No issues found")
 
     if args.fix:
-        fixed_text, fix_count = auto_fix(text)
-        if fix_count > 0:
-            print(f"\nAuto-fixed {fix_count} issue(s)")
-            path.write_text(fixed_text, encoding="utf-8")
+        if auto_fixed_count > 0:
+            print(f"\nAuto-fixed {auto_fixed_count} provision issue(s) (费→人口)")
             print("Written back to file")
-            # Re-check after fix to determine exit code
-            issues = check_translation(fixed_text)
             if issues:
                 print(f"\nRemaining issues after fix: {len(issues)}")
             else:
                 print("\nAll issues resolved after fix")
         else:
-            print("\nNo auto-fixable issues")
+            print("\nNo auto-fixable provision issues")
 
     sys.exit(1 if issues else 0)
 

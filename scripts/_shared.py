@@ -6,7 +6,36 @@ across learn.py, context_lock.py, and diff_review.py.
 """
 
 import re
+import sys
 from collections.abc import Iterator
+from typing import Any
+
+# --- JSON output helper (agent-agnostic) ---
+
+
+def json_output(data: Any, errors: list[str] | None = None, exit_code: int = 0) -> None:
+    """Print a standard JSON envelope to stdout and exit.
+
+    Args:
+        data: Command-specific structured payload.
+        errors: High-level error messages (not individual translation issues).
+        exit_code: Process exit code. 0 means success; non-zero means failure.
+    """
+    import json
+
+    if errors is None:
+        errors = []
+
+    envelope = {
+        "success": exit_code == 0,
+        "exit_code": exit_code,
+        "data": data,
+        "errors": errors,
+    }
+
+    print(json.dumps(envelope, ensure_ascii=False, indent=2))
+    sys.exit(exit_code)
+
 
 # --- Regex patterns ---
 
@@ -35,170 +64,78 @@ SKIP_WORDS_MINIMAL: frozenset[str] = frozenset({
     "When", "What", "Where", "Which", "While", "Although", "However",
 })
 
-# Full skip words used by learn.py for aggressive false-positive filtering.
+# Full skip words used by learn.py for false-positive filtering.
+# Kept intentionally small and focused on words that are genuinely not Gwent terms.
+# Common adjective/adverb comparative/superlative forms are filtered via regex in
+# the extraction functions rather than being enumerated here.
 SKIP_WORDS_FULL: frozenset[str] = frozenset({
+    # Articles and determiners
     "The", "A", "An", "This", "That", "These", "Those", "It", "Its",
+    "Such", "Each", "Every", "All", "Both", "Either", "Neither",
+    # Personal pronouns
     "He", "She", "They", "We", "You", "I", "Me", "My", "His", "Her",
-    "Their", "Our", "Your", "And", "Or", "But", "If", "Then", "Than",
-    "When", "Where", "Why", "How", "What", "Who", "Which", "While",
-    "Because", "Since", "Until", "Although", "However", "Therefore",
-    "Moreover", "Furthermore", "Nevertheless", "Otherwise", "Instead",
-    "Meanwhile", "Afterwards", "Previously", "Eventually", "Finally",
-    "Currently", "Recently", "Usually", "Often", "Sometimes", "Always",
-    "Never", "Already", "Still", "Yet", "Even", "Just", "Only", "Also",
-    "Too", "Very", "Quite", "Rather", "Pretty", "Really", "Actually",
-    "Probably", "Possibly", "Perhaps", "Maybe", "Certainly", "Definitely",
-    "Absolutely", "Completely", "Totally", "Entirely", "Fully", "Highly",
-    "Extremely", "Incredibly", "Amazingly", "Surprisingly", "Interestingly",
-    "Fortunately", "Unfortunately", "Luckily", "Hopefully", "Ideally",
-    "Basically", "Essentially", "Fundamentally", "Primarily", "Mainly",
-    "Mostly", "Generally", "Typically", "Normally", "Commonly",
-    "Frequently", "Regularly", "Consistently", "Constantly", "Continuously",
-    "Repeatedly", "Occasionally", "Rarely", "Seldom", "Hardly", "Barely",
-    "Scarcely", "Nearly", "Almost", "Approximately", "Roughly", "Around",
-    "About", "Over", "Under", "Above", "Below", "Between", "Among",
-    "Within", "Without", "Against", "Across", "Along", "Behind",
-    "Beyond", "Beside", "Besides", "Inside", "Outside", "Through",
-    "Throughout", "Toward", "Towards", "Upon", "Onto", "Into", "Off",
-    "Up", "Down", "In", "Out", "On", "At", "To", "For",
-    "Of", "With", "From", "By", "About", "Like", "As", "During",
-    "Before", "After", "One", "Two", "Three", "Four", "Five", "Six",
-    "Seven", "Eight", "Nine", "Ten", "First", "Second", "Third",
-    "Last", "Next", "Previous", "New", "Old", "Good", "Bad", "Big",
-    "Small", "Long", "Short", "High", "Low", "Great", "Little",
-    "Large", "Tiny", "Huge", "Vast", "Many", "Much", "More", "Most",
-    "Some", "Any", "All", "None", "Each", "Every", "Both", "Either",
-    "Neither", "Other", "Another", "Same", "Different", "Such", "Own",
-    "Well", "Better", "Best", "Worse", "Worst", "Far", "Further",
-    "Furthest", "Near", "Nearer", "Nearest", "Early", "Earlier",
-    "Earliest", "Late", "Later", "Latest", "Soon", "Sooner", "Soonest",
-    "Fast", "Faster", "Fastest", "Slow", "Slower", "Slowest", "Hard",
-    "Harder", "Hardest", "Easy", "Easier", "Easiest", "Happy",
-    "Happier", "Happiest", "Sad", "Sadder", "Saddest", "Angry",
-    "Angrier", "Angriest", "Strong", "Stronger", "Strongest", "Weak",
-    "Weaker", "Weakest", "Rich", "Richer", "Richest", "Poor", "Poorer",
-    "Poorest", "Young", "Younger", "Youngest", "Old", "Older", "Oldest",
-    "Hot", "Hotter", "Hottest", "Cold", "Colder", "Coldest", "Warm",
-    "Warmer", "Warmest", "Cool", "Cooler", "Coolest", "Dry", "Drier",
-    "Driest", "Wet", "Wetter", "Wettest", "Clean", "Cleaner",
-    "Cleanest", "Dirty", "Dirtier", "Dirtiest", "Deep", "Deeper",
-    "Deepest", "Shallow", "Shallower", "Shallowest", "Wide", "Wider",
-    "Widest", "Narrow", "Narrower", "Narrowest", "Thick", "Thicker",
-    "Thickest", "Thin", "Thinner", "Thinnest", "Heavy", "Heavier",
-    "Heaviest", "Light", "Lighter", "Lightest", "Bright", "Brighter",
-    "Brightest", "Dark", "Darker", "Darkest", "Loud", "Louder",
-    "Loudest", "Quiet", "Quieter", "Quietest", "Sharp", "Sharper",
-    "Sharpest", "Dull", "Duller", "Dullest", "Smooth", "Smoother",
-    "Smoothest", "Rough", "Rougher", "Roughest", "Soft", "Softer",
-    "Softest", "Tight", "Tighter", "Tightest", "Loose", "Looser",
-    "Loosest", "Safe", "Safer", "Safest", "Dangerous", "Careful",
-    "Brave", "Braver", "Bravest", "Clever", "Cleverer", "Cleverest",
-    "Stupid", "Stupider", "Stupidest", "Friendly", "Friendlier",
-    "Friendliest", "Lovely", "Lovelier", "Loveliest", "Lively",
-    "Livelier", "Liveliest", "Lonely", "Lonelier", "Loneliest",
-    "Ugly", "Uglier", "Ugliest", "Pretty", "Prettier", "Prettiest",
-    "Healthy", "Healthier", "Healthiest", "Wealthy", "Wealthier",
-    "Wealthiest", "Hungry", "Hungrier", "Hungriest", "Thirsty",
-    "Thirstier", "Thirstiest", "Sleepy", "Sleepier", "Sleepiest",
-    "Funny", "Funnier", "Funniest", "Sunny", "Sunnier", "Sunniest",
-    "Windy", "Windier", "Windiest", "Rainy", "Rainier", "Rainiest",
-    "Snowy", "Snowier", "Snowiest", "Cloudy", "Cloudier", "Cloudiest",
-    "Foggy", "Foggier", "Fogiest", "Dusty", "Dustier", "Dustiest",
-    "Muddy", "Muddier", "Muddiest", "Bloody", "Bloodier", "Bloodiest",
-    "Merry", "Merrier", "Merriest", "Gay", "Gayer", "Gayest", "Blue",
-    "Bluer", "Bluest", "Red", "Redder", "Reddest", "Green", "Greener",
-    "Greenest", "Yellow", "Yellower", "Yellowest", "White", "Whiter",
-    "Whitest", "Black", "Blacker", "Blackest", "Brown", "Browner",
-    "Brownest", "Gray", "Grayer", "Grayest", "Purple", "Purpler",
-    "Purplest", "Orange", "Oranger", "Orangest", "Pink", "Pinker",
-    "Pinkest", "Silver", "Silverer", "Silverest", "Gold", "Golder",
-    "Goldest", "Bronze", "Bronzer", "Bronzest", "True", "Truer",
-    "Truest", "False", "Falser", "Falsest", "Right", "Righter",
-    "Rightest", "Wrong", "Wronger", "Wrongest", "Correct", "Exact",
-    "Exacter", "Exactest", "Perfect", "Complete", "Whole", "Wholer",
-    "Wholest", "Half", "Double", "Doubler", "Doublest", "Triple",
-    "Tripler", "Triplest", "Single", "Singler", "Singlest", "Several",
-    "Many", "Few", "Fewer", "Fewest", "Numerous", "Various", "Diverse",
-    "Similar", "Equal", "Equivalent", "Alike", "Identical", "Distinct",
-    "Separate", "Individual", "Personal", "Private", "Public", "Common",
-    "Shared", "Joint", "Mutual", "Reciprocal", "Collective", "Universal",
-    "General", "Specific", "Particular", "Special", "Unique", "Rare",
-    "Unusual", "Strange", "Weird", "Odd", "Peculiar", "Curious", "Queer",
-    "Suspicious", "Doubtful", "Uncertain", "Unsure", "Dubious",
-    "Questionable", "Debatable", "Disputable", "Controversial",
-    "Contentious", "Problematic", "Troublesome", "Difficult", "Tough",
-    "Rough", "Challenging", "Demanding", "Taxing", "Arduous",
-    "Strenuous", "Laborious", "Tedious", "Tiresome", "Wearisome",
-    "Boring", "Monotonous", "Repetitive", "Routine", "Habitual",
-    "Customary", "Traditional", "Conventional", "Orthodox", "Standard",
-    "Normal", "Regular", "Ordinary", "Average", "Medium", "Moderate",
-    "Modest", "Reasonable", "Sensible", "Practical", "Realistic",
-    "Feasible", "Viable", "Possible", "Achievable", "Attainable",
-    "Accessible", "Available", "Obtainable", "Reachable", "Within",
-    "Beyond", "Exceeding", "Surpassing", "Transcending", "Transcendent",
-    "Superior", "Supreme", "Ultimate", "Final", "Terminal", "Conclusive",
-    "Definitive", "Absolute", "Total", "Full", "Entire", "Intact",
-    "Undamaged", "Unhurt", "Uninjured", "Secure", "Protected", "Guarded",
-    "Defended", "Shielded", "Sheltered", "Covered", "Hidden", "Concealed",
-    "Secret", "Confidential", "Classified", "Restricted", "Limited",
-    "Bound", "Tied", "Connected", "Linked", "Related", "Associated",
-    "Affiliated", "Allied", "United", "Combined", "Joined", "Merged",
-    "Fused", "Blended", "Mixed", "Integrated", "Incorporated",
-    "Included", "Contained", "Enclosed", "Surrounded", "Encircled",
-    "Wrapped", "Packaged", "Boxed", "Crated", "Held", "Kept", "Stored",
-    "Saved", "Preserved", "Maintained", "Sustained", "Supported",
-    "Upheld", "Backed", "Endorsed", "Approved", "Accepted", "Recognized",
-    "Acknowledged", "Admitted", "Confessed", "Declared", "Announced",
-    "Proclaimed", "Stated", "Said", "Told", "Spoken", "Expressed",
-    "Voiced", "Articulated", "Pronounced", "Enunciated", "Uttered",
-    "Murmured", "Muttered", "Mumbled", "Whispered", "Mouthed", "Lipped",
-    "Signed", "Gestured", "Indicated", "Pointed", "Shown", "Displayed",
-    "Exhibited", "Presented", "Demonstrated", "Illustrated",
-    "Exemplified", "Represented", "Symbolized", "Signified", "Meant",
-    "Implied", "Suggested", "Hinted", "Intimated", "Insinuated",
-    "Inferred", "Deduced", "Concluded", "Reasoned", "Thought",
-    "Believed", "Considered", "Deemed", "Regarded", "Viewed", "Seen",
-    "Looked", "Watched", "Observed", "Noticed", "Perceived", "Sensed",
-    "Felt", "Experienced", "Undergone", "Endured", "Suffered", "Borne",
-    "Withstood", "Resisted", "Opposed", "Defied", "Challenged",
-    "Confronted", "Facing", "Meeting", "Encountered", "Trying",
-    "Attempting", "Endeavoring", "Undertaking", "Venturing", "Daring",
-    "Risking", "Gambling", "Betting", "Wagering", "Staking", "Pledging",
-    "Promising", "Vowing", "Swearing", "Oathing", "Committing",
-    "Dedicating", "Devoting", "Consecrating", "Sacrificing", "Offering",
-    "Giving", "Donating", "Contributing", "Providing", "Supplying",
-    "Furnishing", "Equipping", "Arming", "Preparing", "Readying",
-    "Setting", "Fixing", "Establishing", "Founding", "Creating",
-    "Making", "Building", "Constructing", "Erecting", "Raising",
-    "Lifting", "Hoisting", "Elevating", "Uplifting", "Boosting",
-    "Increasing", "Growing", "Expanding", "Enlarging", "Magnifying",
-    "Amplifying", "Intensifying", "Strengthening", "Reinforcing",
-    "Fortifying", "Consolidating", "Solidifying", "Hardening",
-    "Toughening", "Tempering", "Annealing", "Forging", "Casting",
-    "Molding", "Shaping", "Forming", "Fashioning", "Crafting",
-    "Designing", "Planning", "Scheming", "Plotting", "Conspiring",
-    "Colluding", "Cooperating", "Collaborating", "Coordinating",
-    "Synchronizing", "Harmonizing", "Aligning", "Matching", "Pairing",
-    "Coupling", "Linking", "Connecting", "Joining", "Uniting",
-    "Combining", "Integrating", "Fusing", "Merging", "Blending",
-    "Mixing", "Stirring", "Shaking", "Agitating", "Disturbing",
-    "Perturbing", "Disrupting", "Interrupting", "Bothering",
-    "Annoying", "Irritating", "Aggravating", "Exasperating",
-    "Infuriating", "Enraging", "Angering", "Provoking", "Inciting",
-    "Instigating", "Fomenting", "Stirring", "Rousing", "Awakening",
-    "Waking", "Arising", "Emerging", "Appearing", "Materializing",
-    "Manifesting", "Showing", "Revealing", "Disclosing", "Exposing",
-    "Uncovering", "Unveiling", "Unmasking", "Unearthing", "Digging",
-    "Excavating", "Mining", "Extracting", "Deriving", "Obtaining",
-    "Getting", "Acquiring", "Gaining", "Winning", "Earning",
-    "Deserving", "Meriting", "Warranting", "Justifying", "Validating",
-    "Confirming", "Verifying", "Authenticating", "Certifying",
-    "Attesting", "Testifying", "Witnessing", "Seeing", "Observing",
-    "Noticing", "Perceiving", "Sensing", "Feeling", "Experiencing",
-    "Undergoing", "Suffering", "Enduring", "Tolerating", "Bearing",
-    "Resisting", "Opposing", "Defying", "Challenging", "Confronting",
-    "Facing", "Meeting", "Encountered", "Experienced", "Undergone",
+    "Their", "Our", "Your", "One", "Ones",
+    # Common conjunctions
+    "And", "Or", "But", "If", "Then", "Than", "Because", "Since", "Until",
+    "Although", "However", "Therefore", "While", "Whereas",
+    # Common interrogatives / relatives
+    "When", "Where", "Why", "How", "What", "Who", "Which", "Whose", "Whom",
+    # Common prepositions
+    "In", "On", "At", "To", "For", "Of", "With", "From", "By", "About",
+    "Into", "Onto", "Upon", "Over", "Under", "Above", "Below", "Between",
+    "Among", "Through", "Throughout", "Across", "Along", "Against", "Toward",
+    "Towards", "Before", "After", "During", "Within", "Without", "Behind",
+    "Beyond", "Beside", "Besides", "Inside", "Outside", "Off", "Up", "Down",
+    "Like", "As", "Near", "Around",
+    # Common adverbs
+    "Very", "Quite", "Rather", "Really", "Just", "Only", "Also", "Too",
+    "Even", "Still", "Yet", "Already", "Always", "Never", "Often", "Sometimes",
+    "Usually", "Maybe", "Perhaps", "Probably", "Possibly", "Certainly",
+    "Definitely", "Actually", "Basically", "Essentially", "Generally",
+    "Typically", "Finally", "Eventually", "Previously", "Currently",
+    # Common generic adjectives
+    "New", "Old", "Good", "Bad", "Big", "Small", "Long", "Short", "High",
+    "Low", "Great", "Little", "Large", "Many", "Much", "More", "Most",
+    "Some", "Any", "Other", "Another", "Same", "Different", "Own",
+    "First", "Second", "Third", "Last", "Next", "Previous",
+    # Common generic verbs / verb forms that are not card names
+    "Is", "Are", "Was", "Were", "Be", "Been", "Being", "Have", "Has", "Had",
+    "Do", "Does", "Did", "Done", "Get", "Gets", "Got", "Gotten", "Make",
+    "Makes", "Made", "Take", "Takes", "Took", "Taken", "Come", "Comes", "Came",
+    "Go", "Goes", "Went", "Gone", "See", "Sees", "Saw", "Seen", "Know",
+    "Knows", "Knew", "Known", "Think", "Thinks", "Thought", "Use", "Uses",
+    "Used", "Find", "Finds", "Found", "Give", "Gives", "Gave", "Given",
+    "Tell", "Tells", "Told", "Work", "Works", "Worked", "Call", "Calls",
+    "Called", "Try", "Tries", "Tried", "Need", "Needs", "Needed", "Feel",
+    "Feels", "Felt", "Become", "Becomes", "Became", "Become", "Leave",
+    "Leaves", "Left", "Put", "Puts", "Mean", "Means", "Meant", "Keep",
+    "Keeps", "Kept", "Let", "Lets", "Begin", "Begins", "Began", "Begun",
+    "Seem", "Seems", "Seemed", "Help", "Helps", "Helped", "Show", "Shows",
+    "Showed", "Shown", "Hear", "Hears", "Heard", "Play", "Plays", "Played",
+    "Run", "Runs", "Ran", "Move", "Moves", "Moved", "Live", "Lives", "Lived",
+    "Believe", "Believes", "Believed", "Bring", "Brings", "Brought",
+    "Happen", "Happens", "Happened", "Stand", "Stands", "Stood",
+    # Numbers as words
+    "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight",
+    "Nine", "Ten", "Eleven", "Twelve", "Twenty", "Thirty", "Hundred",
+    "Thousand", "Million",
 })
+
+
+# Pattern for common English comparative/superlative adjectives and adverbs.
+# Used as a fallback filter so the literal skip list does not need to enumerate
+# every possible form.
+_SKIP_COMPARATIVE_RE = re.compile(r'^[A-Z][a-z]+(er|est)$')
+
+
+def is_likely_common_word(word: str) -> bool:
+    """Return True if word looks like a common English word, not a card name.
+
+    Combines the curated skip list with regex patterns for common suffixes.
+    """
+    if word in SKIP_WORDS_FULL:
+        return True
+    return bool(_SKIP_COMPARATIVE_RE.match(word))
 
 # Minimal abbreviations skip set (used by context_lock.py and diff_review.py).
 SKIP_ABBREVS_MINIMAL: frozenset[str] = frozenset({
@@ -331,3 +268,74 @@ def extract_abbreviations(
         abbrev = match.group(1)
         if abbrev not in skip_abbrevs:
             yield abbrev
+
+
+def parse_markdown_table(text: str, min_columns: int = 3) -> list[dict[str, str]]:
+    """Parse markdown tables into a list of row dictionaries.
+
+    Headers are normalized to lower-case keys. The special key `_raw` holds
+    the original row values in order. Empty rows and header repeats are skipped.
+
+    Args:
+        text: Markdown text containing zero or more tables.
+        min_columns: Minimum number of columns a data row must have.
+
+    Returns:
+        List of row dicts, one per data row across all tables in the text.
+    """
+    rows: list[dict[str, str]] = []
+    headers: list[str] = []
+    in_table = False
+
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line.startswith("|"):
+            in_table = False
+            headers = []
+            continue
+
+        # Escape pipes inside backticks so they don't split columns.
+        # Markdown tables allow `\|` to represent a literal pipe; we preserve
+        # the escaped form here and let callers unescape if needed.
+        ESC = "\x00PIPE\x00"
+        safe_line = line
+        for quoted in re.findall(r'`[^`]*`', line):
+            safe_quoted = quoted.replace("|", ESC)
+            safe_line = safe_line.replace(quoted, safe_quoted, 1)
+
+        parts = [p.strip() for p in safe_line.split("|")]
+        # Remove leading/trailing empty slots introduced by the outer pipes.
+        if parts and not parts[0]:
+            parts = parts[1:]
+        if parts and not parts[-1]:
+            parts = parts[:-1]
+        # Restore escaped pipes in each cell.
+        parts = [p.replace(ESC, "|") for p in parts]
+
+        if "---" in line:
+            in_table = True
+            continue
+
+        if not in_table:
+            # This is a header row.
+            headers = [h.lower().replace(" ", "_") for h in parts]
+            continue
+
+        # Data row
+        if len(parts) < min_columns:
+            continue
+        if not any(parts):
+            continue
+        # Skip repeated header text
+        if parts[0].lower() in {"english", "wrong", "forbidden", "abbreviation"}:
+            continue
+
+        row: dict[str, str] = {"_raw": "|".join(parts)}
+        for idx, value in enumerate(parts):
+            if idx < len(headers):
+                row[headers[idx]] = value
+            else:
+                row[f"col_{idx}"] = value
+        rows.append(row)
+
+    return rows

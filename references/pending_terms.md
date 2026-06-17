@@ -1,6 +1,6 @@
 # Pending Terms (待审核术语)
 
-Terms discovered during translation that need human review.
+Terms discovered during translation that need verification.
 After verification, move confirmed entries to the appropriate reference file.
 
 Rules for confirming:

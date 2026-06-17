@@ -5,12 +5,16 @@ Translates Chinese output back to English and compares with original.
 Flags semantic drift and meaning loss.
 
 Usage:
-    python backtranslate.py <source_en.txt> <translated_cn.txt> [--detail]
+    python backtranslate.py <source_en.txt> <translated_cn.txt> [backtranslated_en.txt] [--json]
 """
 
+import argparse
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+from _shared import json_output
 
 
 def semantic_comparison(original: str, backtranslated: str) -> list[dict]:
@@ -60,15 +64,18 @@ def semantic_comparison(original: str, backtranslated: str) -> list[dict]:
     return issues
 
 
-def generate_report(original: str, translated: str, backtranslated: str) -> str:
+def generate_report(original: str, translated: str, backtranslated: str | None = None) -> str:
     """Generate a back-translation comparison report."""
-    issues = semantic_comparison(original, backtranslated)
+    issues = semantic_comparison(original, backtranslated) if backtranslated else []
+
+    orig_sents = len([s for s in original.split('.') if s.strip()])
+    translated_sents = len([s for s in translated.split('。') if s.strip()])
 
     lines = [
         "# Back-Translation Report",
         "",
-        f"Original sentences: {len([s for s in original.split('.') if s.strip()])}",
-        f"Translated sentences: {len([s for s in translated.split('。') if s.strip()])}",
+        f"Original sentences: {orig_sents}",
+        f"Translated sentences: {translated_sents}",
         f"Issues found: {len(issues)}",
         "",
         "## Semantic Comparison",
@@ -79,8 +86,7 @@ def generate_report(original: str, translated: str, backtranslated: str) -> str:
         lines.append("No significant semantic drift detected.")
     else:
         for issue in issues:
-            severity_icon = {"high": "", "medium": "", "low": ""}[issue["severity"]]
-            lines.append(f"{severity_icon} **[{issue['severity'].upper()}]** {issue['type']}")
+            lines.append(f"**[{issue['severity'].upper()}]** {issue['type']}")
             lines.append(f"   {issue['detail']}")
             lines.append("")
 
@@ -95,7 +101,7 @@ def generate_report(original: str, translated: str, backtranslated: str) -> str:
         "",
         "Back-Translation (first 200 chars):",
         f"```",
-        f"{backtranslated[:200]}",
+        f"{backtranslated[:200] if backtranslated else 'N/A'}",
         f"```",
         "",
         "## Note",
@@ -109,22 +115,62 @@ def generate_report(original: str, translated: str, backtranslated: str) -> str:
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python backtranslate.py <source_en.txt> <translated_cn.txt> [--detail]")
-        print("")
-        print("This script generates a back-translation validation framework.")
-        print("For actual back-translation, feed the Chinese text to an LLM with:")
-        print('  "Translate this Chinese text back to English literally."')
+    parser = argparse.ArgumentParser(description="Back-Translation Validator")
+    parser.add_argument("source", help="Original English source file")
+    parser.add_argument("translated", help="Chinese translated file")
+    parser.add_argument("backtranslated", nargs="?", help="Back-translated English file")
+    parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
+    args = parser.parse_args()
+
+    source_path = Path(args.source)
+    translated_path = Path(args.translated)
+
+    if not source_path.exists():
+        if args.json:
+            json_output(None, errors=[f"source file not found: {args.source}"], exit_code=1)
+        print(f"Error: source file not found: {args.source}")
+        sys.exit(1)
+    if not translated_path.exists():
+        if args.json:
+            json_output(None, errors=[f"translated file not found: {args.translated}"], exit_code=1)
+        print(f"Error: translated file not found: {args.translated}")
         sys.exit(1)
 
-    source_file = sys.argv[1]
-    translated_file = sys.argv[2]
-    detail = "--detail" in sys.argv
+    original = source_path.read_text(encoding="utf-8")
+    translated = translated_path.read_text(encoding="utf-8")
 
-    original = Path(source_file).read_text(encoding="utf-8")
-    translated = Path(translated_file).read_text(encoding="utf-8")
+    if args.backtranslated:
+        back_path = Path(args.backtranslated)
+        if not back_path.exists():
+            if args.json:
+                json_output(None, errors=[f"back-translated file not found: {args.backtranslated}"], exit_code=1)
+            print(f"Error: back-translated file not found: {args.backtranslated}")
+            sys.exit(1)
+        backtranslated = back_path.read_text(encoding="utf-8")
+        issues = semantic_comparison(original, backtranslated)
+        if args.json:
+            json_output({
+                "original_sentences": len([s for s in original.split('.') if s.strip()]),
+                "translated_sentences": len([s for s in translated.split('。') if s.strip()]),
+                "backtranslated_sentences": len([s for s in backtranslated.split('.') if s.strip()]),
+                "issue_count": len(issues),
+                "issues": issues,
+            }, exit_code=1 if issues else 0)
+        report = generate_report(original, translated, backtranslated)
+        print(report)
+        return
 
-    # Placeholder: In practice, backtranslation would come from an LLM
+    # No backtranslated file provided: print instructions.
+    if args.json:
+        json_output({
+            "original_sentences": len([s for s in original.split('.') if s.strip()]),
+            "translated_sentences": len([s for s in translated.split('。') if s.strip()]),
+            "backtranslated_sentences": 0,
+            "issue_count": 0,
+            "issues": [],
+            "note": "Back-translation file required for comparison. See printed instructions.",
+        }, exit_code=0)
+
     print("=" * 60)
     print("BACK-TRANSLATION VALIDATION FRAMEWORK")
     print("=" * 60)
@@ -144,17 +190,6 @@ def main():
     print("  Save the result to backtranslated.txt, then run:")
     print("  python backtranslate.py source.txt translated.txt backtranslated.txt")
     print()
-
-    # Generate placeholder report with heuristics
-    report = generate_report(
-        original, translated,
-        f"[Back-translation not provided. Original length: {len(original)} chars]"
-    )
-
-    if detail:
-        print(report)
-    else:
-        print("Run with --detail to see the full report template.")
 
 
 if __name__ == "__main__":

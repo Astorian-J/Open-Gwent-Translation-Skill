@@ -26,17 +26,20 @@ Lock table format:
     }
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
 from datetime import datetime
 
+sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
     extract_abbreviations,
     extract_capitalized_phrases,
     extract_card_names,
     extract_card_names_no_colon,
     extract_terms_from_markdown,
+    json_output,
 )
 
 
@@ -80,7 +83,7 @@ def extract_terms_from_source(source_text: str) -> dict[str, str]:
     return terms
 
 
-def build_lock(source_file: str, lock_file: str):
+def build_lock(source_file: str, lock_file: str) -> dict:
     """Build a new lock table from source text."""
     source_text = Path(source_file).read_text(encoding="utf-8")
     candidates = extract_terms_from_source(source_text)
@@ -99,18 +102,10 @@ def build_lock(source_file: str, lock_file: str):
         }
 
     save_lock(lock, lock_file)
-    print(f"Built lock table with {len(lock['terms'])} terms")
-    print(f"Save to: {lock_file}")
-    print()
-    print("Next steps:")
-    print("1. Translate the text, looking up terms in references/")
-    print("2. As you decide each translation, update the lock table:")
-    print(f'   python context_lock.py add "Term" "翻译" --lock {lock_file}')
-    print("3. For subsequent paragraphs, check against the lock:")
-    print(f'   python context_lock.py check translated.txt --lock {lock_file}')
+    return lock
 
 
-def check_translation(translation_file: str, lock_file: str):
+def check_translation(translation_file: str, lock_file: str) -> dict:
     """Check translation against lock table for consistency violations."""
     lock = load_lock(lock_file)
     translation = Path(translation_file).read_text(encoding="utf-8")
@@ -122,56 +117,46 @@ def check_translation(translation_file: str, lock_file: str):
         cn_term = info.get("cn", "")
         status = info.get("status", "pending")
 
-        if status == "confirmed" and cn_term:
-            # Check if the Chinese term appears (or its alternatives)
-            variants = [cn_term]
-            # Also check for partial matches
-            if "/" in cn_term:
-                variants = [v.strip() for v in cn_term.split("/")]
+        if status != "confirmed" or not cn_term:
+            continue
 
-            found = any(v in translation for v in variants)
-            if found:
-                confirmed.append(en_term)
-            else:
-                # The English term might be translated differently
-                # This is a soft check—only flag if the EN term appears untranslated
-                if en_term.lower() in translation.lower():
-                    violations.append({
-                        "term": en_term,
-                        "expected": cn_term,
-                        "issue": "English term left untranslated"
-                    })
+        # Check if any variant of the Chinese term appears in the translation.
+        variants = [v.strip() for v in cn_term.split("/")]
+        found_cn = any(v in translation for v in variants)
+        found_en = en_term.lower() in translation.lower()
 
-    print(f"# Context Lock Check")
-    print()
-    print(f"Lock file: {lock_file}")
-    print(f"Confirmed terms in lock: {len([t for t in lock['terms'].values() if t.get('status') == 'confirmed'])}")
-    print(f"Terms found in translation: {len(confirmed)}")
-    print()
+        if found_cn:
+            confirmed.append(en_term)
+        elif found_en:
+            # English term still present — likely untranslated.
+            violations.append({
+                "term": en_term,
+                "expected": cn_term,
+                "issue": "English term left untranslated"
+            })
+        else:
+            # Neither English nor Chinese variant present — term may be omitted.
+            violations.append({
+                "term": en_term,
+                "expected": cn_term,
+                "issue": "Locked term missing from translation"
+            })
 
-    if violations:
-        print("## Violations")
-        print()
-        for v in violations:
-            print(f"- **{v['term']}**: {v['issue']}")
-            print(f"  Expected: 「{v['expected']}」")
-        print()
-    else:
-        print("No consistency violations found.")
-        print()
-
-    # Show pending terms
+    confirmed_count = len([t for t in lock['terms'].values() if t.get('status') == 'confirmed'])
     pending = [(en, info) for en, info in lock["terms"].items() if info.get("status") != "confirmed"]
-    if pending:
-        print(f"## Pending terms ({len(pending)})")
-        print()
-        for en, info in pending:
-            print(f"- {en}")
-        print()
-        print("Confirm with: python context_lock.py add \"Term\" \"翻译\" --lock", lock_file)
+
+    return {
+        "lock_file": lock_file,
+        "confirmed_count": confirmed_count,
+        "found_in_translation": len(confirmed),
+        "violation_count": len(violations),
+        "violations": violations,
+        "pending_count": len(pending),
+        "pending_terms": [en for en, _ in pending],
+    }
 
 
-def add_term(en_term: str, cn_term: str, lock_file: str):
+def add_term(en_term: str, cn_term: str, lock_file: str) -> dict:
     """Add or update a term in the lock table."""
     lock = load_lock(lock_file)
 
@@ -182,47 +167,95 @@ def add_term(en_term: str, cn_term: str, lock_file: str):
     }
 
     save_lock(lock, lock_file)
-    print(f"Locked: 「{en_term}」→ 「{cn_term}」")
+    return {"term": en_term, "translation": cn_term, "lock_file": lock_file}
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage:")
-        print("  python context_lock.py build source.txt --output lock.json")
-        print("  python context_lock.py check translation.txt --lock lock.json")
-        print("  python context_lock.py add \"Term\" \"翻译\" --lock lock.json")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Context Lock — per-document terminology consistency")
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
-    command = sys.argv[1]
+    build = subparsers.add_parser("build", help="Build lock table from source text")
+    build.add_argument("source", help="Source file")
+    build.add_argument("--output", default="lock.json", help="Output lock file")
+    build.add_argument("--json", action="store_true", help="Output structured JSON")
 
-    if command == "build":
-        if len(sys.argv) < 3:
-            print("Usage: python context_lock.py build source.txt --output lock.json")
+    check = subparsers.add_parser("check", help="Check translation against lock table")
+    check.add_argument("translation", help="Translated file")
+    check.add_argument("--lock", default="lock.json", help="Lock file")
+    check.add_argument("--json", action="store_true", help="Output structured JSON")
+
+    add = subparsers.add_parser("add", help="Add a term to the lock table")
+    add.add_argument("en_term", help="English term")
+    add.add_argument("cn_term", help="Chinese translation")
+    add.add_argument("--lock", default="lock.json", help="Lock file")
+    add.add_argument("--json", action="store_true", help="Output structured JSON")
+
+    args = parser.parse_args()
+
+    if args.command == "build":
+        source_path = Path(args.source)
+        if not source_path.exists():
+            if args.json:
+                json_output(None, errors=[f"source file not found: {args.source}"], exit_code=1)
+            print(f"Error: source file not found: {args.source}")
             sys.exit(1)
-        source_file = sys.argv[2]
-        lock_file = sys.argv[4] if len(sys.argv) > 4 and sys.argv[3] == "--output" else "lock.json"
-        build_lock(source_file, lock_file)
+        lock = build_lock(args.source, args.output)
+        term_count = len(lock["terms"])
+        if args.json:
+            json_output({
+                "lock_file": args.output,
+                "term_count": term_count,
+                "document": lock["document"],
+            }, exit_code=0)
+        print(f"Built lock table with {term_count} terms")
+        print(f"Save to: {args.output}")
+        print()
+        print("Next steps:")
+        print("1. Translate the text, looking up terms in references/")
+        print("2. As you decide each translation, update the lock table:")
+        print(f'   python context_lock.py add "Term" "翻译" --lock {args.output}')
+        print("3. For subsequent paragraphs, check against the lock:")
+        print(f'   python context_lock.py check translated.txt --lock {args.output}')
 
-    elif command == "check":
-        if len(sys.argv) < 3:
-            print("Usage: python context_lock.py check translation.txt --lock lock.json")
+    elif args.command == "check":
+        translation_path = Path(args.translation)
+        if not translation_path.exists():
+            if args.json:
+                json_output(None, errors=[f"translation file not found: {args.translation}"], exit_code=1)
+            print(f"Error: translation file not found: {args.translation}")
             sys.exit(1)
-        translation_file = sys.argv[2]
-        lock_file = sys.argv[4] if len(sys.argv) > 4 and sys.argv[3] == "--lock" else "lock.json"
-        check_translation(translation_file, lock_file)
+        result = check_translation(args.translation, args.lock)
+        if args.json:
+            json_output(result, exit_code=1 if result["violation_count"] > 0 else 0)
+        print(f"# Context Lock Check")
+        print()
+        print(f"Lock file: {result['lock_file']}")
+        print(f"Confirmed terms in lock: {result['confirmed_count']}")
+        print(f"Terms found in translation: {result['found_in_translation']}")
+        print()
+        if result["violations"]:
+            print("## Violations")
+            print()
+            for v in result["violations"]:
+                print(f"- **{v['term']}**: {v['issue']}")
+                print(f"  Expected: 「{v['expected']}」")
+            print()
+        else:
+            print("No consistency violations found.")
+            print()
+        if result["pending_terms"]:
+            print(f"## Pending terms ({result['pending_count']})")
+            print()
+            for en in result["pending_terms"]:
+                print(f"- {en}")
+            print()
+            print("Confirm with: python context_lock.py add \"Term\" \"翻译\" --lock", args.lock)
 
-    elif command == "add":
-        if len(sys.argv) < 5:
-            print("Usage: python context_lock.py add \"Term\" \"翻译\" --lock lock.json")
-            sys.exit(1)
-        en_term = sys.argv[2]
-        cn_term = sys.argv[3]
-        lock_file = sys.argv[5] if len(sys.argv) > 5 and sys.argv[4] == "--lock" else "lock.json"
-        add_term(en_term, cn_term, lock_file)
-
-    else:
-        print(f"Unknown command: {command}")
-        sys.exit(1)
+    elif args.command == "add":
+        result = add_term(args.en_term, args.cn_term, args.lock)
+        if args.json:
+            json_output(result, exit_code=0)
+        print(f"Locked: 「{result['term']}」→ 「{result['translation']}」")
 
 
 if __name__ == "__main__":
