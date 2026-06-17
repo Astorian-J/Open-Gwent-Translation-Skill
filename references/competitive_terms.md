@@ -37,6 +37,7 @@
 | Imprisonment | 牢狱之灾 | | NG leader |
 | Leader | 领袖 | | Deck leader ability |
 | Nilfgaard | 尼弗迦德 | NG | Faction name |
+| Syndicate | 辛迪加 | SY | Faction name |
 
 ## Competitive/Tournament Terms (补充)
 
@@ -161,7 +162,6 @@
 | rain | 雨 | SK archetype | Weather damage |
 | alchemy | 炼金 | SY/ST archetype | Potion deck |
 | firesworn | 火誓者 | SY archetype | Fire cult |
-| off the books | 黑市买卖 | SY leader | Coin generation |
 | lined pockets | 盆满钵满 | SY leader | 官方译名 |
 | jackpot | 头号大奖 | SY leader | High coin payoff |
 | congregate | 集会布道 | SY leader | Firesworn swarm |

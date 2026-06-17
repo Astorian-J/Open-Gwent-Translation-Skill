@@ -41,6 +41,7 @@
 | Sabbath | 夜宴 | Yaga's token |
 | Deathwish | 遗愿 | Monster keyword |
 | Defender | 卫士 | Taunt-like unit |
+| Syndicate | 辛迪加 | Faction; abbreviation: SY |
 | purify | 净化 | Remove status |
 
 ## Number Formulas

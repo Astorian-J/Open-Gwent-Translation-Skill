@@ -68,6 +68,17 @@ For translating Chinese Gwent articles into English.
 | 小局 | round |
 | 对局 | match / game |
 
+## Factions (派系)
+
+| Chinese | English | Notes |
+|---------|---------|-------|
+| 辛迪加 | Syndicate | Faction; abbreviation: SY |
+| 北方领域 | Northern Realms | Faction |
+| 史凯利格 | Skellige | Faction |
+| 怪兽 | Monsters | Faction |
+| 尼弗迦德 | Nilfgaard | Faction; abbreviation: NG |
+| 松鼠党 | Scoia'tael | Faction; abbreviation: ST |
+
 ## Style Notes for CN → EN
 
 ### Sentence Structure
