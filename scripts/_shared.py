@@ -342,6 +342,26 @@ def parse_markdown_table(text: str, min_columns: int = 3) -> list[dict[str, str]
     return rows
 
 
+def extract_cn_variants(lock: dict) -> set[str]:
+    """Extract every Chinese variant phrase recorded in a context lock.
+
+    A lock term's ``cn`` field may carry several variants separated by ``/``
+    (e.g. ``"蟹蜘蛛领袖/装甲蟹蜘蛛"``). Each variant is a phrase the agent must
+    use verbatim, so the check and enforce layers treat them as disambiguating
+    context. Centralized here so the two enforcement layers cannot drift apart.
+    """
+    phrases: set[str] = set()
+    for info in lock.get("terms", {}).values():
+        cn = info.get("cn", "")
+        if not cn:
+            continue
+        for variant in cn.split("/"):
+            variant = variant.strip()
+            if variant:
+                phrases.add(variant)
+    return phrases
+
+
 # --- Unified Term Authority ---
 
 

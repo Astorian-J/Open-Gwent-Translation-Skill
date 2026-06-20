@@ -12,15 +12,18 @@ Rules are loaded from references/ directory to stay in sync.
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
     extract_card_names,
     extract_card_names_no_colon,
+    extract_cn_variants,
     json_output,
     SKIP_WORDS_MINIMAL,
 )
@@ -94,6 +97,41 @@ def load_card_corrections():
                     corrections[old] = new
 
     return corrections
+
+
+def load_locked_phrases_from_source(source_path: Path) -> set[str]:
+    """Build a context lock from the source and return locked Chinese phrases.
+
+    These phrases represent the official/community translations that the agent
+    is required to use. An ambiguous base name counts as disambiguated only
+    when one of these phrases is actually present in the translation (see the
+    ambiguous-name guard in check_translation).
+    """
+    script = Path(__file__).parent / "context_lock.py"
+    if not script.exists():
+        return set()
+
+    # Reserve a path only; context_lock.py writes the lock itself via --output.
+    tmp_fd, tmp_name = tempfile.mkstemp(suffix=".json")
+    tmp_path = Path(tmp_name)
+    os.close(tmp_fd)
+
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script), "build", str(source_path), "--output", str(tmp_path)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            return set()
+        lock = json.loads(tmp_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, ValueError, OSError, subprocess.SubprocessError):
+        return set()
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    return extract_cn_variants(lock)
 
 
 def load_abbreviations():
@@ -250,13 +288,14 @@ ENGLISH_COLON = re.compile(r'[一-鿿][A-Za-z]+:')
 ABBREV_PATTERN = re.compile(r'(?<![A-Za-z])(BC|OP|UP|OTB|RSS|CA|GG|BM|PTS|R[123])(?![A-Za-z])')
 
 
-def check_translation(text: str) -> list[str]:
+def check_translation(text: str, locked_phrases: set[str] | None = None) -> list[str]:
     """Check translation text, return list of issues."""
     issues = []
     forbidden_terms = load_forbidden_terms()
     card_corrections = load_card_corrections()
     abbreviations = load_abbreviations()
     ambiguous = load_ambiguous_names()
+    locked_phrases = locked_phrases or set()
 
     # 1. Check "X费" patterns
     fee_matches = PROVISION_FEE_PATTERN.findall(text)
@@ -312,14 +351,22 @@ def check_translation(text: str) -> list[str]:
 
     # 6. Check ambiguous card names (base name without subtitle)
     for base_name, versions in ambiguous.items():
-        if base_name in text:
-            # Check if any full version (EN or CN) is present in the text
-            has_full = any(en in text or (cn and cn in text) for en, cn in versions)
-            if not has_full:
-                issues.append(
-                    f"ambiguous name: 「{base_name}」has multiple versions ({len(versions)}). "
-                    f"Specify full name. See ambiguous_names.md"
-                )
+        if base_name not in text:
+            continue
+        # Exempt only when a disambiguating locked phrase is actually present
+        # in the text. Requiring `phrase in text` keeps the exemption local to
+        # the disambiguating context (e.g. the locked deck name "蟹蜘蛛领袖破烂怪"
+        # appears, so the bare base "蟹蜘蛛" inside it is treated as resolved)
+        # instead of excusing every bare occurrence anywhere in the text.
+        if any(phrase in text and base_name in phrase for phrase in locked_phrases):
+            continue
+        # Check if any full version (EN or CN) is present in the text
+        has_full = any(en in text or (cn and cn in text) for en, cn in versions)
+        if not has_full:
+            issues.append(
+                f"ambiguous name: 「{base_name}」has multiple versions ({len(versions)}). "
+                f"Specify full name. See ambiguous_names.md"
+            )
 
     # 7. Check Chinese numerals
     cn_nums = CHINESE_NUMERALS.findall(text)
@@ -639,7 +686,14 @@ def main():
         sys.exit(1)
 
     text = path.read_text(encoding="utf-8")
-    issues = check_translation(text)
+
+    locked_phrases: set[str] = set()
+    if args.source:
+        source_path = Path(args.source)
+        if source_path.exists():
+            locked_phrases = load_locked_phrases_from_source(source_path)
+
+    issues = check_translation(text, locked_phrases)
 
     if args.source:
         source_path = Path(args.source)
@@ -655,7 +709,7 @@ def main():
         auto_fixed_count = fix_count
         if fix_count > 0:
             path.write_text(fixed_text, encoding="utf-8")
-            issues = check_translation(fixed_text)
+            issues = check_translation(fixed_text, locked_phrases)
 
     if args.json:
         structured = [categorize_issue(i) for i in issues]

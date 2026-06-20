@@ -50,17 +50,21 @@ def run_script_json(script_name: str, args: list[str]) -> tuple[bool, dict | Non
     return result.returncode == 0, parsed, output
 
 
-def run_check_translation(file_path: Path, json_mode: bool) -> tuple[bool, int]:
+def run_check_translation(file_path: Path, source_path: Path | None, json_mode: bool) -> tuple[bool, int]:
     """Run check_translation.py and return (pass, issue_count)."""
+    args = [str(file_path)]
+    if source_path:
+        args.extend(["--source", str(source_path)])
+
     if json_mode:
-        ok, parsed, _ = run_script_json("check_translation.py", [str(file_path)])
+        ok, parsed, _ = run_script_json("check_translation.py", args)
         if parsed and "data" in parsed:
             return ok, parsed["data"].get("issue_count", 0)
         return ok, 0
 
     script = Path(__file__).parent / "check_translation.py"
     result = subprocess.run(
-        [sys.executable, str(script), str(file_path)],
+        [sys.executable, str(script), *args],
         capture_output=True,
         text=True,
         timeout=60,
@@ -95,20 +99,24 @@ def run_residue_scan(file_path: Path, json_mode: bool) -> tuple[bool, int]:
     return issue_count == 0, issue_count
 
 
-def run_phase_c_check(file_path: Path, json_mode: bool) -> tuple[bool, int]:
+def run_phase_c_check(file_path: Path, source_path: Path | None, json_mode: bool) -> tuple[bool, int]:
     """Run phase_c_check.py and return (pass, issue_count)."""
     script = Path(__file__).parent / "phase_c_check.py"
     if not script.exists():
         return True, 0
 
+    args = [str(file_path)]
+    if source_path:
+        args.extend(["--source", str(source_path)])
+
     if json_mode:
-        ok, parsed, _ = run_script_json("phase_c_check.py", [str(file_path)])
+        ok, parsed, _ = run_script_json("phase_c_check.py", args)
         if parsed and "data" in parsed:
             return ok, parsed["data"].get("automated_failed", 0)
         return ok, 0
 
     result = subprocess.run(
-        [sys.executable, str(script), str(file_path)],
+        [sys.executable, str(script), *args],
         capture_output=True,
         text=True,
         timeout=60,
@@ -192,7 +200,7 @@ def main() -> None:
 
     # Check 2: Terminology check
     try:
-        passed, count = run_check_translation(file_path, args.json)
+        passed, count = run_check_translation(file_path, source_path, args.json)
         checks.append({"name": "terminology", "passed": passed, "issue_count": count, "message": "No terminology issues" if passed else f"Terminology: {count} issue(s)"})
     except Exception as e:
         checks.append({"name": "terminology", "passed": False, "issue_count": 0, "message": f"Terminology check failed: {e}"})
@@ -206,7 +214,7 @@ def main() -> None:
 
     # Check 4: Phase C self-check
     try:
-        passed, count = run_phase_c_check(file_path, args.json)
+        passed, count = run_phase_c_check(file_path, source_path, args.json)
         checks.append({"name": "phase_c", "passed": passed, "issue_count": count, "message": "Phase C checks passed" if passed else f"Phase C: {count} issue(s)"})
     except Exception as e:
         checks.append({"name": "phase_c", "passed": False, "issue_count": 0, "message": f"Phase C check failed: {e}"})

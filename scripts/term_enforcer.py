@@ -20,7 +20,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import json_output
+from _shared import extract_cn_variants, json_output
 
 
 def build_lock_from_source(source_path: Path) -> Path:
@@ -45,19 +45,33 @@ def load_lock(lock_file: Path) -> dict:
     return json.loads(lock_file.read_text(encoding="utf-8"))
 
 
+def _contains_cjk(target: str) -> bool:
+    """Return True if target contains any CJK character."""
+    return bool(re.search(r"[一-鿿]", target))
+
+
 def count_occurrences(text: str, targets: list[str]) -> int:
-    """Count how many times any of the targets appears as a whole word/phrase."""
+    """Count how many times any of the targets appears as a whole word/phrase.
+
+    For CJK targets, word boundaries are unreliable because CJK characters are
+    all considered word characters by \b. We therefore use substring matching
+    for any target that contains CJK characters, and word-boundary matching for
+    pure ASCII/alphabetic targets. Single-CJK-char targets are skipped because
+    bare-substring matching would inflate the count across the whole text.
+    """
     count = 0
     text_lower = text.lower()
     for target in targets:
         target = target.strip().lower()
         if not target:
             continue
-        # Use word boundary for short terms; substring match for longer phrases.
-        if len(target) <= 3:
-            pattern = rf"\b{re.escape(target)}\b"
-        else:
+        if _contains_cjk(target):
+            if len(target) < 2:
+                continue
+            # Substring match for CJK; escape still needed for regex specials.
             pattern = rf"{re.escape(target)}"
+        else:
+            pattern = rf"\b{re.escape(target)}\b"
         count += len(re.findall(pattern, text_lower))
     return count
 
@@ -66,10 +80,12 @@ def get_context_snippet(text: str, target: str, radius: int = 30) -> str:
     """Return a short snippet around the first occurrence of target."""
     text_lower = text.lower()
     target_lower = target.lower()
-    if len(target) <= 3:
-        pattern = rf"\b{re.escape(target_lower)}\b"
-    else:
+    if _contains_cjk(target):
+        if len(target_lower) < 2:
+            return ""
         pattern = rf"{re.escape(target_lower)}"
+    else:
+        pattern = rf"\b{re.escape(target_lower)}\b"
     match = re.search(pattern, text_lower)
     if not match:
         return ""
@@ -77,6 +93,44 @@ def get_context_snippet(text: str, target: str, radius: int = 30) -> str:
     end = min(len(text), match.end() + radius)
     snippet = text[start:end].replace("\n", " ")
     return snippet.strip()
+
+
+def _longest_common_substring(variants: list[str]) -> str:
+    """Find the longest substring present in every variant."""
+    if not variants:
+        return ""
+    shortest = min(variants, key=len)
+    best = ""
+    for start in range(len(shortest)):
+        for end in range(start + 1, len(shortest) + 1):
+            candidate = shortest[start:end]
+            if len(candidate) <= len(best):
+                continue
+            if all(candidate in v for v in variants):
+                best = candidate
+    return best
+
+
+def _locked_phrase_disambiguates(
+    ambiguous_variants: list[str],
+    locked_phrases: set[str],
+    translation: str = "",
+) -> bool:
+    """Return True if a disambiguating locked phrase is present in the translation.
+
+    The ambiguous base is approximated as the longest substring common to all
+    Chinese variants (e.g. for Arachas variants the common substring is '蟹蜘蛛').
+    The base counts as disambiguated only when some locked phrase that contains
+    it actually appears in the translation; a bare base used elsewhere is still
+    flagged. ``translation`` defaults to "" so a forgotten caller never silently
+    passes a term.
+    """
+    if not ambiguous_variants:
+        return False
+    base = _longest_common_substring(ambiguous_variants)
+    if not base:
+        return False
+    return any(base in phrase and phrase in translation for phrase in locked_phrases)
 
 
 def enforce_terms(translated_path: Path, lock: dict) -> dict:
@@ -90,6 +144,11 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
     passed = 0
     checked = 0
 
+    # Locked Chinese phrases from the lock. An ambiguous base is treated as
+    # disambiguated only when a locked phrase containing it appears in the
+    # translation (see _locked_phrase_disambiguates).
+    locked_cn_phrases = extract_cn_variants(lock)
+
     for term, info in lock.get("terms", {}).items():
         status = info.get("status", "pending")
         variants = info.get("variants", [])
@@ -98,7 +157,7 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
             checked += 1
             variant_cns = [v["cn"] for v in variants if v.get("cn")]
             found = any(vcn in translation for vcn in variant_cns)
-            if found:
+            if found or _locked_phrase_disambiguates(variant_cns, locked_cn_phrases, translation):
                 passed += 1
             else:
                 expected = " / ".join(variant_cns)

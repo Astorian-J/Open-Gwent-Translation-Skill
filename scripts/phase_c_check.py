@@ -110,11 +110,15 @@ def check_english_residue(text: str, ref_dir: Path) -> list[str]:
     return residue_checker(text)
 
 
-def check_ambiguous_names(text: str, ref_dir: Path) -> list[str]:
-    """Delegate ambiguous-name detection to check_translation.py."""
-    sys.path.insert(0, str(Path(__file__).parent))
-    from check_translation import check_translation
-    all_issues = check_translation(text)
+def check_ambiguous_names(text: str, ref_dir: Path, source_path: Path | None = None) -> list[str]:
+    """Delegate ambiguous-name detection to check_translation.py.
+
+    If source_path is provided, locked terms from the source are used to
+    exempt ambiguous bases that appear inside locked deck/card names.
+    """
+    from check_translation import check_translation, load_locked_phrases_from_source
+    locked_phrases = load_locked_phrases_from_source(source_path) if source_path else set()
+    all_issues = check_translation(text, locked_phrases)
     return [issue for issue in all_issues if "ambiguous name:" in issue]
 
 
@@ -257,7 +261,7 @@ def run_phase_c_check(
                 for issue in check_english_residue(text, ref_dir):
                     automated_issues.append(f"[{rid}] {issue}")
             elif rid == "encn-06":
-                for issue in check_ambiguous_names(text, ref_dir):
+                for issue in check_ambiguous_names(text, ref_dir, source_path):
                     automated_issues.append(f"[{rid}] {issue}")
             elif rid == "encn-10":
                 if translated_path and source_path:
