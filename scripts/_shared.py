@@ -362,6 +362,41 @@ def extract_cn_variants(lock: dict) -> set[str]:
     return phrases
 
 
+def load_lock_file(lock_path: "Path | str") -> dict:
+    """Load and parse a context lock JSON file."""
+    import json
+
+    return json.loads(Path(lock_path).read_text(encoding="utf-8"))
+
+
+def build_lock_from_source(source_path: "Path | str") -> Path:
+    """Build a context lock from a source file by shelling out to context_lock.py.
+
+    Returns the path to the generated lock file — a temp file the caller is
+    responsible for cleaning up. Raises RuntimeError on build failure so callers
+    can decide whether to degrade or abort, instead of silently masking errors.
+    """
+    import subprocess
+    import tempfile
+
+    lock_file = Path(tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", prefix="gwent_lock_", delete=False
+    ).name)
+    result = subprocess.run(
+        [sys.executable, str(Path(__file__).parent / "context_lock.py"),
+         "build", str(source_path), "--output", str(lock_file)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if result.returncode != 0:
+        lock_file.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"context_lock.py build failed: {result.stderr or result.stdout}"
+        )
+    return lock_file
+
+
 # --- Unified Term Authority ---
 
 

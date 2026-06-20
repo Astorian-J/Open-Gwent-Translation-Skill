@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import json_output
+from _shared import build_lock_from_source, json_output
 
 
 def run_script_json(script_name: str, args: list[str]) -> tuple[bool, dict | None, str]:
@@ -50,11 +50,11 @@ def run_script_json(script_name: str, args: list[str]) -> tuple[bool, dict | Non
     return result.returncode == 0, parsed, output
 
 
-def run_check_translation(file_path: Path, source_path: Path | None, json_mode: bool) -> tuple[bool, int]:
+def run_check_translation(file_path: Path, lock_path: Path | None, json_mode: bool) -> tuple[bool, int]:
     """Run check_translation.py and return (pass, issue_count)."""
     args = [str(file_path)]
-    if source_path:
-        args.extend(["--source", str(source_path)])
+    if lock_path:
+        args.extend(["--lock", str(lock_path)])
 
     if json_mode:
         ok, parsed, _ = run_script_json("check_translation.py", args)
@@ -99,15 +99,15 @@ def run_residue_scan(file_path: Path, json_mode: bool) -> tuple[bool, int]:
     return issue_count == 0, issue_count
 
 
-def run_phase_c_check(file_path: Path, source_path: Path | None, json_mode: bool) -> tuple[bool, int]:
+def run_phase_c_check(file_path: Path, lock_path: Path | None, json_mode: bool) -> tuple[bool, int]:
     """Run phase_c_check.py and return (pass, issue_count)."""
     script = Path(__file__).parent / "phase_c_check.py"
     if not script.exists():
         return True, 0
 
     args = [str(file_path)]
-    if source_path:
-        args.extend(["--source", str(source_path)])
+    if lock_path:
+        args.extend(["--lock", str(lock_path)])
 
     if json_mode:
         ok, parsed, _ = run_script_json("phase_c_check.py", args)
@@ -131,12 +131,12 @@ def run_phase_c_check(file_path: Path, source_path: Path | None, json_mode: bool
     return issue_count == 0 and result.returncode == 0, issue_count
 
 
-def run_term_authority_check(file_path: Path, source_path: Path | None, json_mode: bool) -> tuple[bool, int]:
+def run_term_authority_check(file_path: Path, lock_path: Path | None, json_mode: bool) -> tuple[bool, int]:
     """Run term_enforcer.py and return (pass, violation_count).
 
-    If no source_path is provided, the check is skipped.
+    If no lock_path is provided, the check is skipped.
     """
-    if source_path is None:
+    if lock_path is None:
         return True, 0
 
     script = Path(__file__).parent / "term_enforcer.py"
@@ -144,13 +144,13 @@ def run_term_authority_check(file_path: Path, source_path: Path | None, json_mod
         return True, 0
 
     if json_mode:
-        ok, parsed, _ = run_script_json("term_enforcer.py", [str(file_path), "--source", str(source_path)])
+        ok, parsed, _ = run_script_json("term_enforcer.py", [str(file_path), "--lock", str(lock_path)])
         if parsed and "data" in parsed:
             return ok, parsed["data"].get("violation_count", 0)
         return ok, 0
 
     result = subprocess.run(
-        [sys.executable, str(script), str(file_path), "--source", str(source_path)],
+        [sys.executable, str(script), str(file_path), "--lock", str(lock_path)],
         capture_output=True,
         text=True,
         timeout=60,
@@ -190,6 +190,15 @@ def main() -> None:
         print("Save your translation to a file first, then re-run.")
         sys.exit(1)
 
+    # Build the context lock once and reuse it for every downstream check,
+    # instead of letting each sub-script rebuild it from the source.
+    lock_path: Path | None = None
+    if source_path:
+        try:
+            lock_path = build_lock_from_source(source_path)
+        except Exception as e:
+            print(f"[WARN] context lock build failed; term authority checks skipped: {e}")
+
     checks = []
 
     # Check 1: File exists
@@ -200,7 +209,7 @@ def main() -> None:
 
     # Check 2: Terminology check
     try:
-        passed, count = run_check_translation(file_path, source_path, args.json)
+        passed, count = run_check_translation(file_path, lock_path, args.json)
         checks.append({"name": "terminology", "passed": passed, "issue_count": count, "message": "No terminology issues" if passed else f"Terminology: {count} issue(s)"})
     except Exception as e:
         checks.append({"name": "terminology", "passed": False, "issue_count": 0, "message": f"Terminology check failed: {e}"})
@@ -214,17 +223,20 @@ def main() -> None:
 
     # Check 4: Phase C self-check
     try:
-        passed, count = run_phase_c_check(file_path, source_path, args.json)
+        passed, count = run_phase_c_check(file_path, lock_path, args.json)
         checks.append({"name": "phase_c", "passed": passed, "issue_count": count, "message": "Phase C checks passed" if passed else f"Phase C: {count} issue(s)"})
     except Exception as e:
         checks.append({"name": "phase_c", "passed": False, "issue_count": 0, "message": f"Phase C check failed: {e}"})
 
     # Check 5: Term authority enforcement
     try:
-        passed, count = run_term_authority_check(file_path, source_path, args.json)
+        passed, count = run_term_authority_check(file_path, lock_path, args.json)
         checks.append({"name": "term_authority", "passed": passed, "issue_count": count, "message": "Term authority checks passed" if passed else f"Term authority: {count} violation(s)"})
     except Exception as e:
         checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "message": f"Term authority check failed: {e}"})
+
+    if lock_path:
+        lock_path.unlink(missing_ok=True)
 
     all_pass = all(c["passed"] for c in checks)
 

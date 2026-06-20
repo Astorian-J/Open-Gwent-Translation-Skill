@@ -25,6 +25,7 @@ from _shared import (
     extract_card_names_no_colon,
     extract_cn_variants,
     json_output,
+    load_lock_file,
     SKIP_WORDS_MINIMAL,
 )
 
@@ -131,6 +132,20 @@ def load_locked_phrases_from_source(source_path: Path) -> set[str]:
     finally:
         tmp_path.unlink(missing_ok=True)
 
+    return extract_cn_variants(lock)
+
+
+def load_locked_phrases_from_lock(lock_path: Path) -> set[str]:
+    """Read locked Chinese phrases directly from a pre-built lock file.
+
+    Unlike load_locked_phrases_from_source this does not shell out to
+    context_lock.py — the lock must already exist (built once by the caller,
+    e.g. completeness_guard). Used by the --lock path to avoid rebuilding.
+    """
+    try:
+        lock = load_lock_file(lock_path)
+    except (json.JSONDecodeError, ValueError, OSError):
+        return set()
     return extract_cn_variants(lock)
 
 
@@ -611,14 +626,26 @@ def auto_fix(text: str) -> tuple[str, int]:
     return fixed, count
 
 
-def check_term_authority_violations(translated_path: Path, source_path: Path) -> list[str]:
-    """Run term_enforcer.py and return formatted issue strings."""
+def check_term_authority_violations(
+    translated_path: Path,
+    source_path: Path | None = None,
+    lock_path: Path | None = None,
+) -> list[str]:
+    """Run term_enforcer.py and return formatted issue strings.
+
+    Pass lock_path to reuse a pre-built lock (--lock); otherwise pass
+    source_path and let term_enforcer build it (--source).
+    """
     script = Path(__file__).parent / "term_enforcer.py"
     if not script.exists():
         return []
 
+    if lock_path:
+        flag, ref = "--lock", str(lock_path)
+    else:
+        flag, ref = "--source", str(source_path)
     result = subprocess.run(
-        [sys.executable, str(script), str(translated_path), "--source", str(source_path), "--json"],
+        [sys.executable, str(script), str(translated_path), flag, ref, "--json"],
         capture_output=True,
         text=True,
         timeout=60,
@@ -674,6 +701,7 @@ def main():
     parser = argparse.ArgumentParser(description="Gwent translation terminology checker")
     parser.add_argument("file", help="File to check")
     parser.add_argument("--source", help="Source file for term authority enforcement")
+    parser.add_argument("--lock", help="Pre-built context lock JSON (reuse, do not rebuild)")
     parser.add_argument("--fix", action="store_true", help="Auto-fix provision-terminology errors only (费→人口)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     args = parser.parse_args()
@@ -688,17 +716,27 @@ def main():
     text = path.read_text(encoding="utf-8")
 
     locked_phrases: set[str] = set()
-    if args.source:
+    if args.lock:
+        lock_path = Path(args.lock)
+        if lock_path.exists():
+            locked_phrases = load_locked_phrases_from_lock(lock_path)
+    elif args.source:
         source_path = Path(args.source)
         if source_path.exists():
             locked_phrases = load_locked_phrases_from_source(source_path)
 
     issues = check_translation(text, locked_phrases)
 
-    if args.source:
+    if args.lock:
+        lock_path = Path(args.lock)
+        if lock_path.exists():
+            issues.extend(check_term_authority_violations(path, lock_path=lock_path))
+        else:
+            issues.append(f"term authority: lock file not found: {args.lock}")
+    elif args.source:
         source_path = Path(args.source)
         if source_path.exists():
-            issues.extend(check_term_authority_violations(path, source_path))
+            issues.extend(check_term_authority_violations(path, source_path=source_path))
         else:
             issues.append(f"term authority: source file not found: {args.source}")
 

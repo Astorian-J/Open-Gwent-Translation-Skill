@@ -110,14 +110,29 @@ def check_english_residue(text: str, ref_dir: Path) -> list[str]:
     return residue_checker(text)
 
 
-def check_ambiguous_names(text: str, ref_dir: Path, source_path: Path | None = None) -> list[str]:
+def check_ambiguous_names(
+    text: str,
+    ref_dir: Path,
+    source_path: Path | None = None,
+    lock_path: Path | None = None,
+) -> list[str]:
     """Delegate ambiguous-name detection to check_translation.py.
 
-    If source_path is provided, locked terms from the source are used to
-    exempt ambiguous bases that appear inside locked deck/card names.
+    If lock_path is provided, reuse a pre-built lock; elif source_path is
+    provided, build from source. Locked terms exempt ambiguous bases that
+    appear inside locked deck/card names.
     """
-    from check_translation import check_translation, load_locked_phrases_from_source
-    locked_phrases = load_locked_phrases_from_source(source_path) if source_path else set()
+    from check_translation import (
+        check_translation,
+        load_locked_phrases_from_lock,
+        load_locked_phrases_from_source,
+    )
+    if lock_path:
+        locked_phrases = load_locked_phrases_from_lock(lock_path)
+    elif source_path:
+        locked_phrases = load_locked_phrases_from_source(source_path)
+    else:
+        locked_phrases = set()
     all_issues = check_translation(text, locked_phrases)
     return [issue for issue in all_issues if "ambiguous name:" in issue]
 
@@ -165,20 +180,29 @@ def check_chinese_residue(text: str, ref_dir: Path) -> list[str]:
     return issues
 
 
-def check_context_lock_terms(translated_path: Path, source_path: Path | None) -> list[str]:
+def check_context_lock_terms(
+    translated_path: Path,
+    source_path: Path | None = None,
+    lock_path: Path | None = None,
+) -> list[str]:
     """Delegate context-lock term enforcement to term_enforcer.py.
 
-    If no source file is provided, the check cannot run automatically.
+    Reuse a pre-built lock via lock_path (--lock); otherwise build from
+    source_path (--source). If neither is provided, the check is skipped.
     """
-    if source_path is None:
+    if source_path is None and lock_path is None:
         return []
 
     script = Path(__file__).parent / "term_enforcer.py"
     if not script.exists():
         return []
 
+    if lock_path:
+        flag, ref = "--lock", str(lock_path)
+    else:
+        flag, ref = "--source", str(source_path)
     result = subprocess.run(
-        [sys.executable, str(script), str(translated_path), "--source", str(source_path), "--json"],
+        [sys.executable, str(script), str(translated_path), flag, ref, "--json"],
         capture_output=True,
         text=True,
         timeout=60,
@@ -207,6 +231,7 @@ def run_phase_c_check(
     ref_dir: Path,
     translated_path: Path | None = None,
     source_path: Path | None = None,
+    lock_path: Path | None = None,
 ) -> tuple[list[str], list[str]]:
     """Run Phase C rules against text.
 
@@ -261,11 +286,11 @@ def run_phase_c_check(
                 for issue in check_english_residue(text, ref_dir):
                     automated_issues.append(f"[{rid}] {issue}")
             elif rid == "encn-06":
-                for issue in check_ambiguous_names(text, ref_dir, source_path):
+                for issue in check_ambiguous_names(text, ref_dir, source_path, lock_path):
                     automated_issues.append(f"[{rid}] {issue}")
             elif rid == "encn-10":
-                if translated_path and source_path:
-                    for issue in check_context_lock_terms(translated_path, source_path):
+                if translated_path and (source_path or lock_path):
+                    for issue in check_context_lock_terms(translated_path, source_path, lock_path):
                         automated_issues.append(f"[{rid}] {issue}")
                 else:
                     manual_warnings.append(f"[{rid}] {rule['description']} — {message}")
@@ -307,6 +332,7 @@ def main() -> None:
         help="Translation direction (auto-detected if omitted)",
     )
     parser.add_argument("--source", help="Source file for term authority check")
+    parser.add_argument("--lock", help="Pre-built context lock JSON (reuse, do not rebuild)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     args = parser.parse_args()
 
@@ -321,9 +347,10 @@ def main() -> None:
     direction = args.direction or detect_direction(text)
     ref_dir = Path(__file__).parent.parent / "references"
     source_path = Path(args.source) if args.source else None
+    lock_path = Path(args.lock) if args.lock else None
 
     automated_issues, manual_warnings = run_phase_c_check(
-        text, direction, ref_dir, translated_path=file_path, source_path=source_path
+        text, direction, ref_dir, translated_path=file_path, source_path=source_path, lock_path=lock_path
     )
 
     if args.json:

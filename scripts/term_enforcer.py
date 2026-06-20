@@ -14,30 +14,11 @@ Usage:
 import argparse
 import json
 import re
-import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import extract_cn_variants, json_output
-
-
-def build_lock_from_source(source_path: Path) -> Path:
-    """Run context_lock.py build and return the generated lock file path."""
-    lock_file = Path(tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", prefix="gwent_lock_enforcer_", delete=False
-    ).name)
-    result = subprocess.run(
-        [sys.executable, str(Path(__file__).parent / "context_lock.py"),
-         "build", str(source_path), "--output", str(lock_file)],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"context_lock.py build failed: {result.stderr or result.stdout}")
-    return lock_file
+from _shared import build_lock_from_source, extract_cn_variants, json_output
 
 
 def load_lock(lock_file: Path) -> dict:
