@@ -1,3 +1,6 @@
 __pycache__/
 .claude/
 *.baiduyun.uploading.cfg
+
+# 本地回归测试样本（真实文章译文，不入库）
+samples/
