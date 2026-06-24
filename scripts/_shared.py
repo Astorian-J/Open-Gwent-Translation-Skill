@@ -429,6 +429,26 @@ def build_lock_from_source(source_path: "Path | str") -> Path:
     return lock_file
 
 
+# Category terms that should NOT be auto-enforced from category_map.md: either
+# they collide with an earlier-loaded reference (card_names / keywords_map /
+# competitive_terms / terminology_map — first-wins keeps the authoritative CN) or
+# they are generic English words whose appearance in prose would cause
+# term_missing_or_literal false positives. Everything else in category_map.md is
+# Gwent-specific (relict, insectoid, construct, ...) and IS enforced.
+SKIP_CATEGORY: frozenset[str] = frozenset({
+    # collisions — other references own these
+    "leader", "mage", "syndicate", "artifact", "stratagem", "dragon", "siren",
+    "cutthroat", "alchemist", "cleric", "witcher", "tactic", "alchemy", "spell",
+    "berserk", "berserker", "soldier", "machine", "knight", "bandit", "cultist",
+    "druid", "pirate", "warrior", "hunter", "archer",
+    # generic common words — false-positive risk (appear in non-category prose)
+    "human", "agent", "support", "officer", "aristocrat", "scholar", "thief",
+    "story", "location", "blind", "organic",
+    "spirit", "beast", "cursed", "dryad", "ogre", "mutant", "devourer",
+    "specter",  # same CN as spirit (鬼灵), rare in prose
+})
+
+
 # --- Unified Term Authority ---
 
 
@@ -460,6 +480,21 @@ class TermAuthority:
         self._cn_corrections: dict[str, str] = {}
         # base name lower -> list of variant dicts
         self._ambiguous: dict[str, list[dict]] = {}
+        # en_lower -> canonical_en for enforced category terms (relict, insectoid, ...)
+        # Scanned separately: category words usually appear lowercase in prose and
+        # the capitalized-phrase extractor would miss them.
+        self._categories: dict[str, str] = {}
+        # en_lower -> canonical_en for distinctive faction names (Nilfgaard, Skellige,
+        # ...). Single capitalized words are missed by the capitalized-phrase
+        # extractor, so distinctive faction names are scanned directly. Generic
+        # faction words (Monsters, Neutral) are excluded to avoid false positives
+        # and rely on their abbreviations (MO, NE) instead.
+        self._factions: dict[str, str] = {}
+        # en_lower -> {en, cn_name, cn_ability, card_id}: official effect text,
+        # loaded from effect_text.json (built by build_effect_reference.py).
+        # Used to inject the official CN ability so the agent copies it verbatim
+        # when quoting a card's effect (term-enforcer can't lock long sentences).
+        self._effects: dict[str, dict] = {}
 
         self._loaded = False
         self._load_all()
@@ -472,9 +507,12 @@ class TermAuthority:
         self._load_reverse_terminology_map()
         self._load_competitive_terms()
         self._load_keywords_map()
+        self._load_category_map()
+        self._load_card_attributes_map()
         self._load_ambiguous_names()
         self._load_cn_fuzzy_fixes()
         self._load_correction_guide()
+        self._load_effect_text()
         self._loaded = True
 
     # -- registration helpers --
@@ -698,6 +736,68 @@ class TermAuthority:
                 continue
             self._register(en, cn, "keywords_map.md", "keyword")
 
+    def _load_category_map(self) -> None:
+        """Load card category terms (relict / insectoid / construct / ...).
+
+        Loaded AFTER keywords_map / competitive_terms / terminology_map so that
+        collisions (leader, mage, syndicate, ...) keep the authoritative CN from
+        those files via first-wins. Generic / colliding English words are skipped
+        (SKIP_CATEGORY); the remaining Gwent-specific categories are registered AND
+        recorded in self._categories so get_all_for_text can scan for them in
+        lowercase prose (the capitalized-phrase extractor misses them).
+        """
+        path = self.ref_dir / "category_map.md"
+        if not path.exists():
+            return
+
+        text = path.read_text(encoding="utf-8")
+        rows = parse_markdown_table(text, min_columns=3)
+        for row in rows:
+            en = row.get("english", "").strip()
+            cn = row.get("chinese", "").strip()
+            if not en or en.lower() == "english":
+                continue
+            # category_map uses "—" for unmapped CN; _register would otherwise
+            # store the em-dash as a real CN and the enforcer would match it.
+            if not cn or cn in {"—", "－", "-"}:
+                continue
+            if en.lower() in SKIP_CATEGORY:
+                continue
+            self._register(en, cn, "category_map.md", "category")
+            self._categories[en.lower()] = en
+
+    def _load_card_attributes_map(self) -> None:
+        """Load rarity + faction (name & abbreviation) terms.
+
+        Factions collide with terminology_map / reverse_terminology_map names, so
+        this loads AFTER them: first-wins keeps the authoritative faction CN, while
+        the abbreviations (NR/MO/SK/ST/SY/NE) are still attached via _add_abbrev.
+        Neutral/中立 is new (no collision) so it registers fresh. Rarity words are
+        generic English: registered, but they only enforce when capitalized in the
+        source (no lowercase scan) to avoid false positives.
+        """
+        path = self.ref_dir / "card_attributes_map.md"
+        if not path.exists():
+            return
+
+        text = path.read_text(encoding="utf-8")
+        rows = parse_markdown_table(text, min_columns=2)
+        for row in rows:
+            en = row.get("english", "").strip()
+            cn = row.get("chinese", "").strip()
+            if not en or not cn or en.lower() == "english":
+                continue
+            abbr = row.get("abbreviation", "").strip()
+            if abbr and abbr.lower() != "abbreviation":
+                self._register(en, cn, "card_attributes_map.md", "faction",
+                               abbrevs=[abbr])
+                # Distinctive single-word faction names are scanned in prose too;
+                # generic ones (monsters/neutral) rely on their abbreviation only.
+                if en.lower() not in {"monsters", "neutral"}:
+                    self._factions[en.lower()] = en
+            else:
+                self._register(en, cn, "card_attributes_map.md", "rarity")
+
     def _load_ambiguous_names(self) -> None:
         path = self.ref_dir / "ambiguous_names.md"
         if not path.exists():
@@ -786,6 +886,29 @@ class TermAuthority:
             else:
                 self._add_alias(wrong, right)
 
+    def _load_effect_text(self) -> None:
+        """Load official card effect text (EN + CN) from effect_text.json.
+
+        Built by build_effect_reference.py from the card-data SSOT. Holds the
+        official CN ability per card so the translation pipeline can inject it
+        for the agent to copy verbatim when quoting effects. Degrades to empty
+        (no injection) if the file is missing; on a parse/encoding error it
+        degrades to empty AND warns on stderr so the failure is not silent.
+        health_check also validates parseability independently.
+        """
+        path = self.ref_dir / "effect_text.json"
+        if not path.exists():
+            return
+        try:
+            import json
+            self._effects = json.loads(path.read_text(encoding="utf-8"))
+        except (ValueError, OSError) as exc:
+            # A truncated/corrupt file would silently disable effect injection
+            # across the whole pipeline — surface it instead of hiding it.
+            print(f"[WARN] effect_text.json failed to parse ({exc}); "
+                  f"effect injection disabled.", file=sys.stderr)
+            self._effects = {}
+
     # -- public API --
 
     def resolve(self, term: str) -> dict | None:
@@ -861,6 +984,17 @@ class TermAuthority:
             "match_type": match_type,
         }
 
+    def get_official_ability(self, en_name: str) -> dict | None:
+        """Return the official effect record for a card by English name, or None.
+
+        Record: {en, cn_name, cn_ability, card_id}. cn_ability is the official
+        Chinese ability text the agent should copy verbatim when quoting the
+        card's effect.
+        """
+        if not en_name:
+            return None
+        return self._effects.get(en_name.strip().lower())
+
     def get_all_for_text(self, text: str) -> list[dict]:
         """Extract and resolve all known terms from a source text."""
         candidates: set[str] = set()
@@ -882,6 +1016,20 @@ class TermAuthority:
             # Match as a whole word to avoid false positives.
             if re.search(rf"\b{re.escape(base_lower)}\b", text_lower):
                 candidates.add(base_lower.title() if base_lower else base_lower)
+
+        # Category terms (relict, insectoid, ...) usually appear lowercase in
+        # prose ("GN relicts", "vampire deck") and are missed by the capitalized
+        # extractors above. Scan them directly, tolerating a trailing plural -s.
+        for cat_lower, canonical_en in self._categories.items():
+            if re.search(rf"\b{re.escape(cat_lower)}s?\b", text_lower):
+                candidates.add(canonical_en)
+
+        # Distinctive faction names (Nilfgaard, Skellige, Scoia'tael, Syndicate,
+        # Northern Realms) — single capitalized words missed by the phrase
+        # extractor. Plain word match (faction names are not pluralized).
+        for fac_lower, canonical_en in self._factions.items():
+            if re.search(rf"\b{re.escape(fac_lower)}\b", text_lower):
+                candidates.add(canonical_en)
 
         # Sort by length descending so full names are resolved before abbreviations.
         candidates = sorted(candidates, key=lambda x: (-len(x), x.lower()))

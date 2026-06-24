@@ -37,6 +37,11 @@ JSON_CAPABLE_SCRIPTS = {
     "format_skeleton.py",
 }
 
+# Cap on how many official card effects the pre-translation report injects
+# (both human and JSON output). The full set lives in references/effect_text.json
+# for on-demand lookup; capping bounds agent context for card-heavy articles.
+OFFICIAL_EFFECTS_CAP = 20
+
 
 def get_script_dir() -> Path:
     return Path(__file__).parent
@@ -245,6 +250,21 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
     # Step 4: Build card name quick reference table
     quick_ref = build_card_lookup_table(source_path)
 
+    # Step 5: Official effect text for cards in the source — inject so the agent
+    # copies the official CN ability verbatim when quoting effects. Long
+    # sentences can't be locked by term_enforcer, so this is the enforcement
+    # lever for effect text. See references/effect_text.json.
+    authority = TermAuthority()
+    official_effects = []
+    for en, _cn in quick_ref:
+        rec = authority.get_official_ability(en)
+        if rec and rec.get("cn_ability"):
+            official_effects.append({
+                "english": en,
+                "chinese": rec.get("cn_name", ""),
+                "official_ability": rec["cn_ability"],
+            })
+
     if json_mode:
         data = {
             "command": "pre",
@@ -257,6 +277,8 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
             "lock_path": str(lock_file),
             "card_references_found": len(quick_ref),
             "card_references": [{"english": en, "chinese": cn} for en, cn in quick_ref],
+            "official_effects": official_effects[:OFFICIAL_EFFECTS_CAP],
+            "official_effects_total": len(official_effects),
             "term_authority": term_authority,
         }
         return data, all_ok
@@ -346,6 +368,18 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
         lines.append("")
     else:
         lines.append("    [INFO] No additional card names detected in source")
+        lines.append("")
+
+    if official_effects:
+        lines.append("    OFFICIAL EFFECT TEXT (引用效果时逐字照抄，勿改写)")
+        lines.append("    | Card | Chinese | Official ability |")
+        lines.append("    |------|---------|------------------|")
+        for eff in official_effects[:OFFICIAL_EFFECTS_CAP]:
+            ability = " ".join(eff["official_ability"].split())
+            lines.append(f"    | {eff['english']} | {eff['chinese']} | {ability} |")
+        if len(official_effects) > OFFICIAL_EFFECTS_CAP:
+            lines.append(f"    | ... ({len(official_effects) - OFFICIAL_EFFECTS_CAP} more; "
+                         f"全部见 effect_text.json) | ... | ... |")
         lines.append("")
 
     lines.append("-" * 50)

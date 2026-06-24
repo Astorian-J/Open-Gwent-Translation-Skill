@@ -28,6 +28,7 @@ Manual rules are surfaced as warnings that a human must confirm.
 | encn-09 | Chinese colon "：" in card names | regex_forbidden | `[一-鿿][A-Za-z]+:` | English colon after Chinese: 「{match}」— use Chinese colon "：" | e.g. "杰洛特:Igni" |
 | encn-10 | Context lock terms used consistently | reference | context_lock.json | context lock violation: {issue} | Requires --source to run term_enforcer.py |
 | encn-11 | Figurative language intent preserved | manual | style_reference.md | rhetoric — confirm metaphor/sarcasm/hyperbole was translated by intent, not literally (no flattened irony) | See 修辞与语气判断 section |
+| encn-12 | Quoted card effects match official text | manual | effect_text.json | effect — when quoting a card's ability, confirm it matches the official CN ability verbatim (from pre-translation OFFICIAL EFFECT TEXT table) | Long sentences can't be term-locked; injection + manual |
 
 ## CN → EN Rules
 
@@ -42,6 +43,7 @@ Manual rules are surfaced as warnings that a human must confirm.
 | cnen-07 | Oral verbs mapped naturally | manual | correction_guide.md | oral verbs — verify natural English mapping | Quality check; e.g. 赚翻 → generates huge value |
 | cnen-08 | Tone: casual but not broken English | manual | style_reference.md | tone — confirm casual native-player register | Requires human stylistic judgment |
 | cnen-09 | Figurative language & sarcasm preserved | manual | style_reference.md | rhetoric — confirm figurative intent and sarcasm survive in English, irony not flattened | See 修辞与语气判断 section |
+| cnen-10 | Quoted card effects match official text | manual | effect_text.json | effect — when quoting a card's ability, confirm it matches the official EN ability from effect_text.json | Long sentences can't be term-locked; manual |
 
 ## Check Types
 

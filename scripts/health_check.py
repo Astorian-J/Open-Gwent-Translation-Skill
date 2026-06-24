@@ -61,12 +61,14 @@ def check_reference_files(ref_dir: Path) -> list[tuple[str, str]]:
         ("competitive_terms.md", "Competitive terms"),
         ("common_pitfalls.md", "Common pitfalls"),
         ("category_map.md", "Category map"),
+        ("card_attributes_map.md", "Card attributes (rarity/faction) map"),
         ("version_map.md", "Version map"),
         ("style_fingerprint.md", "Style fingerprint"),
         ("cn_fuzzy_fixes.md", "Chinese fuzzy fixes"),
         ("pending_terms.md", "Pending terms buffer"),
         ("changelog.md", "Changelog"),
         ("phase_c_checklist.md", "Phase C checklist"),
+        ("effect_text.json", "Official card effect text (EN+CN)"),
     ]
 
     for fname, desc in required_refs:
@@ -273,6 +275,74 @@ def check_phase_c_checklist(ref_dir: Path) -> list[tuple[str, str]]:
     return results
 
 
+# Faction abbreviation -> expected canonical EN (lower). Invariant:
+# card_attributes_map faction spellings must stay byte-aligned with
+# terminology_map / reverse_terminology_map so each abbreviation attaches to the
+# AUTHORITATIVE entry (first-wins), not a parallel non-authoritative one.
+_FACTION_ABBREV_EXPECTED = {
+    "NR": "northern realms", "NG": "nilfgaard", "MO": "monsters",
+    "SK": "skellige", "ST": "scoia'tael", "SY": "syndicate", "NE": "neutral",
+}
+
+
+def check_term_authority_invariants(script_dir: Path) -> list[tuple[str, str]]:
+    """C2 guard: faction abbreviations resolve to the right canonical, and no
+    faction other than Neutral is sourced from card_attributes_map.md (which
+    would mean a spelling drift created a parallel, non-authoritative entry that
+    dilutes the user's "强制用既定译法" guarantee)."""
+    results = []
+    try:
+        from _shared import get_term_authority
+        ta = get_term_authority()
+    except Exception as exc:  # noqa: BLE001
+        results.append(("FAIL", f"TermAuthority invariants: 无法加载 ({exc})"))
+        return results
+
+    bad = []
+    for abbr, expected in _FACTION_ABBREV_EXPECTED.items():
+        r = ta.resolve(abbr)
+        if not r or r["canonical_en"].lower() != expected:
+            bad.append(f"{abbr}->{r['canonical_en'] if r else 'NONE'}")
+    if bad:
+        results.append(("FAIL", f"阵营缩写解析错: {', '.join(bad)}"))
+    else:
+        results.append(("PASS", "7 阵营缩写 (NR/NG/MO/SK/ST/SY/NE) 解析正确"))
+
+    drifted = [
+        e["canonical_en"] for e in ta._entries.values()
+        if e.get("type") == "faction"
+        and e.get("source") == "card_attributes_map.md"
+        and e["canonical_en"].lower() != "neutral"
+    ]
+    if drifted:
+        results.append(("FAIL", f"阵营名从 card_attributes 取得权威来源（拼写漂移）: {', '.join(drifted)}"))
+    else:
+        results.append(("PASS", "已有阵营名权威来源正常（terminology/reverse/competitive）"))
+    return results
+
+
+def check_effect_text(ref_dir: Path) -> list[tuple[str, str]]:
+    """I4 guard: effect_text.json must parse and hold a healthy entry count, so a
+    truncated/corrupt file cannot silently disable effect injection across the
+    whole pipeline."""
+    results = []
+    path = ref_dir / "effect_text.json"
+    if not path.exists():
+        results.append(("FAIL", "effect_text.json: 缺失"))
+        return results
+    try:
+        import json
+        count = len(json.loads(path.read_text(encoding="utf-8")))
+    except Exception as exc:  # noqa: BLE001
+        results.append(("FAIL", f"effect_text.json: 解析失败 ({exc})"))
+        return results
+    if count > 1000:
+        results.append(("PASS", f"effect_text.json: 可解析，{count} 张卡官方效果"))
+    else:
+        results.append(("WARN", f"effect_text.json: 仅 {count} 条（预期 ~1366），可能损坏"))
+    return results
+
+
 def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
     """Run basic test cases on scripts."""
     results = []
@@ -372,6 +442,8 @@ def main():
     skill_results = run_section("SKILL.md Structure", lambda: check_skill_file(skill_file))
     data_results = run_section("Data Integrity", lambda: check_data_integrity(ref_dir))
     phase_c_results = run_section("Phase C Checklist", lambda: check_phase_c_checklist(ref_dir))
+    authority_results = run_section("TermAuthority Invariants", lambda: check_term_authority_invariants(script_dir))
+    effect_results = run_section("Effect Text", lambda: check_effect_text(ref_dir))
     test_results = run_section("Functional Tests", lambda: run_test_cases(script_dir))
 
     pass_count = sum(1 for s, _ in all_results if s == "PASS")

@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-06-24 — Card-info Enforcement (categories / attributes / effects)
+
+用户原则：**所有卡牌信息（名称/词条/效果/阵营/边框/稀有度/类别）必须强制用既定译法**；
+修辞/语气走引导。审计发现硬层有漏，本轮补齐。
+
+### Phase 1 — 类别（category_map 之前是孤儿，relict→遗物 的根因）
+- `scripts/_shared.py`：新增 `_load_category_map()`，按现有 loader 约定解析三张表，
+  `—`/空 CN 跳过、通用词黑名单 SKIP_CATEGORY 跳过，注册 Gwent 专属类别
+  （relict/insectoid/construct/...）。
+- 新增 **小写类别词扫描**（仿已有的歧义名扫描）：类别词在散文里通常小写
+  （"GN relicts"），大写短语提取器抓不到；扫描后 relict 等才会被锁定+强制
+  （译文写"遗物"触发 term_missing_or_literal → completeness_guard 拦截）。
+
+### Phase 2 — 卡牌属性（稀有度 + 阵营缺口）
+- 新增 `references/card_attributes_map.md`：稀有度（common/rare/epic/legendary↔普通/稀有/史诗/传奇）、
+  阵营全名+缩写（补 Neutral/中立、缩写 NR/MO/SK/ST/NE，原先只有 NG/SY 偶然漏入）。
+- `scripts/_shared.py`：新增 `_load_card_attributes_map()`；阵营缩写经 _add_abbrev 注册后
+  被 extract_abbreviations 锁定强制；非通用阵营全名（Nilfgaard/Skellige/...）加小写扫描，
+  通用 Monsters/Neutral 走缩写 MO/NE 避免误伤。
+- 边框颜色 gold/bronze 已在 keywords_map 强制（文件里注明），silver 随版本移除。
+
+### Phase 3 — 官方效果文本（注入 + 自检；term-lock 不适合长句）
+- 新增 `scripts/build_effect_reference.py`：从 `~/gwent-card-db/tables/cards_{en,cn}.json`
+  生成 `references/effect_text.json`（1366 卡，EN+CN 官方 ability，0 NULL）。
+- `scripts/_shared.py`：新增 `_load_effect_text()` + `get_official_ability(en)`。
+- `scripts/auto_pipeline.py` pre：新增 OFFICIAL EFFECT TEXT 表 + JSON 字段 official_effects，
+  把源文出现的卡的官方 CN 效果注入给 agent 逐字照抄（长句强制的实际手段）。
+- 新增 `scripts/effect_verifier.py`：**信息性**自检（官方效果是否在译文逐字出现），
+  不进 block 门（效果缺席可能只是没引用）。
+- `references/phase_c_checklist.md`：加 manual 自检 encn-12 / cnen-10（引用效果与官方一致）。
+
+### 验证
+health_check 通过；encn 回归 issue_count=7 不变；relict→遗物 端到端被拦、残物通过；
+阵营缩写/全名强制生效；pre 注入官方效果；effect_verifier 信息性输出。
+
 ## 2026-06-24 — Figurative Language & Tone Judgment
 
 ### Added
