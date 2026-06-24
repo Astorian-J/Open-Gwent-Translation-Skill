@@ -367,14 +367,16 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
     return "\n".join(lines), all_ok
 
 
-def post_translation(source_path: Path, translated_path: Path, json_mode: bool = False) -> tuple[str | dict, bool]:
+def post_translation(source_path: Path, translated_path: Path, direction: str | None = None, json_mode: bool = False) -> tuple[str | dict, bool]:
     """Run all postprocessing steps. Returns a report and overall success."""
     all_ok = True
+    text = translated_path.read_text(encoding="utf-8")
+    direction = direction or detect_direction(text)
 
     # Step 1: Check terminology
     check_ok, check_out, check_parsed = run_script(
         "check_translation.py",
-        [str(translated_path)],
+        [str(translated_path), "--direction", direction],
         json_mode=json_mode,
     )
     if not check_ok:
@@ -417,6 +419,7 @@ def post_translation(source_path: Path, translated_path: Path, json_mode: bool =
             "command": "post",
             "source": str(source_path),
             "translated": str(translated_path),
+            "direction": direction,
             "terminology_issue_count": terminology_issue_count,
             "new_terms_learned": new_terms_learned,
             "health_check_passed": health_check_passed,
@@ -430,6 +433,7 @@ def post_translation(source_path: Path, translated_path: Path, json_mode: bool =
         "",
         f"Source:      {source_path}",
         f"Translated:  {translated_path}",
+        f"Direction:   {'EN->CN' if direction == 'encn' else 'CN->EN'}",
         "",
     ]
 
@@ -555,6 +559,7 @@ def main():
     post = subparsers.add_parser("post", help="Post-translation checks")
     post.add_argument("source", help="Original source file")
     post.add_argument("translated", help="Translated file")
+    post.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
     post.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
 
     scan = subparsers.add_parser("scan", help="Scan translated file for untranslated card names")
@@ -598,7 +603,7 @@ def main():
                 json_output(None, errors=[f"Translated file not found: {args.translated}"], exit_code=1)
             print(f"Error: Translated file not found: {args.translated}")
             sys.exit(1)
-        report, ok = post_translation(source_path, translated_path, json_mode=json_mode)
+        report, ok = post_translation(source_path, translated_path, direction=args.direction, json_mode=json_mode)
         if json_mode:
             json_output(report, exit_code=0 if ok else 1)
         print(report)

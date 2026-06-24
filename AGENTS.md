@@ -63,6 +63,16 @@ automated phases and use the returned data to guide any manual work.
 }
 ```
 
+- **Translation direction**: `post`, `scan`, `phase_c_check`, `check_translation`,
+  and `completeness_guard` all accept `--direction {encn,cnen}`. Direction is
+  auto-detected from the translated text when omitted, but the detection is a
+  character-ratio heuristic that fails on poorly-translated or mixed text (e.g.
+  a barely-started CN->EN translation reads as Chinese and is misclassified).
+  Since the translation workflow always knows the real direction, pass
+  `--direction` explicitly in automated pipelines rather than relying on the
+  fallback. The detected/used direction is reported in each command's JSON
+  output.
+
 ## Script Reference
 
 ### `auto_pipeline.py`
@@ -136,8 +146,14 @@ and must disambiguate all `ambiguous_terms` with a full subtitle variant.
 
 #### `post`
 
+Runs terminology check, learns new terms, and a skill health check on the
+translated file. Direction-aware: direction is auto-detected from the
+translated file or set with `--direction`, and forwarded to the terminology
+checker.
+
 ```bash
 python scripts/auto_pipeline.py post source.md translated.txt --json
+python scripts/auto_pipeline.py post source.md translated.txt --direction cnen --json
 ```
 
 JSON data:
@@ -147,6 +163,7 @@ JSON data:
   "command": "post",
   "source": "source.md",
   "translated": "translated.txt",
+  "direction": "encn",
   "terminology_issue_count": 3,
   "new_terms_learned": 2,
   "health_check_passed": true

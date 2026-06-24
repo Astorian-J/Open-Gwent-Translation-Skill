@@ -49,6 +49,13 @@ def detect_direction(text: str) -> str:
     the terminology checker, the residue scanner, and the completeness
     guard so all of them agree on which language is the *target* and thus
     which kind of residue to flag.
+
+    Caveat: this is a character-ratio heuristic and is unreliable on
+    poorly-translated or heavily mixed text. A CN->EN translation that was
+    barely started (still mostly Chinese) is misclassified as "encn", so its
+    untranslated Chinese card names go unflagged. Callers that know the real
+    direction (the translation workflow always does) should pass it
+    explicitly via --direction rather than rely on this fallback.
     """
     chinese_chars = len(re.findall(r"[一-鿿]", text))
     english_words = len(re.findall(r"[A-Za-z]{2,}", text))

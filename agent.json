@@ -51,11 +51,14 @@
       },
       {
         "name": "post",
-        "command": "python scripts/auto_pipeline.py post {source} {translated} --json",
+        "command": "python scripts/auto_pipeline.py post {source} {translated} --direction {direction} --json",
         "required_args": [
           "source",
           "translated"
-        ]
+        ],
+        "optional_args": {
+          "direction": "encn | cnen (auto-detected if omitted)"
+        }
       },
       {
         "name": "guard",
@@ -134,6 +137,14 @@
           "type": "file_path"
         },
         {
+          "name": "--direction",
+          "required": false,
+          "choices": [
+            "encn",
+            "cnen"
+          ]
+        },
+        {
           "name": "--json",
           "required": false,
           "type": "flag"
@@ -143,6 +154,7 @@
         "command",
         "source",
         "translated",
+        "direction",
         "terminology_issue_count",
         "new_terms_learned",
         "health_check_passed"
