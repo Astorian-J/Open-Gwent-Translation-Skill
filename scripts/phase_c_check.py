@@ -21,7 +21,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import json_output, parse_markdown_table
+from _shared import detect_direction, json_output, parse_markdown_table
+from check_translation import check_chinese_residue, check_english_residue
 
 
 def load_rules(ref_dir: Path) -> list[dict[str, str]]:
@@ -60,21 +61,6 @@ def load_rules(ref_dir: Path) -> list[dict[str, str]]:
     return rules
 
 
-def detect_direction(text: str) -> str:
-    """Heuristically detect translation direction from output text."""
-    chinese_chars = len(re.findall(r"[一-鿿]", text))
-    english_words = len(re.findall(r"[A-Za-z]{2,}", text))
-
-    # If substantial Chinese and limited English, assume EN->CN output.
-    if chinese_chars > english_words * 2 and chinese_chars > 20:
-        return "encn"
-    # If substantial English and limited Chinese, assume CN->EN output.
-    if english_words > chinese_chars / 2 and english_words > 20:
-        return "cnen"
-    # Fallback: more Chinese than English -> encn, else cnen.
-    return "encn" if chinese_chars >= english_words else "cnen"
-
-
 def check_regex_forbidden(text: str, pattern: str) -> list[str]:
     """Return issues for each match of a forbidden regex pattern."""
     issues = []
@@ -96,18 +82,6 @@ def check_regex_required(text: str, pattern: str) -> bool:
     except re.error as e:
         print(f"[checker error] invalid regex '{pattern}': {e}", file=sys.stderr)
         return False
-
-
-def check_english_residue(text: str, ref_dir: Path) -> list[str]:
-    """Delegate English residue detection to check_translation.py."""
-    check_script = Path(__file__).parent / "check_translation.py"
-    if not check_script.exists():
-        return []
-
-    # Import directly to avoid subprocess overhead and preserve types.
-    sys.path.insert(0, str(Path(__file__).parent))
-    from check_translation import check_english_residue as residue_checker
-    return residue_checker(text)
 
 
 def check_ambiguous_names(
@@ -135,49 +109,6 @@ def check_ambiguous_names(
         locked_phrases = set()
     all_issues = check_translation(text, locked_phrases)
     return [issue for issue in all_issues if "ambiguous name:" in issue]
-
-
-def load_chinese_card_names(ref_dir: Path) -> dict[str, str]:
-    """Build Chinese card name -> English mapping from card_names.md."""
-    card_file = ref_dir / "card_names.md"
-    if not card_file.exists():
-        return {}
-
-    mapping: dict[str, str] = {}
-    text = card_file.read_text(encoding="utf-8")
-    for line in text.split("\n"):
-        line = line.strip()
-        if line.startswith("|") and "---" not in line and "English" not in line:
-            parts = [p.strip() for p in line.split("|")]
-            if len(parts) >= 4 and parts[1] and parts[2]:
-                en, cn = parts[1], parts[2]
-                if en not in ("English", "—", "") and cn not in ("Chinese", "—", ""):
-                    mapping[cn] = en
-    return mapping
-
-
-def check_chinese_residue(text: str, ref_dir: Path) -> list[str]:
-    """Detect untranslated Chinese card names in CN->EN output."""
-    mapping = load_chinese_card_names(ref_dir)
-    if not mapping:
-        return []
-
-    # Sort by length descending so longer names match before their substrings.
-    names = sorted(mapping.keys(), key=len, reverse=True)
-    issues = []
-    reported: set[str] = set()
-
-    for cn in names:
-        if len(cn) < 2:
-            continue
-        if cn in reported:
-            continue
-        if cn in text:
-            en = mapping[cn]
-            issues.append(f"Chinese residue: 「{cn}」→ 「{en}」")
-            reported.add(cn)
-
-    return issues
 
 
 def check_context_lock_terms(
@@ -283,7 +214,7 @@ def run_phase_c_check(
 
         if check_type == "reference":
             if rid == "encn-05":
-                for issue in check_english_residue(text, ref_dir):
+                for issue in check_english_residue(text):
                     automated_issues.append(f"[{rid}] {issue}")
             elif rid == "encn-06":
                 for issue in check_ambiguous_names(text, ref_dir, source_path, lock_path):
@@ -295,7 +226,7 @@ def run_phase_c_check(
                 else:
                     manual_warnings.append(f"[{rid}] {rule['description']} — {message}")
             elif rid == "cnen-03":
-                for issue in check_chinese_residue(text, ref_dir):
+                for issue in check_chinese_residue(text):
                     automated_issues.append(f"[{rid}] {issue}")
             continue
 

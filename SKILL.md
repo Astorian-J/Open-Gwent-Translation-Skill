@@ -147,7 +147,8 @@ This automatically performs terminology check, consistency verification,
 and records new terms to `pending_terms.md`. Skipping this step may leave
 unrecorded terms.
 
-If you need to re-scan a translated file for English residue only:
+If you need to re-scan a translated file for untranslated card names
+(direction-aware: English residue for EN→CN, Chinese residue for CN→EN):
 ```bash
 python scripts/auto_pipeline.py scan translated.txt
 ```

@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import build_lock_from_source, json_output
+from _shared import build_lock_from_source, detect_direction, json_output
 
 
 def run_script_json(script_name: str, args: list[str]) -> tuple[bool, dict | None, str]:
@@ -50,9 +50,9 @@ def run_script_json(script_name: str, args: list[str]) -> tuple[bool, dict | Non
     return result.returncode == 0, parsed, output
 
 
-def run_check_translation(file_path: Path, lock_path: Path | None, json_mode: bool) -> tuple[bool, int]:
+def run_check_translation(file_path: Path, lock_path: Path | None, direction: str, json_mode: bool) -> tuple[bool, int]:
     """Run check_translation.py and return (pass, issue_count)."""
-    args = [str(file_path)]
+    args = [str(file_path), "--direction", direction]
     if lock_path:
         args.extend(["--lock", str(lock_path)])
 
@@ -79,33 +79,37 @@ def run_check_translation(file_path: Path, lock_path: Path | None, json_mode: bo
     return issue_count == 0 and result.returncode == 0, issue_count
 
 
-def run_residue_scan(file_path: Path, json_mode: bool) -> tuple[bool, int]:
+def run_residue_scan(file_path: Path, direction: str, json_mode: bool) -> tuple[bool, int]:
     """Run auto_pipeline.py scan and return (pass, issue_count)."""
     if json_mode:
-        ok, parsed, _ = run_script_json("auto_pipeline.py", ["scan", str(file_path)])
+        ok, parsed, _ = run_script_json("auto_pipeline.py", ["scan", str(file_path), "--direction", direction])
         if parsed and "data" in parsed:
-            return ok, parsed["data"].get("english_residue_count", 0)
+            return ok, parsed["data"].get("residue_count", 0)
         return ok, 0
 
     script = Path(__file__).parent / "auto_pipeline.py"
     result = subprocess.run(
-        [sys.executable, str(script), "scan", str(file_path)],
+        [sys.executable, str(script), "scan", str(file_path), "--direction", direction],
         capture_output=True,
         text=True,
         timeout=60,
     )
     output = result.stdout.strip()
-    issue_count = output.count("English residue:")
+    # Count both English residue (EN->CN) and Chinese residue (CN->EN) lines.
+    issue_count = sum(
+        1 for line in output.split("\n")
+        if "English residue:" in line or "Chinese residue:" in line
+    )
     return issue_count == 0, issue_count
 
 
-def run_phase_c_check(file_path: Path, lock_path: Path | None, json_mode: bool) -> tuple[bool, int]:
+def run_phase_c_check(file_path: Path, lock_path: Path | None, direction: str, json_mode: bool) -> tuple[bool, int]:
     """Run phase_c_check.py and return (pass, issue_count)."""
     script = Path(__file__).parent / "phase_c_check.py"
     if not script.exists():
         return True, 0
 
-    args = [str(file_path)]
+    args = [str(file_path), "--direction", direction]
     if lock_path:
         args.extend(["--lock", str(lock_path)])
 
@@ -131,12 +135,14 @@ def run_phase_c_check(file_path: Path, lock_path: Path | None, json_mode: bool) 
     return issue_count == 0 and result.returncode == 0, issue_count
 
 
-def run_term_authority_check(file_path: Path, lock_path: Path | None, json_mode: bool) -> tuple[bool, int]:
+def run_term_authority_check(file_path: Path, lock_path: Path | None, direction: str, json_mode: bool) -> tuple[bool, int]:
     """Run term_enforcer.py and return (pass, violation_count).
 
-    If no lock_path is provided, the check is skipped.
+    Term authority enforces official Chinese translations in the output, which
+    only applies to EN->CN. For CN->EN the check is skipped. If no lock_path
+    is provided, the check is also skipped.
     """
-    if lock_path is None:
+    if direction == "cnen" or lock_path is None:
         return True, 0
 
     script = Path(__file__).parent / "term_enforcer.py"
@@ -169,6 +175,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Completeness Guard — Final gate before translation finalization")
     parser.add_argument("file", help="Translated file to check")
     parser.add_argument("--source", help="Source file for term authority enforcement")
+    parser.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     args = parser.parse_args()
 
@@ -190,6 +197,11 @@ def main() -> None:
         print("Save your translation to a file first, then re-run.")
         sys.exit(1)
 
+    # Detect direction once and pass it to every downstream check so all of
+    # them agree on which language is the target (and thus which residue to
+    # flag). An explicit --direction overrides the heuristic.
+    direction = args.direction or detect_direction(file_path.read_text(encoding="utf-8"))
+
     # Build the context lock once and reuse it for every downstream check,
     # instead of letting each sub-script rebuild it from the source.
     lock_path: Path | None = None
@@ -207,31 +219,37 @@ def main() -> None:
     else:
         checks.append({"name": "file_exists", "passed": False, "issue_count": 0, "message": "File missing or empty"})
 
+    residue_lang = "English" if direction == "encn" else "Chinese"
+
     # Check 2: Terminology check
     try:
-        passed, count = run_check_translation(file_path, lock_path, args.json)
+        passed, count = run_check_translation(file_path, lock_path, direction, args.json)
         checks.append({"name": "terminology", "passed": passed, "issue_count": count, "message": "No terminology issues" if passed else f"Terminology: {count} issue(s)"})
     except Exception as e:
         checks.append({"name": "terminology", "passed": False, "issue_count": 0, "message": f"Terminology check failed: {e}"})
 
-    # Check 3: English residue scan
+    # Check 3: Residue scan (English residue for EN->CN, Chinese residue for CN->EN)
     try:
-        passed, count = run_residue_scan(file_path, args.json)
-        checks.append({"name": "residue_scan", "passed": passed, "issue_count": count, "message": "No English residue" if passed else f"Residue: {count} untranslated card name(s)"})
+        passed, count = run_residue_scan(file_path, direction, args.json)
+        checks.append({"name": "residue_scan", "passed": passed, "issue_count": count, "message": f"No {residue_lang} residue" if passed else f"Residue: {count} untranslated card name(s)"})
     except Exception as e:
         checks.append({"name": "residue_scan", "passed": False, "issue_count": 0, "message": f"Residue scan failed: {e}"})
 
     # Check 4: Phase C self-check
     try:
-        passed, count = run_phase_c_check(file_path, lock_path, args.json)
+        passed, count = run_phase_c_check(file_path, lock_path, direction, args.json)
         checks.append({"name": "phase_c", "passed": passed, "issue_count": count, "message": "Phase C checks passed" if passed else f"Phase C: {count} issue(s)"})
     except Exception as e:
         checks.append({"name": "phase_c", "passed": False, "issue_count": 0, "message": f"Phase C check failed: {e}"})
 
-    # Check 5: Term authority enforcement
+    # Check 5: Term authority enforcement (EN->CN only; skipped for CN->EN)
     try:
-        passed, count = run_term_authority_check(file_path, lock_path, args.json)
-        checks.append({"name": "term_authority", "passed": passed, "issue_count": count, "message": "Term authority checks passed" if passed else f"Term authority: {count} violation(s)"})
+        passed, count = run_term_authority_check(file_path, lock_path, direction, args.json)
+        if direction == "cnen":
+            msg = "Term authority: skipped (CN->EN)"
+        else:
+            msg = "Term authority checks passed" if passed else f"Term authority: {count} violation(s)"
+        checks.append({"name": "term_authority", "passed": passed, "issue_count": count, "message": msg})
     except Exception as e:
         checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "message": f"Term authority check failed: {e}"})
 
@@ -242,6 +260,7 @@ def main() -> None:
 
     if args.json:
         data = {
+            "direction": direction,
             "all_passed": all_pass,
             "blocked": not all_pass,
             "checks": checks,
@@ -253,12 +272,13 @@ def main() -> None:
     print("=" * 60)
     print("")
     print(f"File: {file_path}")
+    print(f"Direction: {'EN->CN' if direction == 'encn' else 'CN->EN'}")
     print("")
 
     check_labels = [
         ("Checking file exists", checks[0]),
         ("Running terminology check", checks[1]),
-        ("Running English residue scan", checks[2]),
+        ("Running residue scan", checks[2]),
         ("Running Phase C self-check", checks[3]),
         ("Running term authority enforcement", checks[4]),
     ]

@@ -155,8 +155,13 @@ JSON data:
 
 #### `scan`
 
+Direction-aware residue scan: reports English card names left in an EN->CN
+translation, or Chinese card names left in a CN->EN translation. Direction is
+auto-detected from the file, or set explicitly with `--direction`.
+
 ```bash
 python scripts/auto_pipeline.py scan translated.txt --json
+python scripts/auto_pipeline.py scan translated.txt --direction cnen --json
 ```
 
 JSON data:
@@ -165,25 +170,31 @@ JSON data:
 {
   "command": "scan",
   "translated": "translated.txt",
-  "english_residue_count": 0,
+  "direction": "encn",
+  "residue_count": 0,
   "residues": []
 }
 ```
 
 ### `check_translation.py`
 
-Detailed terminology checker. Optionally accepts a source file to run term
-authority enforcement.
+Detailed terminology checker. Direction-aware: for EN->CN output it runs the
+full terminology check set and reports English residue; for CN->EN output it
+reports Chinese residue instead. Direction is auto-detected from the file, or
+set explicitly with `--direction`. Optionally accepts a source file (or
+pre-built lock) to run term authority enforcement, an EN->CN-only check.
 
 ```bash
 python scripts/check_translation.py translated.txt --json
 python scripts/check_translation.py translated.txt --source source.md --json
+python scripts/check_translation.py translated.txt --direction cnen --json
 ```
 
 JSON data:
 
 ```json
 {
+  "direction": "encn",
   "issue_count": 5,
   "auto_fixable_count": 2,
   "auto_fixed_count": 0,
@@ -201,7 +212,7 @@ Issue categories include: `provision_mix`, `identical_numbers`,
 `suspicious_order`, `forbidden_term`, `outdated_card_name`, `ambiguous_name`,
 `chinese_numerals`, `passive_voice`, `english_parentheses`, `english_colon`,
 `abbreviation`, `typo`, `homophone`, `deck_abbreviation`, `english_residue`,
-`term_authority_violation`.
+`chinese_residue`, `term_authority_violation`.
 
 ### `phase_c_check.py`
 
@@ -237,10 +248,15 @@ JSON data:
 ### `completeness_guard.py`
 
 Final check. Combines terminology, residue, Phase C, and term authority checks.
+Direction-aware: direction is auto-detected from the file or set with
+`--direction`, and applied to every downstream check. The residue check looks
+for English residue (EN→CN) or Chinese residue (CN→EN); term authority
+enforcement applies to EN→CN only and is skipped for CN→EN.
 
 ```bash
 python scripts/completeness_guard.py translated.txt --json
 python scripts/completeness_guard.py translated.txt --source source.md --json
+python scripts/completeness_guard.py translated.txt --source source.md --direction cnen --json
 ```
 
 The `--source` flag is required for the `term_authority` check; without it,
@@ -250,6 +266,7 @@ JSON data:
 
 ```json
 {
+  "direction": "encn",
   "all_passed": false,
   "blocked": true,
   "checks": [

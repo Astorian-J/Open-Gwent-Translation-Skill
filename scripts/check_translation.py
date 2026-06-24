@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
+    detect_direction,
     extract_card_names,
     extract_card_names_no_colon,
     extract_cn_variants,
@@ -303,8 +304,29 @@ ENGLISH_COLON = re.compile(r'[一-鿿][A-Za-z]+:')
 ABBREV_PATTERN = re.compile(r'(?<![A-Za-z])(BC|OP|UP|OTB|RSS|CA|GG|BM|PTS|R[123])(?![A-Za-z])')
 
 
-def check_translation(text: str, locked_phrases: set[str] | None = None) -> list[str]:
-    """Check translation text, return list of issues."""
+def check_translation(
+    text: str,
+    locked_phrases: set[str] | None = None,
+    direction: str | None = None,
+) -> list[str]:
+    """Check translation text, return list of issues.
+
+    Direction ("encn" or "cnen") selects which checks apply and is
+    auto-detected from the text when omitted. The full terminology check
+    set (provision mix, forbidden terms, fuzzy fixes, English residue, ...)
+    targets a Chinese *output* and runs only for EN->CN. A CN->EN output is
+    scanned for untranslated Chinese card names instead, because running
+    the EN->CN checks against English text would flag the target language
+    itself as residue.
+    """
+    direction = direction or detect_direction(text)
+
+    # CN->EN output: the only term-level residue is Chinese card names that
+    # were not translated to English. The EN->CN checks below all assume a
+    # Chinese output and would false-positive on English text.
+    if direction == "cnen":
+        return check_chinese_residue(text)
+
     issues = []
     forbidden_terms = load_forbidden_terms()
     card_corrections = load_card_corrections()
@@ -604,6 +626,58 @@ def check_english_residue(text: str) -> list[str]:
     return issues
 
 
+def load_chinese_card_names() -> dict[str, str]:
+    """Build a Chinese card name -> English map from card_names.md.
+
+    The mirror of the English card map used by check_english_residue, keyed
+    by the Chinese name so a CN->EN translation can be scanned for Chinese
+    card names that were not translated to English.
+    """
+    card_file = _get_ref_path("card_names.md")
+    if not card_file.exists():
+        return {}
+
+    mapping: dict[str, str] = {}
+    card_text = card_file.read_text(encoding="utf-8")
+    for line in card_text.split("\n"):
+        line = line.strip()
+        if line.startswith("|") and "---" not in line and "English" not in line:
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) >= 4 and parts[1] and parts[2]:
+                en, cn = parts[1], parts[2]
+                if en not in ("English", "—", "") and cn not in ("Chinese", "—", ""):
+                    mapping[cn] = en
+    return mapping
+
+
+def check_chinese_residue(text: str) -> list[str]:
+    """Scan CN->EN output for untranslated Chinese card names.
+
+    The direction-aware counterpart of check_english_residue: where that
+    flags English card names left in a Chinese translation, this flags
+    Chinese card names left in an English translation. Longer names are
+    matched first so a full name is reported before any of its substrings.
+    """
+    mapping = load_chinese_card_names()
+    if not mapping:
+        return []
+
+    names = sorted(mapping.keys(), key=len, reverse=True)
+    issues: list[str] = []
+    reported: set[str] = set()
+
+    for cn in names:
+        if len(cn) < 2:
+            continue
+        if cn in reported:
+            continue
+        if cn in text:
+            issues.append(f"Chinese residue: 「{cn}」→ 「{mapping[cn]}」")
+            reported.add(cn)
+
+    return issues
+
+
 def auto_fix(text: str) -> tuple[str, int]:
     """Auto-fix deterministic provision-terminology errors.
 
@@ -685,6 +759,7 @@ ISSUE_CATEGORIES = {
     "homophone:": "homophone",
     "deck abbreviation:": "deck_abbreviation",
     "English residue:": "english_residue",
+    "Chinese residue:": "chinese_residue",
     "term authority:": "term_authority_violation",
 }
 
@@ -703,6 +778,7 @@ def main():
     parser.add_argument("--source", help="Source file for term authority enforcement")
     parser.add_argument("--lock", help="Pre-built context lock JSON (reuse, do not rebuild)")
     parser.add_argument("--fix", action="store_true", help="Auto-fix provision-terminology errors only (费→人口)")
+    parser.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     args = parser.parse_args()
 
@@ -714,6 +790,7 @@ def main():
         sys.exit(1)
 
     text = path.read_text(encoding="utf-8")
+    direction = args.direction or detect_direction(text)
 
     locked_phrases: set[str] = set()
     if args.lock:
@@ -725,20 +802,25 @@ def main():
         if source_path.exists():
             locked_phrases = load_locked_phrases_from_source(source_path)
 
-    issues = check_translation(text, locked_phrases)
+    issues = check_translation(text, locked_phrases, direction)
 
-    if args.lock:
-        lock_path = Path(args.lock)
-        if lock_path.exists():
-            issues.extend(check_term_authority_violations(path, lock_path=lock_path))
-        else:
-            issues.append(f"term authority: lock file not found: {args.lock}")
-    elif args.source:
-        source_path = Path(args.source)
-        if source_path.exists():
-            issues.extend(check_term_authority_violations(path, source_path=source_path))
-        else:
-            issues.append(f"term authority: source file not found: {args.source}")
+    # Term authority enforces that locked source terms appear with their
+    # official Chinese translation -- an EN->CN concern only. For CN->EN the
+    # output is English, so the lock model does not apply and the check is
+    # skipped to avoid flagging the target language.
+    if direction == "encn":
+        if args.lock:
+            lock_path = Path(args.lock)
+            if lock_path.exists():
+                issues.extend(check_term_authority_violations(path, lock_path=lock_path))
+            else:
+                issues.append(f"term authority: lock file not found: {args.lock}")
+        elif args.source:
+            source_path = Path(args.source)
+            if source_path.exists():
+                issues.extend(check_term_authority_violations(path, source_path=source_path))
+            else:
+                issues.append(f"term authority: source file not found: {args.source}")
 
     # Apply auto-fix before emitting any output so JSON reports accurate counts.
     auto_fixed_count = 0
@@ -747,12 +829,13 @@ def main():
         auto_fixed_count = fix_count
         if fix_count > 0:
             path.write_text(fixed_text, encoding="utf-8")
-            issues = check_translation(fixed_text, locked_phrases)
+            issues = check_translation(fixed_text, locked_phrases, direction)
 
     if args.json:
         structured = [categorize_issue(i) for i in issues]
         auto_fixable = sum(1 for i in structured if i["category"] == "provision_mix")
         data = {
+            "direction": direction,
             "issue_count": len(issues),
             "auto_fixable_count": auto_fixable,
             "auto_fixed_count": auto_fixed_count,

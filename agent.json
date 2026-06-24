@@ -59,11 +59,14 @@
       },
       {
         "name": "guard",
-        "command": "python scripts/completeness_guard.py {translated} --source {source} --json",
+        "command": "python scripts/completeness_guard.py {translated} --source {source} --direction {direction} --json",
         "required_args": [
           "translated",
           "source"
-        ]
+        ],
+        "optional_args": {
+          "direction": "encn | cnen (auto-detected if omitted)"
+        }
       }
     ]
   },
@@ -156,6 +159,14 @@
           "type": "file_path"
         },
         {
+          "name": "--direction",
+          "required": false,
+          "choices": [
+            "encn",
+            "cnen"
+          ]
+        },
+        {
           "name": "--json",
           "required": false,
           "type": "flag"
@@ -164,7 +175,8 @@
       "json_output": [
         "command",
         "translated",
-        "english_residue_count",
+        "direction",
+        "residue_count",
         "residues"
       ]
     },
@@ -188,12 +200,21 @@
           "type": "flag"
         },
         {
+          "name": "--direction",
+          "required": false,
+          "choices": [
+            "encn",
+            "cnen"
+          ]
+        },
+        {
           "name": "--json",
           "required": false,
           "type": "flag"
         }
       ],
       "json_output": [
+        "direction",
         "issue_count",
         "auto_fixable_count",
         "auto_fixed_count",
@@ -253,17 +274,26 @@
           "type": "file_path"
         },
         {
+          "name": "--direction",
+          "required": false,
+          "choices": [
+            "encn",
+            "cnen"
+          ]
+        },
+        {
           "name": "--json",
           "required": false,
           "type": "flag"
         }
       ],
       "json_output": [
+        "direction",
         "all_passed",
         "blocked",
         "checks"
       ],
-      "command": "python scripts/completeness_guard.py {file} --source {source} --json"
+      "command": "python scripts/completeness_guard.py {file} --source {source} --direction {direction} --json"
     },
     {
       "name": "health_check",

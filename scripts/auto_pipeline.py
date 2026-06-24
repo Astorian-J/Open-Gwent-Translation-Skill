@@ -24,7 +24,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import json_output, TermAuthority
+from _shared import detect_direction, json_output, TermAuthority
 
 
 # Scripts that already support --json in Phase 1.
@@ -460,63 +460,79 @@ def post_translation(source_path: Path, translated_path: Path, json_mode: bool =
     return "\n".join(lines), all_ok
 
 
-def scan_translation(translated_path: Path, json_mode: bool = False) -> tuple[str | dict, bool]:
-    """Standalone scan mode: check a translated file for English residue.
+def scan_translation(
+    translated_path: Path,
+    direction: str | None = None,
+    json_mode: bool = False,
+) -> tuple[str | dict, bool]:
+    """Standalone scan mode: check a translated file for untranslated card names.
 
-    This is the final defense line after translation. It scans the translated
-    text for any remaining English card names and reports them with suggested
-    Chinese translations.
+    Direction-aware final defense line. For EN->CN output it reports English
+    card names left untranslated; for CN->EN output it reports Chinese card
+    names left untranslated. Direction is auto-detected from the file when
+    not given, and passed through to check_translation.py so both sides agree.
     """
+    text = translated_path.read_text(encoding="utf-8")
+    direction = direction or detect_direction(text)
+
     ok, out, parsed = run_script(
         "check_translation.py",
-        [str(translated_path)],
+        [str(translated_path), "--direction", direction],
         json_mode=json_mode,
     )
 
+    residue_categories = {"english_residue", "chinese_residue"}
     residues = []
     if parsed and parsed.get("data"):
         for issue in parsed["data"].get("issues", []):
-            if issue.get("category") == "english_residue":
+            if issue.get("category") in residue_categories:
                 residues.append(issue)
     else:
         # Fallback for non-JSON mode or parse failure.
         residues = [
-            {"message": line}
+            {"message": line.strip()}
             for line in out.split("\n")
-            if "English residue" in line
+            if "English residue" in line or "Chinese residue" in line
         ]
 
     if json_mode:
         data = {
             "command": "scan",
             "translated": str(translated_path),
-            "english_residue_count": len(residues),
+            "direction": direction,
+            "residue_count": len(residues),
             "residues": residues,
         }
         return data, len(residues) == 0
 
+    # Residues are always in the SOURCE language; the fix is to translate
+    # them into the target language of this direction.
+    source_lang = "English" if direction == "encn" else "Chinese"
+    target_lang = "Chinese" if direction == "encn" else "English"
+
     lines = [
         "=" * 60,
-        "GWENT TRANSLATION — ENGLISH RESIDUE SCAN",
+        "GWENT TRANSLATION — RESIDUE SCAN",
         "=" * 60,
         "",
-        f"File: {translated_path}",
+        f"File:      {translated_path}",
+        f"Direction: {'EN->CN' if direction == 'encn' else 'CN->EN'}",
         "",
     ]
 
     if residues:
-        lines.append(f"[WARN] Found {len(residues)} English residue(s):")
+        lines.append(f"[WARN] Found {len(residues)} {source_lang} residue(s):")
         lines.append("")
         for issue in residues:
             lines.append(f"  {issue.get('message', issue)}")
         lines.append("")
         lines.append("-" * 50)
-        lines.append("Action required: Replace the above English card names")
-        lines.append("with their Chinese translations before finalizing.")
+        lines.append(f"Action required: Replace the above {source_lang} card names")
+        lines.append(f"with their {target_lang} translations before finalizing.")
         lines.append("")
         lines.append("[BLOCKED] After fixing, re-run: python auto_pipeline.py scan translated.txt")
     else:
-        lines.append("[PASS] No English residue found. Translation is clean.")
+        lines.append(f"[PASS] No {source_lang} residue found. Translation is clean.")
         lines.append("")
         lines.append("If you have not yet run post-processing:")
         lines.append("  python auto_pipeline.py post source.md translated.txt")
@@ -541,8 +557,9 @@ def main():
     post.add_argument("translated", help="Translated file")
     post.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
 
-    scan = subparsers.add_parser("scan", help="Scan translated file for English residue")
+    scan = subparsers.add_parser("scan", help="Scan translated file for untranslated card names")
     scan.add_argument("translated", help="Translated file to scan")
+    scan.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
     scan.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
 
     args = parser.parse_args()
@@ -555,7 +572,7 @@ def main():
                 json_output(None, errors=[f"Translated file not found: {args.translated}"], exit_code=1)
             print(f"Error: Translated file not found: {args.translated}")
             sys.exit(1)
-        report, ok = scan_translation(translated_path, json_mode=json_mode)
+        report, ok = scan_translation(translated_path, direction=args.direction, json_mode=json_mode)
         if json_mode:
             json_output(report, exit_code=0 if ok else 1)
         print(report)

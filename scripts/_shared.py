@@ -38,6 +38,31 @@ def json_output(data: Any, errors: list[str] | None = None, exit_code: int = 0) 
     sys.exit(exit_code)
 
 
+# --- Translation direction detection ---
+
+
+def detect_direction(text: str) -> str:
+    """Heuristically detect translation direction from output text.
+
+    Returns "encn" when the text reads as a Chinese translation (EN->CN
+    output) and "cnen" when it reads as English (CN->EN output). Used by
+    the terminology checker, the residue scanner, and the completeness
+    guard so all of them agree on which language is the *target* and thus
+    which kind of residue to flag.
+    """
+    chinese_chars = len(re.findall(r"[一-鿿]", text))
+    english_words = len(re.findall(r"[A-Za-z]{2,}", text))
+
+    # Substantial Chinese with limited English -> EN->CN output.
+    if chinese_chars > english_words * 2 and chinese_chars > 20:
+        return "encn"
+    # Substantial English with limited Chinese -> CN->EN output.
+    if english_words > chinese_chars / 2 and english_words > 20:
+        return "cnen"
+    # Fallback: more Chinese than English -> encn, else cnen.
+    return "encn" if chinese_chars >= english_words else "cnen"
+
+
 # --- Regex patterns ---
 
 CARD_NAME_PATTERN = re.compile(
