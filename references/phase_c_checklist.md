@@ -27,6 +27,7 @@ Manual rules are surfaced as warnings that a human must confirm.
 | encn-08 | Chinese parentheses used, not English () | regex_forbidden | `\([^）]*\)` | English parentheses: 「{match}」— use Chinese brackets 「（）」 | English parens in Chinese text |
 | encn-09 | Chinese colon "：" in card names | regex_forbidden | `[一-鿿][A-Za-z]+:` | English colon after Chinese: 「{match}」— use Chinese colon "：" | e.g. "杰洛特:Igni" |
 | encn-10 | Context lock terms used consistently | reference | context_lock.json | context lock violation: {issue} | Requires --source to run term_enforcer.py |
+| encn-11 | Figurative language intent preserved | manual | style_reference.md | rhetoric — confirm metaphor/sarcasm/hyperbole was translated by intent, not literally (no flattened irony) | See 修辞与语气判断 section |
 
 ## CN → EN Rules
 
@@ -40,6 +41,7 @@ Manual rules are surfaced as warnings that a human must confirm.
 | cnen-06 | Community slang preserved | manual | competitive_terms.md | community slang — verify English slang equivalents are preserved | Quality check; see quick reference table |
 | cnen-07 | Oral verbs mapped naturally | manual | correction_guide.md | oral verbs — verify natural English mapping | Quality check; e.g. 赚翻 → generates huge value |
 | cnen-08 | Tone: casual but not broken English | manual | style_reference.md | tone — confirm casual native-player register | Requires human stylistic judgment |
+| cnen-09 | Figurative language & sarcasm preserved | manual | style_reference.md | rhetoric — confirm figurative intent and sarcasm survive in English, irony not flattened | See 修辞与语气判断 section |
 
 ## Check Types
 

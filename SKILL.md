@@ -77,6 +77,7 @@ Translate the text according to the direction-specific constraints below.
 | Numbers | Always Arabic numerals (5点, 12人口, R3, 4P) |
 | Parentheses | Chinese brackets 「（中文括号）」, not English (parens) |
 | Verbs | Oral Chinese: 塞进/拍下/骗出/处理掉/赚翻/撑过/不管她/改回去 |
+| Rhetoric | 比喻/夸张/反讽/嘲讽：先识别，译意图不译字面，留住"咬人味"。见 style_reference.md《修辞与语气判断》 |
 | Style | Apply user's style fingerprint preferences when available |
 
 **For CN → EN**:
@@ -89,6 +90,7 @@ Translate the text according to the direction-specific constraints below.
 | Numbers | Arabic numerals. "5 power, 12 provision", "R3", not "Round Three" |
 | Parentheses | English parentheses (), not Chinese 「（）」 |
 | Slang | Preserve community slang: "nerf sponge", "abusive combo", "braindead deck" |
+| Rhetoric | Preserve figurative intent & sarcasm; don't flatten irony or drain hyperbole. See style_reference.md |
 | Style | Match the source's register (casual guide vs. formal analysis) |
 
 For detailed step-by-step guidance, see `references/translation_workflow.md`.

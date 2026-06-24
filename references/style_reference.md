@@ -62,3 +62,38 @@ Translation style modeled after Metallic Danny BC proposal (2026-05-30, verified
 | needs to be highlighted | 让它更亮眼 | It needs more attention → 得让它更亮眼一点 |
 | slightly reduce | 稍微降低一点 | Slightly reduce power → 稍微降低一点强度 |
 | this season | 这个赛季 | This season we... → 这个赛季我们... |
+
+## Figurative Language & Tone Judgment (修辞与语气判断)
+
+Gwent community writing is heavy on metaphor, hyperbole, sarcasm, and trash-talk.
+Translate the **intent and force**, not the literal words. Do not flatten irony
+into sincerity — that is the most common way these translations go bland.
+
+### Rules
+1. **识别 first.** Before translating a sentence, judge: is this literal, or
+   figurative (比喻 / 夸张 / 反讽 / 嘲讽 / 习语)? If figurative, the words are a
+   vehicle for an attitude, not the meaning itself.
+2. **译意图，不译字面.** Keep the image when Chinese has an equivalent-register
+   counterpart; otherwise swap the vehicle for one that lands in Chinese. Do not
+   translate a dead metaphor word-for-word when it reads awkwardly.
+3. **绝不抹平语气.** Sarcasm stays sarcastic, mockery stays biting, hyperbole
+   stays big. "guess what" → 你猜怎么着 (not "我告诉你"); a dismissive tone stays
+   dismissive; "sweet spot" keeps its "just-right" feel, not a dry "该去的位置".
+
+### Examples (from a real BC discussion)
+
+| English (figure) | Type | Bad (literal / flat) | Good (intent kept) |
+|---|---|---|---|
+| "ng siege on steroids" | hyperbole | "围攻体系…类固醇" | "围攻体系…打了鸡血般的加强版" |
+| "massively loud gameplay design" | metaphor | "太大声的设计"（生硬） | "存在感太强 / 喧宾夺主的设计" |
+| "the sweet spot for it" | idiom | "该去的位置"（被抹平） | "刚刚好的最佳点 / 甜点位" |
+| "or it sinks" (support rate) | metaphor | "或者它下沉" | "还是沉底" ✓ |
+| "guess what, I lose…" | sarcasm | "我告诉你，我输掉…" | "你猜怎么着，我就解不掉了" ✓ |
+| "All I hear is someone who…" | dismissive | "我听到的只是某人…" | "我听到的就是某些人…（想保住 2-0）" ✓ |
+| "enablers that make it toxic" | metaphor (slang) | "让它有毒的" | "让 tutor 变得有毒的配合牌" ✓ |
+
+### Swap the vehicle when the literal doesn't land
+- **"loud design"** → "存在感太强 / 喧宾夺主"（别照搬"大声"，中文里生硬）
+- **"on steroids"** → 幽默场合用"打了鸡血般"，中性场合用"加强版 / 超强版"
+- **"sweet spot"** → 保留"刚刚好"的感觉，别翻成干巴巴的"位置"
+- **"braindead / one-trick pony"** → "无脑 / 一招鲜"（保留贬义比喻的力度）

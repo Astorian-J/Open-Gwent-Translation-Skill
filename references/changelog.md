@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-06-24 — Figurative Language & Tone Judgment
+
+### Added
+- `references/style_reference.md`: new section 《修辞与语气判断》 — rules + a
+  real-example table for metaphor / hyperbole / sarcasm / mockery
+  (译意图不译字面，保留"咬人味"). Grounded in an actual BC33 Reddit translation
+  (on steroids / loud design / sweet spot / guess what / sink / toxic /
+  dismissive tone).
+- `SKILL.md` Phase B: added a "Rhetoric" row to both the EN→CN and CN→EN tables.
+- `references/phase_c_checklist.md`: added manual checks encn-11 / cnen-09
+  (figurative intent preserved, irony not flattened).
+
+### Why
+Translation notes from real BC content showed figurative / sarcastic lines were
+handled inconsistently — some kept the bite (沉底 / 你猜怎么着), others got flattened
+(sweet spot → 该去的位置) or translated too literally (loud design → 太大声). The
+skill steered the overall tone but never told the agent to judge rhetoric on a
+per-sentence basis.
+
 ## 2026-06-03 — Server Verification & Restructure
 
 ### Structural Changes
