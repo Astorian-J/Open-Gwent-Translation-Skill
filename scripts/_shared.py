@@ -40,6 +40,12 @@ def json_output(data: Any, errors: list[str] | None = None, exit_code: int = 0) 
 
 # --- Translation direction detection ---
 
+# Heuristic thresholds for direction detection (character-ratio based).
+# See the caveat in detect_direction's docstring — unreliable on mixed text;
+# callers that know the real direction should pass --direction explicitly.
+DIRECTION_RATIO = 2        # 中文需明显多于英文（中文字数 > 英文词数 × 此值）
+DIRECTION_MIN_TOKENS = 20  # 且达到最小字符/词数才判定，避免短文本误判
+
 
 def detect_direction(text: str) -> str:
     """Heuristically detect translation direction from output text.
@@ -61,10 +67,10 @@ def detect_direction(text: str) -> str:
     english_words = len(re.findall(r"[A-Za-z]{2,}", text))
 
     # Substantial Chinese with limited English -> EN->CN output.
-    if chinese_chars > english_words * 2 and chinese_chars > 20:
+    if chinese_chars > english_words * DIRECTION_RATIO and chinese_chars > DIRECTION_MIN_TOKENS:
         return "encn"
     # Substantial English with limited Chinese -> CN->EN output.
-    if english_words > chinese_chars / 2 and english_words > 20:
+    if english_words > chinese_chars / DIRECTION_RATIO and english_words > DIRECTION_MIN_TOKENS:
         return "cnen"
     # Fallback: more Chinese than English -> encn, else cnen.
     return "encn" if chinese_chars >= english_words else "cnen"

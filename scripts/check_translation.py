@@ -11,6 +11,7 @@ Rules are loaded from references/ directory to stay in sync.
 """
 
 import argparse
+import functools
 import json
 import os
 import re
@@ -273,6 +274,13 @@ def load_fuzzy_fixes():
     return fixes
 
 
+# --- Tunable thresholds ---
+
+# Provision 顺序检查：人口高出战力超过此容差视为可疑「X for Y」反转
+SUSPICIOUS_ORDER_MARGIN = 5
+# 中文残留名最短长度，跳过单字避免「的/了」等误匹配
+MIN_CN_RESIDUE_LEN = 2
+
 # --- Patterns ---
 
 # "X费换X点战力" / "X费X战力"
@@ -362,7 +370,7 @@ def check_translation(
     order_matches = POWER_PROVISION_ORDER.findall(text)
     for match in order_matches:
         pop, pwr = int(match[0]), int(match[1])
-        if pop > pwr + 5:
+        if pop > pwr + SUSPICIOUS_ORDER_MARGIN:
             issues.append(
                 f"suspicious order: 「{pop}人口{pwr}战力」— population much higher than power, "
                 f"verify source 'X for Y' format"
@@ -626,6 +634,7 @@ def check_english_residue(text: str) -> list[str]:
     return issues
 
 
+@functools.lru_cache(maxsize=1)
 def load_chinese_card_names() -> dict[str, str]:
     """Build a Chinese card name -> English map from card_names.md.
 
@@ -667,7 +676,7 @@ def check_chinese_residue(text: str) -> list[str]:
     reported: set[str] = set()
 
     for cn in names:
-        if len(cn) < 2:
+        if len(cn) < MIN_CN_RESIDUE_LEN:
             continue
         if cn in reported:
             continue
@@ -825,11 +834,16 @@ def main():
     # Apply auto-fix before emitting any output so JSON reports accurate counts.
     auto_fixed_count = 0
     if args.fix:
-        fixed_text, fix_count = auto_fix(text)
-        auto_fixed_count = fix_count
-        if fix_count > 0:
-            path.write_text(fixed_text, encoding="utf-8")
-            issues = check_translation(fixed_text, locked_phrases, direction)
+        if direction == "cnen":
+            # auto_fix corrects EN->CN provision terms (Chinese 「费→人口」);
+            # a CN->EN output is English and would never match — explicit no-op.
+            print("note: --fix applies to EN->CN provision terms only; ignored for CN->EN", file=sys.stderr)
+        else:
+            fixed_text, fix_count = auto_fix(text)
+            auto_fixed_count = fix_count
+            if fix_count > 0:
+                path.write_text(fixed_text, encoding="utf-8")
+                issues = check_translation(fixed_text, locked_phrases, direction)
 
     if args.json:
         structured = [categorize_issue(i) for i in issues]

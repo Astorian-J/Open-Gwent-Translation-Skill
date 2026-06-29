@@ -268,7 +268,10 @@ Final check. Combines terminology, residue, Phase C, and term authority checks.
 Direction-aware: direction is auto-detected from the file or set with
 `--direction`, and applied to every downstream check. The residue check looks
 for English residue (EN→CN) or Chinese residue (CN→EN); term authority
-enforcement applies to EN→CN only and is skipped for CN→EN.
+enforcement applies to EN→CN only. The `term_authority` check carries a
+`status` field: `ran` (executed), `not_applicable` (CN→EN — enforcing official
+CN terms does not apply), `skipped` (EN→CN but no `--source`/lock provided),
+or `error` (the check itself raised an exception).
 
 ```bash
 python scripts/completeness_guard.py translated.txt --json
@@ -291,7 +294,7 @@ JSON data:
     {"name": "terminology", "passed": false, "issue_count": 3, "message": "..."},
     {"name": "residue_scan", "passed": true, "issue_count": 0, "message": "..."},
     {"name": "phase_c", "passed": false, "issue_count": 1, "message": "..."},
-    {"name": "term_authority", "passed": false, "issue_count": 2, "message": "..."}
+    {"name": "term_authority", "passed": false, "issue_count": 2, "status": "ran", "message": "..."}
   ]
 }
 ```

@@ -412,6 +412,33 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
         except Exception as e:
             results.append(("WARN", f"check_translation.py: Residue test failed ({e})"))
 
+    # Test completeness_guard term_authority status contract (CN->EN => not_applicable)
+    guard_script = script_dir / "completeness_guard.py"
+    if guard_script.exists():
+        try:
+            test_content = "Geralt of Rivia is a witcher traveling the Continent."
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".txt", encoding="utf-8", delete=False
+            ) as tf:
+                tf.write(test_content)
+                test_file = Path(tf.name)
+            try:
+                result = subprocess.run(
+                    [sys.executable, str(guard_script), str(test_file),
+                     "--direction", "cnen", "--json"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                if '"status": "not_applicable"' in result.stdout:
+                    results.append(("PASS", "completeness_guard.py: term_authority status=not_applicable for CN->EN"))
+                else:
+                    results.append(("WARN", "completeness_guard.py: term_authority status contract broken"))
+            finally:
+                test_file.unlink(missing_ok=True)
+        except Exception as e:
+            results.append(("WARN", f"completeness_guard.py: Test failed ({e})"))
+
     return results
 
 

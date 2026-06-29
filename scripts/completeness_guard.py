@@ -135,25 +135,29 @@ def run_phase_c_check(file_path: Path, lock_path: Path | None, direction: str, j
     return issue_count == 0 and result.returncode == 0, issue_count
 
 
-def run_term_authority_check(file_path: Path, lock_path: Path | None, direction: str, json_mode: bool) -> tuple[bool, int]:
-    """Run term_enforcer.py and return (pass, violation_count).
+def run_term_authority_check(file_path: Path, lock_path: Path | None, direction: str, json_mode: bool) -> tuple[bool, int, str]:
+    """Run term_enforcer.py and return (pass, violation_count, status).
 
-    Term authority enforces official Chinese translations in the output, which
-    only applies to EN->CN. For CN->EN the check is skipped. If no lock_path
-    is provided, the check is also skipped.
+    status is one of:
+      "not_applicable" — CN->EN output; enforcing official CN terms does not apply
+      "skipped"        — EN->CN but no lock file (or term_enforcer.py missing); not run
+      "ran"            — actually executed; pass/count are meaningful
+      "error"          — the check itself raised (set by the caller's except guard)
     """
-    if direction == "cnen" or lock_path is None:
-        return True, 0
+    if direction == "cnen":
+        return True, 0, "not_applicable"
+    if lock_path is None:
+        return True, 0, "skipped"
 
     script = Path(__file__).parent / "term_enforcer.py"
     if not script.exists():
-        return True, 0
+        return True, 0, "skipped"
 
     if json_mode:
         ok, parsed, _ = run_script_json("term_enforcer.py", [str(file_path), "--lock", str(lock_path)])
         if parsed and "data" in parsed:
-            return ok, parsed["data"].get("violation_count", 0)
-        return ok, 0
+            return ok, parsed["data"].get("violation_count", 0), "ran"
+        return ok, 0, "ran"
 
     result = subprocess.run(
         [sys.executable, str(script), str(file_path), "--lock", str(lock_path)],
@@ -168,7 +172,7 @@ def run_term_authority_check(file_path: Path, lock_path: Path | None, direction:
             issue_count = int(output.split("Issues:")[1].strip().split()[0])
         except (IndexError, ValueError):
             pass
-    return issue_count == 0 and result.returncode == 0, issue_count
+    return issue_count == 0 and result.returncode == 0, issue_count, "ran"
 
 
 def main() -> None:
@@ -242,16 +246,18 @@ def main() -> None:
     except Exception as e:
         checks.append({"name": "phase_c", "passed": False, "issue_count": 0, "message": f"Phase C check failed: {e}"})
 
-    # Check 5: Term authority enforcement (EN->CN only; skipped for CN->EN)
+    # Check 5: Term authority enforcement (EN->CN only)
     try:
-        passed, count = run_term_authority_check(file_path, lock_path, direction, args.json)
-        if direction == "cnen":
-            msg = "Term authority: skipped (CN->EN)"
+        passed, count, status = run_term_authority_check(file_path, lock_path, direction, args.json)
+        if status == "not_applicable":
+            msg = "Term authority: not applicable (CN->EN)"
+        elif status == "skipped":
+            msg = "Term authority: skipped (no lock file)"
         else:
             msg = "Term authority checks passed" if passed else f"Term authority: {count} violation(s)"
-        checks.append({"name": "term_authority", "passed": passed, "issue_count": count, "message": msg})
+        checks.append({"name": "term_authority", "passed": passed, "issue_count": count, "status": status, "message": msg})
     except Exception as e:
-        checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "message": f"Term authority check failed: {e}"})
+        checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "status": "error", "message": f"Term authority check failed: {e}"})
 
     if lock_path:
         lock_path.unlink(missing_ok=True)
