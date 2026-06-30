@@ -26,6 +26,7 @@ from _shared import (
     extract_card_names,
     extract_card_names_no_colon,
     extract_cn_variants,
+    get_term_authority,
     json_output,
     load_lock_file,
     SKIP_WORDS_MINIMAL,
@@ -311,13 +312,61 @@ ENGLISH_COLON = re.compile(r'[一-鿿][A-Za-z]+:')
 # by non-ASCII letters or punctuation.
 ABBREV_PATTERN = re.compile(r'(?<![A-Za-z])(BC|OP|UP|OTB|RSS|CA|GG|BM|PTS|R[123])(?![A-Za-z])')
 
+# Gameplay-context words that, within a ±20 char window, indicate a slang term is
+# used in its community sense (not literal). Filters literal "broken link" / "loud
+# noise" false positives so the reverse-scan warns only on slang usage.
+SLANG_CONTEXT_WORDS = {"card", "deck", "meta", "strong", "weak", "play",
+                       "nerf", "buff", "build", "run", "tier", "win", "lose"}
+# Half-window (chars each side of a slang hit) that must contain a gameplay
+# context word to treat the occurrence as slang rather than literal.
+SLANG_CONTEXT_WINDOW = 20
+
+
+def _slang_in_context(source: str, slang: str) -> bool:
+    """True if `slang` appears in a gameplay context (not a literal use).
+
+    Slang words (broken / loud / nuts) have common literal meanings. Require a
+    gameplay-context word within ±20 chars to treat the occurrence as slang.
+    Lowers false positives; false negatives only miss a (non-blocking) warn.
+    """
+    low = source.lower()
+    for m in re.finditer(rf"\b{re.escape(slang.lower())}s?\b", low):
+        start = max(0, m.start() - SLANG_CONTEXT_WINDOW)
+        end = min(len(low), m.end() + SLANG_CONTEXT_WINDOW)
+        if any(w in low[start:end] for w in SLANG_CONTEXT_WORDS):
+            return True
+    return False
+
+
+def _slang_warnings(source_text: str | None, translation: str) -> list[str]:
+    """Warn (never block) when source slang lacks any intended CN form in translation."""
+    if not source_text:
+        return []
+    authority = get_term_authority()
+    warnings: list[str] = []
+    for rec in authority.get_slang_for_text(source_text):
+        if not _slang_in_context(source_text, rec["english"]):
+            continue
+        intended = [s.strip() for s in rec["intended_cn"].split("/") if s.strip()]
+        if intended and not any(c in translation for c in intended):
+            warnings.append(
+                f"slang not preserved: source「{rec['english']}」→ "
+                f"expected one of {intended} (avoid literal「{rec['literal_forbidden']}」)"
+            )
+    return warnings
+
 
 def check_translation(
     text: str,
     locked_phrases: set[str] | None = None,
     direction: str | None = None,
-) -> list[str]:
-    """Check translation text, return list of issues.
+    source_text: str | None = None,
+) -> tuple[list[str], list[str]]:
+    """Check translation text, return (issues, warnings).
+
+    If `source_text` is given, slang terms in it are reverse-scanned and a
+    non-blocking warning is emitted when the translation lacks any intended CN
+    form for a slang term used in a gameplay context.
 
     Direction ("encn" or "cnen") selects which checks apply and is
     auto-detected from the text when omitted. The full terminology check
@@ -333,7 +382,7 @@ def check_translation(
     # were not translated to English. The EN->CN checks below all assume a
     # Chinese output and would false-positive on English text.
     if direction == "cnen":
-        return check_chinese_residue(text)
+        return check_chinese_residue(text), []
 
     issues = []
     forbidden_terms = load_forbidden_terms()
@@ -519,7 +568,12 @@ def check_translation(
     residue_issues = check_english_residue(text)
     issues.extend(residue_issues)
 
-    return issues
+    # 14. Slang reverse-scan (WARN only, never blocks): if the source contained a
+    # known slang term in a gameplay context, the translation should carry at
+    # least one intended CN form. Misses become warnings, not issues.
+    warnings = _slang_warnings(source_text, text)
+
+    return issues, warnings
 
 
 def check_english_residue(text: str) -> list[str]:
@@ -770,6 +824,7 @@ ISSUE_CATEGORIES = {
     "English residue:": "english_residue",
     "Chinese residue:": "chinese_residue",
     "term authority:": "term_authority_violation",
+    "slang not preserved:": "slang_not_preserved",
 }
 
 
@@ -802,6 +857,7 @@ def main():
     direction = args.direction or detect_direction(text)
 
     locked_phrases: set[str] = set()
+    source_text: str | None = None
     if args.lock:
         lock_path = Path(args.lock)
         if lock_path.exists():
@@ -810,8 +866,9 @@ def main():
         source_path = Path(args.source)
         if source_path.exists():
             locked_phrases = load_locked_phrases_from_source(source_path)
+            source_text = source_path.read_text(encoding="utf-8")
 
-    issues = check_translation(text, locked_phrases, direction)
+    issues, warnings = check_translation(text, locked_phrases, direction, source_text=source_text)
 
     # Term authority enforces that locked source terms appear with their
     # official Chinese translation -- an EN->CN concern only. For CN->EN the
@@ -843,17 +900,23 @@ def main():
             auto_fixed_count = fix_count
             if fix_count > 0:
                 path.write_text(fixed_text, encoding="utf-8")
-                issues = check_translation(fixed_text, locked_phrases, direction)
+                issues, warnings = check_translation(fixed_text, locked_phrases, direction, source_text=source_text)
 
     if args.json:
         structured = [categorize_issue(i) for i in issues]
         auto_fixable = sum(1 for i in structured if i["category"] == "provision_mix")
+        structured_warnings = [
+            {"category": "slang_not_preserved", "severity": "warning", "message": w}
+            for w in warnings
+        ]
         data = {
             "direction": direction,
             "issue_count": len(issues),
+            "warning_count": len(warnings),
             "auto_fixable_count": auto_fixable,
             "auto_fixed_count": auto_fixed_count,
             "issues": structured,
+            "warnings": structured_warnings,
         }
         json_output(data, exit_code=1 if issues else 0)
 
@@ -863,6 +926,11 @@ def main():
             print(f"  {issue}")
     else:
         print("No issues found")
+
+    if warnings:
+        print(f"\nFound {len(warnings)} warning(s) (non-blocking):")
+        for warning in warnings:
+            print(f"  {warning}")
 
     if args.fix:
         if auto_fixed_count > 0:

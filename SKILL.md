@@ -60,6 +60,12 @@ and format skeleton extraction. These steps should not be run manually.
 >
 > Terms marked **pending** are not in the reference database. Translate them using your
 > judgment, then add them to the lock table if they recur.
+>
+> **SLANG HINTS** (`slang_hints` in the pre-translation JSON): community slang/jargon
+> detected in THIS article with the intended Chinese register (e.g. "on steroids" →
+> 加强版, "broken" → 强到离谱). Use the intended register, not a literal translation.
+> These are hints, not hard locks — Phase C will warn if a detected slang was
+> translated literally.
 
 ---
 

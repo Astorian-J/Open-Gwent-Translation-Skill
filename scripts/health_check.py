@@ -69,6 +69,7 @@ def check_reference_files(ref_dir: Path) -> list[tuple[str, str]]:
         ("changelog.md", "Changelog"),
         ("phase_c_checklist.md", "Phase C checklist"),
         ("effect_text.json", "Official card effect text (EN+CN)"),
+        ("slang_map.md", "Slang & jargon map"),
     ]
 
     for fname, desc in required_refs:
@@ -438,6 +439,33 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
                 test_file.unlink(missing_ok=True)
         except Exception as e:
             results.append(("WARN", f"completeness_guard.py: Test failed ({e})"))
+
+    # Test slang reverse-scan warn (literal translation of source slang warns, non-blocking)
+    check_script = script_dir / "check_translation.py"
+    if check_script.exists():
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".md", encoding="utf-8", delete=False) as sf:
+                sf.write("This card is broken.")
+                src_file = Path(sf.name)
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", encoding="utf-8", delete=False) as tf:
+                tf.write("这张卡破碎了。")
+                tr_file = Path(tf.name)
+            try:
+                result = subprocess.run(
+                    [sys.executable, str(check_script), str(tr_file),
+                     "--source", str(src_file), "--direction", "encn"],
+                    capture_output=True, text=True, timeout=15,
+                )
+                # literal "破碎了" for "broken" should warn (non-blocking, exit 0)
+                if "slang not preserved" in result.stdout and result.returncode == 0:
+                    results.append(("PASS", "check_translation.py: slang reverse-scan warns (non-blocking)"))
+                else:
+                    results.append(("WARN", "check_translation.py: slang warn test unexpected"))
+            finally:
+                src_file.unlink(missing_ok=True)
+                tr_file.unlink(missing_ok=True)
+        except Exception as e:
+            results.append(("WARN", f"check_translation.py: slang test failed ({e})"))
 
     return results
 

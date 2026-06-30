@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-06-30 — Slang 预防 + 检测（黑话"看不懂"修复）
+
+用户痛点：英文黑话（slang/jargon）翻出来"看不懂"。预防为主、检测兜底，两者都做。
+黑话词典刻意不进术语强制锁（保留硬层卡牌信息 / 软层修辞分层）。
+
+### 预防层（pre 注入，主力）
+- 新增 `references/slang_map.md`（30 条：评价俚语 / 习语比喻 / 动作机制），3 列对齐 category_map。
+- `_shared.py`：`_load_slang_map` + `get_slang_for_text`（小写扫描源文黑话，多词短语 re.escape），**不调 _register**（不进强制锁）。
+- `auto_pipeline.py pre`：扫源文黑话，注入 `slang_hints`（封顶 `SLANG_HINTS_CAP=15`，复用 official_effects 模式）。
+- `SKILL.md` Phase A：提示 `slang_hints` 为意向译参考（hint 非硬锁）。
+
+### 检测层（check_translation warn，兜底）
+- `check_translation` 加 `source_text` 参数，返回 `(issues, warnings)`。
+- 反向扫描：源文黑话（gameplay 上下文）+ 译文缺意向译 → warn（不 block）。
+- `_slang_in_context` 误报控制（±20 字符窗口需含 card/deck/meta 等语境词）。
+- warnings 不进 exit code（exit 只看 issues）；JSON 加 `warnings`/`warning_count`。
+- 调用方适配：`phase_c_check.py:110` 解包；subprocess 调用方零改。
+
 ## 2026-06-24 — Card-info Enforcement (categories / attributes / effects)
 
 用户原则：**所有卡牌信息（名称/词条/效果/阵营/边框/稀有度/类别）必须强制用既定译法**；

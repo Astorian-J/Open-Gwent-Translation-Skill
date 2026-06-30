@@ -109,6 +109,10 @@ JSON data:
   "card_references": [
     {"english": "Geralt: Igni", "chinese": "杰洛特：伊格尼法印"}
   ],
+  "slang_hints": [
+    {"english": "on steroids", "intended_cn": "加强版/打了鸡血版", "literal_forbidden": "类固醇", "note": "hyperbole"}
+  ],
+  "slang_hints_total": 1,
   "term_authority": {
     "locked_count": 45,
     "ambiguous_count": 3,
@@ -213,6 +217,7 @@ JSON data:
 {
   "direction": "encn",
   "issue_count": 5,
+  "warning_count": 1,
   "auto_fixable_count": 2,
   "auto_fixed_count": 0,
   "issues": [
@@ -220,6 +225,13 @@ JSON data:
       "category": "provision_mix",
       "severity": "error",
       "message": "provision mix: 「12费换8战力」→ should be 「12人口换8战力」"
+    }
+  ],
+  "warnings": [
+    {
+      "category": "slang_not_preserved",
+      "severity": "warning",
+      "message": "slang not preserved: source「on steroids」→ expected one of ['加强版', '打了鸡血版'] (avoid literal「类固醇」)"
     }
   ]
 }

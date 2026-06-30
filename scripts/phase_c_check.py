@@ -107,7 +107,7 @@ def check_ambiguous_names(
         locked_phrases = load_locked_phrases_from_source(source_path)
     else:
         locked_phrases = set()
-    all_issues = check_translation(text, locked_phrases)
+    all_issues, _warnings = check_translation(text, locked_phrases)
     return [issue for issue in all_issues if "ambiguous name:" in issue]
 
 

@@ -42,6 +42,11 @@ JSON_CAPABLE_SCRIPTS = {
 # for on-demand lookup; capping bounds agent context for card-heavy articles.
 OFFICIAL_EFFECTS_CAP = 20
 
+# Cap on how many slang hints the pre-translation report injects. Slang density
+# is low in practice, but capping bounds agent context and keeps the hint list
+# focused on this article's actual slang.
+SLANG_HINTS_CAP = 15
+
 
 def get_script_dir() -> Path:
     return Path(__file__).parent
@@ -265,6 +270,13 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
                 "official_ability": rec["cn_ability"],
             })
 
+    # Step 6: Slang/jargon hints for terms found in the source — inject the
+    # intended CN register so the agent translates community tone (加强版 for
+    # "on steroids") instead of literal gibberish (类固醇). Prevention layer;
+    # check_translation warns if a detected slang is translated literally.
+    source_text = source_path.read_text(encoding="utf-8")
+    slang_hits = authority.get_slang_for_text(source_text)
+
     if json_mode:
         data = {
             "command": "pre",
@@ -279,6 +291,8 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
             "card_references": [{"english": en, "chinese": cn} for en, cn in quick_ref],
             "official_effects": official_effects[:OFFICIAL_EFFECTS_CAP],
             "official_effects_total": len(official_effects),
+            "slang_hints": slang_hits[:SLANG_HINTS_CAP],
+            "slang_hints_total": len(slang_hits),
             "term_authority": term_authority,
         }
         return data, all_ok
@@ -380,6 +394,16 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
         if len(official_effects) > OFFICIAL_EFFECTS_CAP:
             lines.append(f"    | ... ({len(official_effects) - OFFICIAL_EFFECTS_CAP} more; "
                          f"全部见 effect_text.json) | ... | ... |")
+        lines.append("")
+
+    if slang_hits:
+        lines.append("    SLANG / JARGON HINTS (按意向译，勿字面硬译)")
+        lines.append("    | English | 意向译 | 字面禁译 |")
+        lines.append("    |---------|---------|---------|")
+        for rec in slang_hits[:SLANG_HINTS_CAP]:
+            lines.append(f"    | {rec['english']} | {rec['intended_cn']} | {rec['literal_forbidden']} |")
+        if len(slang_hits) > SLANG_HINTS_CAP:
+            lines.append(f"    | ... ({len(slang_hits) - SLANG_HINTS_CAP} more) | ... | ... |")
         lines.append("")
 
     lines.append("-" * 50)

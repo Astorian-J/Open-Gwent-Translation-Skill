@@ -501,6 +501,11 @@ class TermAuthority:
         # Used to inject the official CN ability so the agent copies it verbatim
         # when quoting a card's effect (term-enforcer can't lock long sentences).
         self._effects: dict[str, dict] = {}
+        # en_lower -> {english, intended_cn, literal_forbidden, note}: community
+        # slang/jargon loaded from slang_map.md. NOT registered as enforced terms
+        # (slang is register guidance, not a hard lock). Used by auto_pipeline pre
+        # (slang_hints injection) and check_translation (reverse-scan warn).
+        self._slang: dict[str, dict] = {}
 
         self._loaded = False
         self._load_all()
@@ -519,6 +524,7 @@ class TermAuthority:
         self._load_cn_fuzzy_fixes()
         self._load_correction_guide()
         self._load_effect_text()
+        self._load_slang_map()
         self._loaded = True
 
     # -- registration helpers --
@@ -771,6 +777,32 @@ class TermAuthority:
                 continue
             self._register(en, cn, "category_map.md", "category")
             self._categories[en.lower()] = en
+
+    def _load_slang_map(self) -> None:
+        """Load community slang/jargon from slang_map.md.
+
+        Slang is register guidance, NOT an enforced term: deliberately kept out of
+        the _register lock (slang depends on tone; hard-locking it would break the
+        hard-layer card-info / soft-layer rhetoric split). Stored in self._slang
+        for auto_pipeline pre (slang_hints injection) and check_translation
+        (reverse-scan warn).
+        """
+        path = self.ref_dir / "slang_map.md"
+        if not path.exists():
+            return
+        text = path.read_text(encoding="utf-8")
+        rows = parse_markdown_table(text, min_columns=3)
+        for row in rows:
+            en = row.get("english", "").strip()
+            intended = row.get("intended_cn", "").strip()
+            if not en or en.lower() == "english" or not intended:
+                continue
+            self._slang[en.lower()] = {
+                "english": en,
+                "intended_cn": intended,
+                "literal_forbidden": row.get("literal_forbidden", "").strip(),
+                "note": row.get("note", "").strip(),
+            }
 
     def _load_card_attributes_map(self) -> None:
         """Load rarity + faction (name & abbreviation) terms.
@@ -1053,6 +1085,22 @@ class TermAuthority:
             results.append({"term": cand, **resolved})
 
         return results
+
+    def get_slang_for_text(self, text: str) -> list[dict]:
+        """Scan source text for community slang/jargon (lowercase-prose tolerant).
+
+        Slang appears lowercase in prose (broken, on steroids) and is missed by
+        the capitalized-phrase extractors. Mirrors the category lowercase scan in
+        get_all_for_text but returns the slang record (intended CN + literal-forbidden)
+        instead of a canonical term. Multi-word phrases (on steroids, sweet spot)
+        match via re.escape on the whole phrase; trailing -s tolerated for plurals.
+        """
+        text_lower = text.lower()
+        hits: list[dict] = []
+        for key, rec in self._slang.items():
+            if re.search(rf"\b{re.escape(key)}s?\b", text_lower):
+                hits.append(rec)
+        return hits
 
     def get_canonical(self, term: str) -> str | None:
         """Return canonical EN for a term, or None if unknown."""

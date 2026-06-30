@@ -118,6 +118,8 @@
         "lock_path",
         "card_references_found",
         "card_references",
+        "slang_hints",
+        "slang_hints_total",
         "term_authority"
       ]
     },
@@ -228,9 +230,11 @@
       "json_output": [
         "direction",
         "issue_count",
+        "warning_count",
         "auto_fixable_count",
         "auto_fixed_count",
-        "issues"
+        "issues",
+        "warnings"
       ]
     },
     {
