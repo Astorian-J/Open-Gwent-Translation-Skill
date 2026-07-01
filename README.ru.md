@@ -1,0 +1,153 @@
+# Gwent Translation Skill
+
+**[English](README.md)** | [中文](README.zh-CN.md) | [Polski](README.pl.md) | **[Русский](README.ru.md)**
+
+> **Внимание:** это русскоязычный перевод документации, созданный машинным переводом и **требующий вычитки носителем русского языка**. Сам инструмент переводит только **английский ↔ китайский** (EN↔CN) — он не поддерживает русский ни как исходный, ни как целевой язык. Самая актуальная версия: [английская](README.md).
+
+> Точный двунаправленный перевод контента по *Gwent: The Witcher Card Game* между английским и китайским — официальная карточная терминология, названия колод сообщества, сленг и естественный тон игроков Bilibili. Работает с любым AI-агентом или переводчиком-человеком.
+
+Машинный перевод контента по Гвинту ломается предсказуемым образом: официальные названия карт переводятся дословно, прозвища колод сообщества превращаются в бессмыслицу, английский сленг вроде "on steroids" или "sweet spot" становится абракадаброй, а весь текст звучит деревянно. Этот набор инструментов исправляет это трёхслойным конвейером: блокирует данные карт, направляет риторику и ловит остатки.
+
+## Возможности
+
+- **Двунаправленный и направленно-осознанный** — EN→CN с тоном сообщества игроков Bilibili (короткие рубленые фразы, активный залог); CN→EN в естественный английский, сохраняющий термины сообщества. У каждого направления свой конвейер, поэтому CN→EN не пометит английские названия карт как непереведённые остатки.
+- **1366 карт, заблокированных дословно** — Официальное EN/CN-название каждой карты, категория, атрибуты (редкость / фракция) и текст способности загружаются из официальных данных CDPR и исполняются дословно. Данные карт никогда не переводятся заново.
+- **200+ названий колод сообщества** — Прозвища, которые реально используют китайские игроки (大金北, 孽鬼跳松, 赤诚骑士北, 状态帝国...), а не дословные переводы.
+- **Инъекция сленга и жаргона** — Английский сленг (op, brick, tutor, mulligan, on steroids, sweet spot...) обнаруживается в исходнике и предварительно наполняется целевым переводом, чтобы перестать быть абракадаброй.
+- **Сохранение риторики и тона** — Метафоры, гипербола и сарказм переводятся по *намерению*, а не слово в слово. "Loud design" не станет "слишком громким".
+- **Трёхслойная защита** — Жёсткий слой исполняет данные карт дословно; мягкий слой направляет риторику и стиль; слой обнаружения ловит остатки и пропущенные термины в конце.
+- **Независим от агента** — У каждого скрипта есть флаг `--json` с унифицированным конвертом `{success, exit_code, data, errors}`. Работает с Claude Code, OpenClaw, Hermes или любым агентом. Только стандартная библиотека Python 3.10+, ноль зависимостей.
+
+## До / После
+
+| Исходный текст | Обычный машинный перевод | Этот инструмент |
+|---|---|---|
+| This build's sweet spot is at 8 provisions — loud design, on steroids. | 这个构建在8人口有甜点位置——大声的设计，在类固醇上。 | 这套的**甜点位**就在 8 人口——**存在感太强**，简直**打了鸡血**。 |
+| Devotion Knights is the meta pick, but it bricks without a tutor. | 奉献骑士是元选择，但没有家庭教师它会变砖。 | **赤诚骑士北**是版本答案,没**检索**就会**卡手**。 |
+
+(Примеры показывают EN→CN, поскольку инструмент работает с английским ↔ китайским.)
+
+## Как это работает
+
+Пять фаз, каждая из которых — кроме самого перевода — автоматизирована:
+
+| Фаза | Что происходит | Скрипт |
+|---|---|---|
+| A. Предобработка | Загружает ссылки, блокирует термины карт, вводит официальные эффекты + подсказки сленга, извлекает скелет формата | `auto_pipeline.py pre` |
+| B. Перевод | Вы или ваш агент переводите, ведомые заблокированной таблицей терминов | — |
+| C. Самопроверка | Проверяет формулировку, остатки, риторику, полноту | `phase_c_check.py` |
+| D. Терминологический авторитет | Заново сверяет все заблокированные данные карт дословно | `term_enforcer.py` |
+| E. Постобработка + шлюз | Финальный шлюз остатков / терминов / полноты | `auto_pipeline.py post`, `completeness_guard.py` |
+
+Данные карт **блокируются, а не предлагаются**: если название карты или официальный эффект встречается в источнике, перевод должен использовать официальную китайскую форму. Новые термины сообщества проходят через буфер проверки (`pending_terms.md`) перед окончательным принятием.
+
+## Быстрая установка
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Astorian-J/Open-Gwent-Translation-Skill/main/install.sh | bash
+```
+
+Или клонируйте вручную:
+
+```bash
+git clone --depth 1 https://github.com/Astorian-J/Open-Gwent-Translation-Skill.git
+```
+
+Требуется Python 3.10+. Нет сторонних зависимостей.
+
+## Использование
+
+```bash
+# 1. Предобработка исходника (блокирует термины, вводит ссылки)
+python scripts/auto_pipeline.py pre source.md --date 2026-07 --type general
+
+# 2. Перевод (вы или ваш агент), используя заблокированную таблицу терминов
+
+# 3. Постобработка и проверка
+python scripts/auto_pipeline.py post source.md translated.txt
+
+# 4. Финальный шлюз
+python scripts/completeness_guard.py translated.txt --source source.md
+```
+
+Добавьте `--json` к любой команде для машиночитаемого вывода. Полный интерфейс агента: [AGENTS.md](AGENTS.md).
+
+## Структура файлов
+
+```
+gwent-translation-style/
+├── SKILL.md                 # Claude Code workflow + constraints
+├── AGENTS.md                # Agent-agnostic interface (commands / JSON / exit codes)
+├── agent.json               # Machine-readable command manifest
+├── install.sh               # One-line installer
+├── references/              # 20 reference files
+│   ├── card_names.md            # Card names (official EN<->CN)
+│   ├── terminology_map.md       # EN->CN terminology
+│   ├── reverse_terminology_map.md  # CN->EN terminology
+│   ├── keywords_map.md          # Keyword translations
+│   ├── category_map.md          # Card categories (relict, construct...)
+│   ├── card_attributes_map.md   # Rarity + faction names / aliases
+│   ├── competitive_terms.md     # 200+ deck names + community slang
+│   ├── slang_map.md             # Slang / jargon hints (op, brick, tutor...)
+│   ├── effect_text.json         # 1366 cards' official ability text
+│   ├── cn_fuzzy_fixes.md        # Chinese typo / abbreviation fixes
+│   ├── correction_guide.md      # Translation rules
+│   ├── common_pitfalls.md       # Common mistakes
+│   ├── style_reference.md       # Style + rhetoric guidelines
+│   ├── style_fingerprint.md     # Author style markers
+│   ├── ambiguous_names.md       # Disambiguation
+│   ├── version_map.md           # Version-specific terms
+│   ├── phase_c_checklist.md     # Self-check rules
+│   ├── translation_workflow.md  # Workflow reference
+│   ├── pending_terms.md         # Terms awaiting review (runtime data)
+│   └── changelog.md             # Update history
+└── scripts/                 # 16 Python scripts
+    ├── auto_pipeline.py         # Single orchestration entry point
+    ├── check_translation.py     # Residue + slang detection
+    ├── completeness_guard.py    # Final gate
+    ├── phase_c_check.py         # Self-check
+    ├── term_enforcer.py         # Card data verification
+    ├── context_lock.py          # Context / abbreviation lock
+    ├── effect_verifier.py       # Official effect text check
+    ├── build_effect_reference.py  # Rebuild effect_text.json
+    ├── format_skeleton.py       # Format preservation
+    ├── diff_review.py           # Diff review
+    ├── backtranslate.py         # Back-translation check
+    ├── lookup.py                # Term lookup
+    ├── learn.py                 # Learn new terms
+    ├── health_check.py          # Integrity check (44 PASS)
+    ├── _shared.py               # Shared logic (TermAuthority)
+    └── agent_utils.py           # JSON envelope helpers
+```
+
+## Ключевые термины
+
+Небольшая выборка — полный набор в `references/`.
+
+**Названия колод** (признанные сообществом):
+
+| Английский | Китайский |
+|---|---|
+| Devotion Knights | 赤诚骑士北 |
+| GN Movement | 孽鬼跳松 |
+| Aristocrats | 状态帝国 |
+| Lined Pockets Crimes | 宝箱罪行迪迦 |
+| Blaze of Glory Eist Warriors | 荣耀圣焰征战 |
+
+**Алиасы фракций**: Northern Realms → 北, Skellige → 岛, Monsters → 怪, Nilfgaard → 帝, Scoia'tael → 松, Syndicate → 迪迦.
+
+## Пользователи Claude Code
+
+Установите в `~/.claude/skills/gwent-translation-style/` и перезапустите Claude Code. Триггеры: `/gwent-translation-style`, "translate Gwent article", "Gwent translation".
+
+## Содействие
+
+1. Сделайте форк репозитория
+2. Добавьте или обновите термины в `references/`
+3. Новые термины сообщества должны пройти через `pending_terms.md`
+4. Запустите `python scripts/health_check.py` перед отправкой
+5. Откройте pull request
+
+## Лицензия
+
+См. [LICENSE](LICENSE).

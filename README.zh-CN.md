@@ -1,0 +1,149 @@
+# 昆特牌翻译 Skill
+
+**[English](README.md)** | **[中文](README.zh-CN.md)** | [Polski](README.pl.md) | [Русский](README.ru.md)
+
+> 面向《昆特牌：巫师之昆特牌》内容的英中双向翻译工具——官方卡牌术语、社区卡组名、玩家黑话，以及地道的 Bilibili 玩家口吻。兼容任何 AI agent 或人工译者。
+
+机翻昆特内容会在几个固定地方翻车：官方卡牌名被直译、社区卡组绰号变不知所云、英文黑话（on steroids / sweet spot）翻出来看不懂、整篇生硬。本工具用三层流水线解决：硬层锁定卡牌数据、软层引导修辞、检测层兜底漏译残留。
+
+## 特性
+
+- **双向 + 方向感知** —— EN→CN 用 Bilibili 玩家社区口吻（短句、主动语态）；CN→EN 译成自然英文并保留社区术语。两个方向各自独立流水线，CN→EN 不会把英文卡名误判为"未翻译残留"。
+- **1366 张卡逐字锁定** —— 每张卡的官方中英文名、类别、属性（稀有度/阵营）、效果文本从 CDPR 官方数据加载并逐字强制，卡牌信息绝不"再翻译"。
+- **200+ 社区卡组名** —— 中文玩家真正在用的绰号（大金北、孽鬼跳松、赤诚骑士北、状态帝国……），不是直译。
+- **黑话/行话注入** —— 源文里的英文黑话（op、brick、tutor、mulligan、on steroids、sweet spot……）会被检测并预注入意向译法，不再翻成看不懂的东西。
+- **修辞与语气保留** —— 比喻、夸张、反讽按*意图*翻译，而非逐字。"loud design"不会变成"太大声"。
+- **三层防御** —— 硬层逐字强制卡牌数据；软层引导修辞与风格；检测层在最后兜底捕捉残留和漏译。
+- **Agent 无关** —— 每个脚本都带 `--json` flag 和统一信封 `{success, exit_code, data, errors}`。兼容 Claude Code、OpenClaw、Hermes 或任意 agent。Python 3.10+ 标准库，零依赖。
+
+## 翻译前后对比
+
+| 源文 | 机翻 | 本工具 |
+|---|---|---|
+| This build's sweet spot is at 8 provisions — loud design, on steroids. | 这个构建在8人口有甜点位置——大声的设计，在类固醇上。 | 这套的**甜点位**就在 8 人口——**存在感太强**，简直**打了鸡血**。 |
+| Devotion Knights is the meta pick, but it bricks without a tutor. | 奉献骑士是元选择，但没有家庭教师它会变砖。 | **赤诚骑士北**是版本答案，没**检索**就会**卡手**。 |
+
+## 工作原理
+
+五个阶段，除实际翻译外全部自动化：
+
+| 阶段 | 做什么 | 脚本 |
+|---|---|---|
+| A. 译前预处理 | 加载 references、锁定卡牌术语、注入官方效果 + 黑话提示、提取格式骨架 | `auto_pipeline.py pre` |
+| B. 翻译 | 你（或你的 agent）按锁定术语表翻译 | — |
+| C. 自检 | 检查措辞、残留、修辞、完整性 | `phase_c_check.py` |
+| D. 术语权威 | 逐字复核所有锁定的卡牌数据 | `term_enforcer.py` |
+| E. 后处理 + 门禁 | 最终的残留/术语/完整性闸门 | `auto_pipeline.py post`、`completeness_guard.py` |
+
+卡牌数据是**锁定而非建议**：源文里出现的卡牌名或官方效果，译文必须用官方中文形式。新社区术语需经审核缓冲区（`pending_terms.md`）才能正式采纳。
+
+## 快速安装
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Astorian-J/Open-Gwent-Translation-Skill/main/install.sh | bash
+```
+
+或手动克隆：
+
+```bash
+git clone --depth 1 https://github.com/Astorian-J/Open-Gwent-Translation-Skill.git
+```
+
+需要 Python 3.10+。无第三方依赖。
+
+## 用法
+
+```bash
+# 1. 译前预处理源文（锁定术语、注入 reference）
+python scripts/auto_pipeline.py pre source.md --date 2026-07 --type general
+
+# 2. 翻译（你或你的 agent），按锁定术语表来
+
+# 3. 后处理并校验
+python scripts/auto_pipeline.py post source.md translated.txt
+
+# 4. 最终门禁
+python scripts/completeness_guard.py translated.txt --source source.md
+```
+
+任意命令加 `--json` 获取机器可读输出。完整 agent 接口见 [AGENTS.md](AGENTS.md)。
+
+## 文件结构
+
+```
+gwent-translation-style/
+├── SKILL.md                 # Claude Code 工作流 + 约束
+├── AGENTS.md                # Agent 无关接口（命令/JSON/退出码）
+├── agent.json               # 机器可读命令清单
+├── install.sh               # 一行安装器
+├── references/              # 20 个 reference 文件
+│   ├── card_names.md            # 卡牌名（官方 EN<->CN）
+│   ├── terminology_map.md       # EN->CN 术语
+│   ├── reverse_terminology_map.md  # CN->EN 术语
+│   ├── keywords_map.md          # 关键词翻译
+│   ├── category_map.md          # 卡牌类别（遗物、构造体……）
+│   ├── card_attributes_map.md   # 稀有度 + 阵营名/缩写
+│   ├── competitive_terms.md     # 200+ 卡组名 + 社区黑话
+│   ├── slang_map.md             # 黑话/行话提示（op、brick、tutor……）
+│   ├── effect_text.json         # 1366 张卡官方效果文本
+│   ├── cn_fuzzy_fixes.md        # 中文错字/缩写修正
+│   ├── correction_guide.md      # 翻译规则
+│   ├── common_pitfalls.md       # 常见错误
+│   ├── style_reference.md       # 风格 + 修辞指南
+│   ├── style_fingerprint.md     # 作者风格标记
+│   ├── ambiguous_names.md       # 歧义消解
+│   ├── version_map.md           # 版本特定术语
+│   ├── phase_c_checklist.md     # 自检规则
+│   ├── translation_workflow.md  # 工作流参考
+│   ├── pending_terms.md         # 待审核术语（运行时数据）
+│   └── changelog.md             # 更新历史
+└── scripts/                 # 16 个 Python 脚本
+    ├── auto_pipeline.py         # 唯一编排入口
+    ├── check_translation.py     # 残留 + 黑话检测
+    ├── completeness_guard.py    # 最终门禁
+    ├── phase_c_check.py         # 自检
+    ├── term_enforcer.py         # 卡牌数据校验
+    ├── context_lock.py          # 上下文/缩写锁定
+    ├── effect_verifier.py       # 官方效果文本检查
+    ├── build_effect_reference.py  # 重建 effect_text.json
+    ├── format_skeleton.py       # 格式保留
+    ├── diff_review.py           # diff 审查
+    ├── backtranslate.py         # 回译检查
+    ├── lookup.py                # 术语查询
+    ├── learn.py                 # 学习新术语
+    ├── health_check.py          # 完整性检查（44 PASS）
+    ├── _shared.py               # 共享逻辑（TermAuthority）
+    └── agent_utils.py           # JSON 信封辅助
+```
+
+## 术语示例
+
+小部分样例——完整数据在 `references/`。
+
+**卡组名**（社区公认）：
+
+| 英文 | 中文 |
+|---|---|
+| Devotion Knights | 赤诚骑士北 |
+| GN Movement | 孽鬼跳松 |
+| Aristocrats | 状态帝国 |
+| Lined Pockets Crimes | 宝箱罪行迪迦 |
+| Blaze of Glory Eist Warriors | 荣耀圣焰征战 |
+
+**阵营别名**：Northern Realms→北、Skellige→岛、Monsters→怪、Nilfgaard→帝、Scoia'tael→松、Syndicate→迪迦。
+
+## Claude Code 用户
+
+安装到 `~/.claude/skills/gwent-translation-style/` 并重启 Claude Code。触发方式：`/gwent-translation-style`、"翻译这篇昆特牌文章"、"昆特翻译"。
+
+## 贡献
+
+1. Fork 仓库
+2. 在 `references/` 增改术语
+3. 新社区术语必须先经 `pending_terms.md`
+4. 提交前跑 `python scripts/health_check.py`
+5. 发起 pull request
+
+## 许可证
+
+见 [LICENSE](LICENSE)。

@@ -1,167 +1,148 @@
 # Gwent Translation Skill
 
-A translation toolkit for Gwent: The Witcher Card Game content between English and Chinese. Optimized for accurate terminology, community deck names, and natural expression.
+**[English](README.md)** | [中文](README.zh-CN.md) | [Polski](README.pl.md) | [Русский](README.ru.md)
 
-Works with any AI agent or human translator. For Claude Code users, see [Claude Code Users](#claude-code-users) below.
+> Accurate bidirectional translation between English and Chinese for *Gwent: The Witcher Card Game* content — official card terminology, community deck names, slang, and a natural Bilibili-player tone. Works with any AI agent or human translator.
+
+Machine translation of Gwent content breaks in predictable ways: official card names get translated literally, community deck nicknames become nonsense, English slang like "on steroids" or "sweet spot" turns into gibberish, and everything reads stiff. This toolkit fixes that with a three-layer pipeline that locks card data, guides rhetoric, and catches residue.
 
 ## Features
 
-- **Bidirectional Translation**: EN↔CN with separate workflows for each direction
-- **68 Verified Deck Names**: Community-recognized Chinese nicknames for competitive decks
-- **42 Leader Names**: Aligned with official Gwent v12.8.0 card data
-- **Faction Slang**: Unified Syndicate faction alias to 迪迦
-- **Terminology Injection**: Auto-detects card names and injects standard translations into prompts
-- **Review Buffer**: New terms go through `pending_terms.md` before permanent adoption
+- **Bidirectional & direction-aware** — EN→CN with a Bilibili-player community tone (short punchy sentences, active voice); CN→EN into natural English that keeps community terms. Each direction has its own pipeline, so CN→EN won't false-flag English card names as untranslated residue.
+- **1366 cards, locked verbatim** — Every card's official EN/CN name, category, attributes (rarity / faction), and ability text is loaded from CDPR's official data and enforced verbatim. Card info is never re-translated freely.
+- **200+ community deck names** — The nicknames Chinese players actually use (大金北, 孽鬼跳松, 赤诚骑士北, 状态帝国...), not literal translations.
+- **Slang & jargon injection** — English slang (op, brick, tutor, mulligan, on steroids, sweet spot...) is detected in the source and pre-injected with the intended translation, so it stops coming out as gibberish.
+- **Rhetoric & tone preservation** — Metaphor, hyperbole, and sarcasm are translated by *intent*, not word-by-word. "Loud design" won't become "too loud".
+- **Three-layer defense** — Hard layer enforces card data verbatim; soft layer guides rhetoric and style; detection layer catches residue and missed terms at the end.
+- **Agent-agnostic** — Every script has a `--json` flag with a unified envelope `{success, exit_code, data, errors}`. Works with Claude Code, OpenClaw, Hermes, or any agent. Python 3.10+ stdlib only, zero dependencies.
+
+## Before / After
+
+| Source text | Plain machine translation | This skill |
+|---|---|---|
+| This build's sweet spot is at 8 provisions — loud design, on steroids. | 这个构建在8人口有甜点位置——大声的设计，在类固醇上。 | 这套的**甜点位**就在 8 人口——**存在感太强**，简直**打了鸡血**。 |
+| Devotion Knights is the meta pick, but it bricks without a tutor. | 奉献骑士是元选择，但没有家庭教师它会变砖。 | **赤诚骑士北**是版本答案，没**检索**就会**卡手**。 |
+
+## How it works
+
+Five phases, each automated except the actual translation:
+
+| Phase | What happens | Script |
+|---|---|---|
+| A. Pre-translation | Loads references, locks card terms, injects official effects + slang hints, extracts format skeleton | `auto_pipeline.py pre` |
+| B. Translation | You or your agent translate, guided by the locked term table | — |
+| C. Self-check | Checks phrasing, residue, rhetoric, completeness | `phase_c_check.py` |
+| D. Term authority | Re-verifies all locked card data verbatim | `term_enforcer.py` |
+| E. Post + guard | Final residue / term / completeness gate | `auto_pipeline.py post`, `completeness_guard.py` |
+
+Card data is **locked, not suggested**: if a card name or official effect appears in the source, the translation must use the official Chinese form. New community terms go through a review buffer (`pending_terms.md`) before permanent adoption.
 
 ## Quick Install
-
-One-line installation:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Astorian-J/Open-Gwent-Translation-Skill/main/install.sh | bash
 ```
 
-Or clone manually to any directory:
+Or clone manually:
 
 ```bash
-git clone --depth 1 https://github.com/Astorian-J/Open-Gwent-Translation-Skill.git ~/gwent-translation-style
+git clone --depth 1 https://github.com/Astorian-J/Open-Gwent-Translation-Skill.git
 ```
 
-## Update
-
-```bash
-cd ~/gwent-translation-style && git pull
-```
-
-## Uninstall
-
-```bash
-rm -rf ~/gwent-translation-style
-```
+Requires Python 3.10+. No third-party dependencies.
 
 ## Usage
 
-Run scripts from the project root. The recommended workflow is:
-
 ```bash
-# 1. Pre-process source
-python scripts/auto_pipeline.py pre source.md --date 2026-05 --type general
+# 1. Pre-process the source (locks terms, injects references)
+python scripts/auto_pipeline.py pre source.md --date 2026-07 --type general
 
-# 2. Translate (performed by you or your agent)
+# 2. Translate (you or your agent), using the locked term table
 
 # 3. Post-process and verify
 python scripts/auto_pipeline.py post source.md translated.txt
 
-# 4. Final check
-python scripts/completeness_guard.py translated.txt
+# 4. Final gate
+python scripts/completeness_guard.py translated.txt --source source.md
 ```
 
-For agent integration, see [AGENTS.md](AGENTS.md).
+Add `--json` to any command for machine-readable output. Full agent interface: [AGENTS.md](AGENTS.md).
 
 ## File Structure
 
 ```
 gwent-translation-style/
-├── SKILL.md                 # workflow pipeline + constraints (Claude Code format)
-├── AGENTS.md                # agent-agnostic interface documentation
-├── references/              # 15 reference files
-│   ├── card_names.md        # Card name translations (official)
-│   ├── terminology_map.md   # EN→CN terminology
-│   ├── reverse_terminology_map.md  # CN→EN terminology
-│   ├── keywords_map.md      # Keyword translations
-│   ├── category_map.md      # Card category translations
-│   ├── competitive_terms.md # Deck names + community slang
-│   ├── cn_fuzzy_fixes.md    # Chinese typo/abbreviation fixes
-│   ├── correction_guide.md  # Translation rules
-│   ├── common_pitfalls.md   # Common mistakes to avoid
-│   ├── style_reference.md   # Style guidelines
-│   ├── style_fingerprint.md # Author style markers
-│   ├── ambiguous_names.md   # Disambiguation guide
-│   ├── version_map.md       # Version-specific terms
-│   ├── pending_terms.md     # Terms awaiting verification
-│   └── changelog.md         # Update history
-└── scripts/                 # utility scripts
-    ├── auto_pipeline.py
-    ├── check_translation.py
-    ├── completeness_guard.py
-    ├── context_lock.py
-    ├── diff_review.py
-    ├── format_skeleton.py
-    ├── health_check.py
-    ├── learn.py
-    ├── lookup.py
-    ├── phase_c_check.py
-    └── backtranslate.py
+├── SKILL.md                 # Claude Code workflow + constraints
+├── AGENTS.md                # Agent-agnostic interface (commands / JSON / exit codes)
+├── agent.json               # Machine-readable command manifest
+├── install.sh               # One-line installer
+├── references/              # 20 reference files
+│   ├── card_names.md            # Card names (official EN<->CN)
+│   ├── terminology_map.md       # EN->CN terminology
+│   ├── reverse_terminology_map.md  # CN->EN terminology
+│   ├── keywords_map.md          # Keyword translations
+│   ├── category_map.md          # Card categories (relict, construct...)
+│   ├── card_attributes_map.md   # Rarity + faction names / aliases
+│   ├── competitive_terms.md     # 200+ deck names + community slang
+│   ├── slang_map.md             # Slang / jargon hints (op, brick, tutor...)
+│   ├── effect_text.json         # 1366 cards' official ability text
+│   ├── cn_fuzzy_fixes.md        # Chinese typo / abbreviation fixes
+│   ├── correction_guide.md      # Translation rules
+│   ├── common_pitfalls.md       # Common mistakes
+│   ├── style_reference.md       # Style + rhetoric guidelines
+│   ├── style_fingerprint.md     # Author style markers
+│   ├── ambiguous_names.md       # Disambiguation
+│   ├── version_map.md           # Version-specific terms
+│   ├── phase_c_checklist.md     # Self-check rules
+│   ├── translation_workflow.md  # Workflow reference
+│   ├── pending_terms.md         # Terms awaiting review (runtime data)
+│   └── changelog.md             # Update history
+└── scripts/                 # 16 Python scripts
+    ├── auto_pipeline.py         # Single orchestration entry point
+    ├── check_translation.py     # Residue + slang detection
+    ├── completeness_guard.py    # Final gate
+    ├── phase_c_check.py         # Self-check
+    ├── term_enforcer.py         # Card data verification
+    ├── context_lock.py          # Context / abbreviation lock
+    ├── effect_verifier.py       # Official effect text check
+    ├── build_effect_reference.py  # Rebuild effect_text.json
+    ├── format_skeleton.py       # Format preservation
+    ├── diff_review.py           # Diff review
+    ├── backtranslate.py         # Back-translation check
+    ├── lookup.py                # Term lookup
+    ├── learn.py                 # Learn new terms
+    ├── health_check.py          # Integrity check (44 PASS)
+    ├── _shared.py               # Shared logic (TermAuthority)
+    └── agent_utils.py           # JSON envelope helpers
 ```
+
+## Terminology Highlights
+
+A small sample — the full set lives in `references/`.
+
+**Deck names** (community-recognized):
+
+| English | Chinese |
+|---|---|
+| Devotion Knights | 赤诚骑士北 |
+| GN Movement | 孽鬼跳松 |
+| Aristocrats | 状态帝国 |
+| Lined Pockets Crimes | 宝箱罪行迪迦 |
+| Blaze of Glory Eist Warriors | 荣耀圣焰征战 |
+
+**Faction aliases**: Northern Realms → 北, Skellige → 岛, Monsters → 怪, Nilfgaard → 帝, Scoia'tael → 松, Syndicate → 迪迦.
 
 ## Claude Code Users
 
-If you use Claude Code, install to `~/.claude/skills/gwent-translation-style/` and restart Claude Code. The skill activates when you:
-
-- Type `/gwent-translation-style`
-- Say "translate Gwent article"
-- Say "Gwent translation"
-
-## Terminology System
-
-### Leader Names (Official)
-
-| English | Chinese | ID |
-|---------|---------|-----|
-| Blaze of Glory | 荣耀圣焰 | 202576 |
-| Patricidal Fury | 鸣镝动怒 | 202119 |
-| Inspired Zeal | 灼心狂热 | 200168 |
-| Lined Pockets | 盆满钵满 | 122105 |
-| Off the Books | 黑市买卖 | 202328 |
-| Hidden Cache | 军备宝箱 | 202577 |
-| Jackpot | 头号大奖 | 202373 |
-
-### Community Deck Names
-
-| English | Chinese |
-|---------|---------|
-| Viraxas Zeal | 大金北 |
-| GN Movement | 孽鬼跳松 |
-| Devotion Knights | 赤诚骑士北 |
-| Lined Pockets Crimes | 宝箱罪行迪迦 |
-| Aristocrats | 状态帝国 |
-| Blaze of Glory Eist Warriors | 荣耀圣焰征战 |
-| Patricidal Fury Warriors | 鸣镝动怒征战 |
-| Renfri Blaze of Glory | 鸣镝动怒鸟岛 |
-| Lippy decks | 现冥卡组 |
-| Armor Exploit deck | 互口岛 |
-
-### Faction Aliases
-
-| Faction | Alias |
-|---------|-------|
-| Northern Realms | 北 |
-| Skellige | 岛 |
-| Monsters | 怪 |
-| Nilfgaard | 帝 |
-| Scoia'tael | 松 |
-| Syndicate | 迪迦 |
-
-## Translation Rules
-
-### Unknown Deck Names
-
-When encountering a deck name without a community alias, follow this pattern:
-
-**Format**: `Card/Mechanic + Leader + Faction Alias`
-
-Examples:
-- `Blaze of Glory Eist Warriors` → 荣耀圣焰征战岛 (but community uses 荣耀圣焰征战)
-- `Patricidal Fury Warriors` → 鸣镝动怒战士岛 (but community uses 鸣镝动怒征战)
-
-Always prioritize community names when available.
+Install to `~/.claude/skills/gwent-translation-style/` and restart Claude Code. Triggers: `/gwent-translation-style`, "translate Gwent article", "Gwent translation".
 
 ## Contributing
 
 1. Fork the repository
 2. Add or update terms in `references/`
-3. New terms must pass through `pending_terms.md` before permanent adoption
-4. Submit a pull request
+3. New community terms must pass through `pending_terms.md`
+4. Run `python scripts/health_check.py` before submitting
+5. Open a pull request
 
 ## License
 
