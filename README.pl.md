@@ -41,6 +41,12 @@ Pięć faz, z których każda — poza samym tłumaczeniem — jest zautomatyzow
 
 Dane kart są **zablokowane, nie sugerowane**: jeśli nazwa karty lub oficjalny efekt pojawia się w źródle, tłumaczenie musi użyć oficjalnej formy chińskiej. Nowe terminy społeczności przechodzą przez bufor weryfikacji (`pending_terms.md`) przed trwałym przyjęciem.
 
+## Uwaga o zużyciu tokenów
+
+Narzędzie wstrzykuje zablokowaną tabelę terminów, oficjalne efekty kart i podpowiedzi slangu, aby zapewnić dokładność. Pełny przebieg (pre → tłumaczenie → post → guard) przetwarza około **30–60K tokenów** w zależności od długości artykułu — około 3–5× zwykłego tłumaczenia. Ponieważ większość potoku jest mechaniczna (blokowanie terminów, detekcja resztek, sprawdzanie formatu), działa dobrze na **tańszych modelach lub w darmowym pakiecie** (Claude Haiku/Sonnet, GPT-4o-mini, DeepSeek itd.) lub dowolnym agencie z darmowym limitem — nie potrzebujesz najdroższego modelu.
+
+*Liczba tokenów to szacowanie strukturalne na podstawie objętości wstrzykiwania w fazie pre, a nie mierzony test end-to-end.*
+
 ## Szybka instalacja
 
 ```bash

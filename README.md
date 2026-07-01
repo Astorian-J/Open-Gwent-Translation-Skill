@@ -37,6 +37,12 @@ Five phases, each automated except the actual translation:
 
 Card data is **locked, not suggested**: if a card name or official effect appears in the source, the translation must use the official Chinese form. New community terms go through a review buffer (`pending_terms.md`) before permanent adoption.
 
+## A note on token usage
+
+This skill injects a locked term table, official card effects, and slang hints to enforce accuracy. A typical full run (pre → translate → post → guard) processes roughly **30–60K tokens** depending on article length — about 3–5× a bare translation. Since most of the pipeline is mechanical (term locking, residue detection, format checks), it runs well on **cheaper or free-tier models** (Claude Haiku/Sonnet, GPT-4o-mini, DeepSeek, etc.) or any agent with a free quota — you don't need the most expensive model.
+
+*Token figure is a structural estimate from pre-phase injection volume, not a measured end-to-end benchmark.*
+
 ## Quick Install
 
 ```bash
