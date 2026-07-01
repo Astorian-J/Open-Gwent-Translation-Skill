@@ -39,9 +39,9 @@ Card data is **locked, not suggested**: if a card name or official effect appear
 
 ## A note on token usage
 
-This skill injects a locked term table, official card effects, and slang hints to enforce accuracy. A typical full run (pre → translate → post → guard) processes roughly **30–60K tokens** depending on article length — about 3–5× a bare translation. Since most of the pipeline is mechanical (term locking, residue detection, format checks), it runs well on **cheaper or free-tier models** (Claude Haiku/Sonnet, GPT-4o-mini, DeepSeek, etc.) or any agent with a free quota — you don't need the most expensive model.
+This skill injects a locked term table, official card effects, and slang hints to enforce accuracy. A typical full run (pre → translate → post → guard) processes roughly **30–60K tokens** depending on article length — about **3× a bare translation** (measured ~31K on a medium BC article; the term table is ~6K, the bulk is the article + reference docs). Since most of the pipeline is mechanical (term locking, residue detection, format checks), it runs well on **cheaper or free-tier models** (Claude Haiku/Sonnet, GPT-4o-mini, DeepSeek, etc.) or any agent with a free quota — you don't need the most expensive model.
 
-*Token figure is a structural estimate from pre-phase injection volume, not a measured end-to-end benchmark.*
+*Token figure based on measuring pre-phase injection on a real BC article; actual usage varies with article length.*
 
 ## Quick Install
 

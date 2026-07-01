@@ -43,9 +43,9 @@ Dane kart są **zablokowane, nie sugerowane**: jeśli nazwa karty lub oficjalny 
 
 ## Uwaga o zużyciu tokenów
 
-Narzędzie wstrzykuje zablokowaną tabelę terminów, oficjalne efekty kart i podpowiedzi slangu, aby zapewnić dokładność. Pełny przebieg (pre → tłumaczenie → post → guard) przetwarza około **30–60K tokenów** w zależności od długości artykułu — około 3–5× zwykłego tłumaczenia. Ponieważ większość potoku jest mechaniczna (blokowanie terminów, detekcja resztek, sprawdzanie formatu), działa dobrze na **tańszych modelach lub w darmowym pakiecie** (Claude Haiku/Sonnet, GPT-4o-mini, DeepSeek itd.) lub dowolnym agencie z darmowym limitem — nie potrzebujesz najdroższego modelu.
+Narzędzie wstrzykuje zablokowaną tabelę terminów, oficjalne efekty kart i podpowiedzi slangu, aby zapewnić dokładność. Pełny przebieg (pre → tłumaczenie → post → guard) przetwarza około **30–60K tokenów** w zależności od długości artykułu — około **3× zwykłego tłumaczenia** (zmierzone ~31K na średnim artykule BC; sama tabela terminów to ~6K, większość to artykuł + dokumenty referencyjne). Ponieważ większość potoku jest mechaniczna (blokowanie terminów, detekcja resztek, sprawdzanie formatu), działa dobrze na **tańszych modelach lub w darmowym pakiecie** (Claude Haiku/Sonnet, GPT-4o-mini, DeepSeek itd.) lub dowolnym agencie z darmowym limitem — nie potrzebujesz najdroższego modelu.
 
-*Liczba tokenów to szacowanie strukturalne na podstawie objętości wstrzykiwania w fazie pre, a nie mierzony test end-to-end.*
+*Liczba tokenów na podstawie pomiaru wstrzykiwania w fazie pre na rzeczywistym artykule BC; rzeczywiste użycie zależy od długości artykułu.*
 
 ## Szybka instalacja
 
