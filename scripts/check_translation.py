@@ -39,6 +39,7 @@ def _get_ref_path(filename: str) -> Path:
     return Path(__file__).parent.parent / "references" / filename
 
 
+@functools.lru_cache(maxsize=1)
 def load_forbidden_terms():
     """Load forbidden terms from correction_guide.md Section 1"""
     terms = {}
@@ -77,6 +78,7 @@ def load_forbidden_terms():
     return terms
 
 
+@functools.lru_cache(maxsize=1)
 def load_card_corrections():
     """Load outdated card names from card_names.md"""
     corrections = {}
@@ -152,6 +154,7 @@ def load_locked_phrases_from_lock(lock_path: Path) -> set[str]:
     return extract_cn_variants(lock)
 
 
+@functools.lru_cache(maxsize=1)
 def load_abbreviations():
     """Load abbreviations that should be expanded on first use.
     Returns dict: abbreviation -> (full_form, english)
@@ -193,6 +196,7 @@ def load_abbreviations():
     return abbrevs
 
 
+@functools.lru_cache(maxsize=1)
 def load_ambiguous_names():
     """Load ambiguous card names (base name -> list of (en, cn) tuples)."""
     ambiguous: dict[str, list[tuple[str, str]]] = {}
@@ -221,6 +225,7 @@ def load_ambiguous_names():
     return ambiguous
 
 
+@functools.lru_cache(maxsize=1)
 def load_fuzzy_fixes():
     """Load Chinese fuzzy fixes: typos, homophones, deck abbreviations."""
     fixes = {
@@ -844,6 +849,7 @@ def main():
     parser.add_argument("--fix", action="store_true", help="Auto-fix provision-terminology errors only (费→人口)")
     parser.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
+    parser.add_argument("--quiet", action="store_true", help="Suppress stderr notes (e.g. --fix no-op on CN->EN)")
     args = parser.parse_args()
 
     path = Path(args.file)
@@ -894,7 +900,8 @@ def main():
         if direction == "cnen":
             # auto_fix corrects EN->CN provision terms (Chinese 「费→人口」);
             # a CN->EN output is English and would never match — explicit no-op.
-            print("note: --fix applies to EN->CN provision terms only; ignored for CN->EN", file=sys.stderr)
+            if not args.quiet:
+                print("note: --fix applies to EN->CN provision terms only; ignored for CN->EN", file=sys.stderr)
         else:
             fixed_text, fix_count = auto_fix(text)
             auto_fixed_count = fix_count
