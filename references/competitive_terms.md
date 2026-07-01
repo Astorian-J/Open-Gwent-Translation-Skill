@@ -252,7 +252,7 @@
 | Renfri BoG | 鸣镝动怒鸟岛 | lerio2 article |
 | Fruits Consume Nekker | 果实领袖的孽鬼吞 | lerio2 article |
 | Shupe Imposter Create | 叶奈法生成店店 | lerio2 article |
-| Aristocrats and Soldiers Allgod | 状态帝国和店店士兵帝 | lerio2 article |
+| Aristocrats and Soldiers Allgod | 状态帝国与士兵全能天神 | lerio2 article |
 | Crimes Pockets Yen | 罪行叶奈法 | lerio2 article |
 | Cache Devo Scenario | 赤诚黑市（带剧情） | lerio2 article |
 | GN Armor Selfwound | 孽鬼护甲自残 | lerio2 article |

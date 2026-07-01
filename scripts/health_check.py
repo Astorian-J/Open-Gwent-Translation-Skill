@@ -344,6 +344,70 @@ def check_effect_text(ref_dir: Path) -> list[tuple[str, str]]:
     return results
 
 
+def check_reference_data_hygiene(ref_dir: Path) -> list[tuple[str, str]]:
+    """Detect structural corruption in table-based reference files.
+
+    Catches: column-count drift within a table, hidden control/zero-width
+    characters sneaking in via copy-paste.
+
+    Cannot catch: semantic errors (a well-formed but wrong CN gloss like the
+    historical '店店士兵帝'). Those need human review — this check guards
+    against format-level corruption only, not a substitute for review.
+    """
+    results = []
+    # EN<->CN 翻译映射核心表(deck名/卡名/术语/关键词/类别/属性/黑话/歧义)，
+    # 会进 TermAuthority 强制层、格式脏了直接影响翻译，故只扫这批；
+    # 叙事/风格类(common_pitfalls/style_reference 等)不进强制层，不扫。
+    targets = [
+        "competitive_terms.md", "card_names.md", "terminology_map.md",
+        "reverse_terminology_map.md", "keywords_map.md", "category_map.md",
+        "card_attributes_map.md", "slang_map.md", "ambiguous_names.md",
+    ]
+    _DIRTY_CHARS = re.compile('[\u0000-\u0008\u000b\u000c\u000e-\u001f\u00a0\u00ad\u200b-\u200f\u2028\u2029\u2060\ufeff]')
+    checked = 0
+    total_issues = 0
+    for fname in targets:
+        path = ref_dir / fname
+        if not path.exists():
+            continue
+        checked += 1
+        lines = path.read_text(encoding="utf-8").split("\n")
+        header_cols: int | None = None
+        bad: list[str] = []
+        for i, line in enumerate(lines, start=1):
+            if "|" not in line or not line.strip().startswith("|"):
+                header_cols = None  # non-table line ⇒ previous table ended
+                continue
+            non_sep = line.replace("|", "").replace("-", "").replace(":", "").replace(" ", "")
+            if not non_sep.strip():
+                header_cols = None
+                continue
+            # 脏字符检查对所有表格行生效(含表头)，须在 header_cols 早返回之前，
+            # 否则分隔行重置后首个数据行被当表头而漏检(审查 Important 修复)
+            if _DIRTY_CHARS.search(line):
+                bad.append(f"L{i}含隐藏控制/零宽字符")
+            cols = line.count("|")
+            if header_cols is None:
+                header_cols = cols
+                continue
+            if cols != header_cols:
+                bad.append(f"L{i}列数{cols}≠表头{header_cols}")
+        if bad:
+            total_issues += len(bad)
+            preview = "; ".join(bad[:3]) + ("..." if len(bad) > 3 else "")
+            results.append(("WARN", f"{fname}: {len(bad)} 处结构异常 — {preview}"))
+    if total_issues == 0:
+        results.append((
+            "PASS",
+            f"reference 数据卫生: {checked} 个表格文件结构正常(列数一致/无隐藏字符)",
+        ))
+    results.append((
+        "INFO",
+        "reference 数据卫生: 仅检测结构脏数据，译法语义错需人工核查(此检查识别不了)",
+    ))
+    return results
+
+
 def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
     """Run basic test cases on scripts."""
     results = []
@@ -499,6 +563,7 @@ def main():
     phase_c_results = run_section("Phase C Checklist", lambda: check_phase_c_checklist(ref_dir))
     authority_results = run_section("TermAuthority Invariants", lambda: check_term_authority_invariants(script_dir))
     effect_results = run_section("Effect Text", lambda: check_effect_text(ref_dir))
+    hygiene_results = run_section("Reference Data Hygiene", lambda: check_reference_data_hygiene(ref_dir))
     test_results = run_section("Functional Tests", lambda: run_test_cases(script_dir))
 
     pass_count = sum(1 for s, _ in all_results if s == "PASS")
