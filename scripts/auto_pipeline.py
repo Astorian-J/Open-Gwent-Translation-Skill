@@ -154,15 +154,25 @@ def build_term_authority_report(lock_file: Path) -> dict:
     for term, info in lock.get("terms", {}).items():
         status = info.get("status", "pending")
         if status == "auto_locked":
-            locked_terms.append({
-                "extracted": term,
-                "canonical_en": info.get("canonical_en", term),
+            canonical = info.get("canonical_en", term)
+            entry = {
+                "canonical_en": canonical,
                 "chinese": info.get("cn", ""),
-                "type": info.get("type", ""),
-                "source_ref": info.get("source_ref", ""),
-                "aliases": info.get("aliases", []),
-                "abbrevs": info.get("abbrevs", []),
-            })
+            }
+            # extracted 仅当与 canonical_en 不同时保留(缩写/别名展开，agent
+            # 需知道源文形式对应)；相同时冗余，省 token。砍 type/source_ref
+            # (agent 翻译不需要)；空 aliases/abbrevs 不输出。
+            # 注意：校验脚本(term_enforcer 等)走 TermAuthority 对象+lock 文件，
+            # 不读这里的 JSON 字段，所以精简不影响翻译校验准确性。
+            if term != canonical:
+                entry["extracted"] = term
+            aliases = info.get("aliases", [])
+            if aliases:
+                entry["aliases"] = aliases
+            abbrevs = info.get("abbrevs", [])
+            if abbrevs:
+                entry["abbrevs"] = abbrevs
+            locked_terms.append(entry)
         elif status == "ambiguous":
             ambiguous_terms.append({
                 "extracted": term,
@@ -334,23 +344,22 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
         lines.append("    MANDATORY TERM LOCK TABLE")
         lines.append("    Use these exact translations. Do not translate literally.")
         lines.append("")
-        lines.append("    | Extracted | Canonical EN | Chinese | Source |")
-        lines.append("    |-----------|--------------|---------|--------|")
+        lines.append("    | Canonical EN | Chinese |")
+        lines.append("    |--------------|---------|")
         for item in term_authority["locked_terms"][:30]:
+            extras = ""
+            if item.get("extracted"):
+                extras += f" (源文: {item['extracted']})"
             aliases = ", ".join(item.get("aliases", []))
             abbrevs = ", ".join(item.get("abbrevs", []))
-            extras = ""
             if aliases:
                 extras += f" aliases={aliases}"
             if abbrevs:
                 extras += f" abbrevs={abbrevs}"
-            lines.append(
-                f"    | {item['extracted']} | {item['canonical_en']} | "
-                f"{item['chinese']} | {item['source_ref']}{extras} |"
-            )
+            lines.append(f"    | {item['canonical_en']} | {item['chinese']}{extras} |")
         if len(term_authority["locked_terms"]) > 30:
             lines.append(
-                f"    | ... ({len(term_authority['locked_terms']) - 30} more) | ... | ... | ... |"
+                f"    | ... ({len(term_authority['locked_terms']) - 30} more) | ... |"
             )
         lines.append("")
 
