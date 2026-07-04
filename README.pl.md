@@ -41,6 +41,23 @@ Pięć faz, z których każda — poza samym tłumaczeniem — jest zautomatyzow
 
 Dane kart są **zablokowane, nie sugerowane**: jeśli nazwa karty lub oficjalny efekt pojawia się w źródle, tłumaczenie musi użyć oficjalnej formy chińskiej. Nowe terminy społeczności przechodzą przez bufor weryfikacji (`pending_terms.md`) przed trwałym przyjęciem.
 
+## Wersja Lite (tłumaczenie czatu)
+
+W przypadku **krótkich treści czatu** — wiadomości grupowych, komentarzy na Discord / QQ / Kook, pojedynczych zdań — pełny potok pięciofazowy to przesada. Umiejętność **lite** (`gwent-translation-lite`) upraszcza tłumaczenie do trzech kroków:
+
+1. **Wyszukiwanie na żądanie** — wyszukuje nazwy kart i terminy przez `lookup.py` tylko wtedy, gdy pojawią się w źródle; bez pełnego wstępnego ładowania tabeli terminów.
+2. **Tłumaczenie** — ten sam ton graczy Bilibili / native-player, oficjalne renderowanie kart i terminów.
+3. **Autokontrolla** — przebieg mentalny; bez skryptów weryfikacyjnych.
+
+Bez wstrzykiwania `pre`, bez `completeness_guard`, bez `term_enforcer`. Lite ponownie wykorzystuje `scripts/` i `references/` głównej umiejętności (zero duplikacji danych) za pośrednictwem zmiennej `$GWENT_SKILL_DIR`, więc działa w Claude Code, hermes, opencode i innych agentach.
+
+| Treść | Umiejętność |
+|---------|-------|
+| Długie artykuły (raporty meta, propozycje BC, analizy kart) | `gwent-translation-style` (pełny potok) |
+| Wiadomości czatu, komentarze, pojedyncze zdania | `gwent-translation-lite` (3 kroki) |
+
+Obie umiejętności instalują się razem przez `install.sh`. Interfejs agenta Lite: [`lite/AGENTS.md`](lite/AGENTS.md).
+
 ## Uwaga o zużyciu tokenów
 
 Narzędzie wstrzykuje zablokowaną tabelę terminów, oficjalne efekty kart i podpowiedzi slangu, aby zapewnić dokładność. Pełny przebieg (pre → tłumaczenie → post → guard) przetwarza około **30–60K tokenów** w zależności od długości artykułu — około **3× zwykłego tłumaczenia** (zmierzone ~31K na średnim artykule BC; sama tabela terminów to ~6K, większość to artykuł + dokumenty referencyjne). Ponieważ większość potoku jest mechaniczna (blokowanie terminów, detekcja resztek, sprawdzanie formatu), działa dobrze na **tańszych modelach lub w darmowym pakiecie** (Claude Haiku/Sonnet, GPT-4o-mini, DeepSeek itd.) lub dowolnym agencie z darmowym limitem — nie potrzebujesz najdroższego modelu.
@@ -107,6 +124,9 @@ gwent-translation-style/
 │   ├── translation_workflow.md  # Workflow reference
 │   ├── pending_terms.md         # Terms awaiting review (runtime data)
 │   └── changelog.md             # Update history
+├── lite/                    # Wersja lite — tłumaczenie czatu
+│   ├── SKILL.md                 # Umiejętność lite (tłumaczenie czatu)
+│   └── AGENTS.md                # Interfejs niezależny od agenta
 └── scripts/                 # 16 Python scripts
     ├── auto_pipeline.py         # Single orchestration entry point
     ├── check_translation.py     # Residue + slang detection
@@ -145,6 +165,8 @@ Mała próbka — pełny zestaw znajduje się w `references/`.
 ## Użytkownicy Claude Code
 
 Zainstaluj w `~/.claude/skills/gwent-translation-style/` i uruchom ponownie Claude Code. Wyzwalacze: `/gwent-translation-style`, "translate Gwent article", "Gwent translation".
+
+Skrypt `install.sh` instaluje **jednocześnie** umiejętność główną i umiejętność lite. Wersja lite uruchamia się przy tłumaczeniu czatu / krótkich treści ("翻一下这句" / wyzwalacze tłumaczenia czatu).
 
 ## Współtworzenie
 

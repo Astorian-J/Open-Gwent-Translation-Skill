@@ -41,6 +41,23 @@
 
 Данные карт **блокируются, а не предлагаются**: если название карты или официальный эффект встречается в источнике, перевод должен использовать официальную китайскую форму. Новые термины сообщества проходят через буфер проверки (`pending_terms.md`) перед окончательным принятием.
 
+## Облегчённая версия (перевод чата)
+
+Для **короткого чата** — сообщения в группах, комментарии в Discord / QQ / Kook, отдельные предложения — полный пятифазный конвейер избыточен. Облегчённый навык **lite** (`gwent-translation-lite`) сокращает перевод до трёх шагов:
+
+1. **Запрос по требованию** — имена карт и термины запрашиваются через `lookup.py` только тогда, когда они встречаются в исходнике; никакой полной предзагрузки таблицы терминов.
+2. **Перевод** — тот же тон игроков Bilibili / нейтральный английский, официальные названия карт и терминов.
+3. **Самопроверка** — мысленный проход; без скриптов проверки.
+
+Никакой инъекции `pre`, никакого `completeness_guard`, никакого `term_enforcer`. Lite переиспользует `scripts/` и `references/` основного навыка (ноль дублирования данных) через переменную `$GWENT_SKILL_DIR`, поэтому работает с Claude Code, hermes, opencode и другими агентами.
+
+| Контент | Навык |
+|---------|-------|
+| Длинные статьи (мета-отчёты, BC-предложения, разбор карт) | `gwent-translation-style` (полный конвейер) |
+| Сообщения чата, комментарии, отдельные предложения | `gwent-translation-lite` (3 шага) |
+
+Оба навыка устанавливаются вместе через `install.sh`. Интерфейс lite для агентов: [`lite/AGENTS.md`](lite/AGENTS.md).
+
 ## О потреблении токенов
 
 Инструмент вводит заблокированную таблицу терминов, официальные эффекты карт и подсказки сленга для обеспечения точности. Полный прогон (pre → перевод → post → guard) обрабатывает примерно **30–60K токенов** в зависимости от длины статьи — примерно **в 3 раза больше обычного перевода** (измерено ~31K на средней BC-статье; сама таблица терминов ~6K, основная масса — статья + справочные документы). Поскольку большая часть конвейера механическая (блокировка терминов, обнаружение остатков, проверка формата), он хорошо работает на **более дешёвых или бесплатных моделях** (Claude Haiku/Sonnet, GPT-4o-mini, DeepSeek и т.д.) или любом агенте с бесплатной квотой — вам не нужна самая дорогая модель.
@@ -107,23 +124,26 @@ gwent-translation-style/
 │   ├── translation_workflow.md  # Workflow reference
 │   ├── pending_terms.md         # Terms awaiting review (runtime data)
 │   └── changelog.md             # Update history
-└── scripts/                 # 16 Python scripts
-    ├── auto_pipeline.py         # Single orchestration entry point
-    ├── check_translation.py     # Residue + slang detection
-    ├── completeness_guard.py    # Final gate
-    ├── phase_c_check.py         # Self-check
-    ├── term_enforcer.py         # Card data verification
-    ├── context_lock.py          # Context / abbreviation lock
-    ├── effect_verifier.py       # Official effect text check
-    ├── build_effect_reference.py  # Rebuild effect_text.json
-    ├── format_skeleton.py       # Format preservation
-    ├── diff_review.py           # Diff review
-    ├── backtranslate.py         # Back-translation check
-    ├── lookup.py                # Term lookup
-    ├── learn.py                 # Learn new terms
-    ├── health_check.py          # Integrity check (44 PASS)
-    ├── _shared.py               # Shared logic (TermAuthority)
-    └── agent_utils.py           # JSON envelope helpers
+├── scripts/                 # 16 Python scripts
+│   ├── auto_pipeline.py         # Single orchestration entry point
+│   ├── check_translation.py     # Residue + slang detection
+│   ├── completeness_guard.py    # Final gate
+│   ├── phase_c_check.py         # Self-check
+│   ├── term_enforcer.py         # Card data verification
+│   ├── context_lock.py          # Context / abbreviation lock
+│   ├── effect_verifier.py       # Official effect text check
+│   ├── build_effect_reference.py  # Rebuild effect_text.json
+│   ├── format_skeleton.py       # Format preservation
+│   ├── diff_review.py           # Diff review
+│   ├── backtranslate.py         # Back-translation check
+│   ├── lookup.py                # Term lookup
+│   ├── learn.py                 # Learn new terms
+│   ├── health_check.py          # Integrity check (44 PASS)
+│   ├── _shared.py               # Shared logic (TermAuthority)
+│   └── agent_utils.py           # JSON envelope helpers
+└── lite/                    # Облегчённый навык (перевод чата, 3 шага)
+    ├── SKILL.md                 # Определение навыка lite (перевод чата)
+    └── AGENTS.md                # Агент-независимый интерфейс lite
 ```
 
 ## Ключевые термины
@@ -145,6 +165,8 @@ gwent-translation-style/
 ## Пользователи Claude Code
 
 Установите в `~/.claude/skills/gwent-translation-style/` и перезапустите Claude Code. Триггеры: `/gwent-translation-style`, "translate Gwent article", "Gwent translation".
+
+`install.sh` устанавливает **оба** навыка вместе — основной `gwent-translation-style` и облегчённый `gwent-translation-lite`. Навык lite срабатывает на перевод чата / короткого контента (например, «翻一下这句» и подобные триггеры перевода сообщений).
 
 ## Содействие
 

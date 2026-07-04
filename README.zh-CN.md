@@ -37,6 +37,23 @@
 
 卡牌数据是**锁定而非建议**：源文里出现的卡牌名或官方效果，译文必须用官方中文形式。新社区术语需经审核缓冲区（`pending_terms.md`）才能正式采纳。
 
+## 精简版（聊天翻译）
+
+对于**短聊天内容**——群消息、Discord / QQ / Kook 评论、单句翻译——完整的五阶段流水线就太重了。**精简版** skill（`gwent-translation-lite`）把翻译精简为三步：
+
+1. **按需查询** —— 仅在源文出现卡牌名/术语时才通过 `lookup.py` 查询；不做全量术语表预加载。
+2. **翻译** —— 同样的 Bilibili 玩家 / 原生玩家口吻，官方卡牌和术语译法。
+3. **自检** —— 译后心里过一遍；不跑校验脚本。
+
+没有 `pre` 注入、没有 `completeness_guard`、没有 `term_enforcer`。精简版通过 `$GWENT_SKILL_DIR` 变量复用主 skill 的 `scripts/` 和 `references/`（零数据重复），因此在 Claude Code、hermes、opencode 等任意 agent 上都能用。
+
+| 内容 | Skill |
+|---------|-------|
+| 长文章（meta 报告、BC 提案、卡牌分析） | `gwent-translation-style`（完整流水线） |
+| 聊天消息、评论、单句 | `gwent-translation-lite`（3 步） |
+
+两个 skill 由 `install.sh` 一起安装。精简版 agent 接口：[`lite/AGENTS.md`](lite/AGENTS.md)。
+
 ## 关于 token 消耗
 
 本 skill 会注入锁定术语表、官方卡牌效果、黑话提示来保证准确。一次完整流程（pre → 翻译 → post → guard）大约消耗 **3-6 万 tokens**，视文章长度而定——约为裸翻译的 **3 倍**（中等 BC 文章实测约 31K；术语表本身约 6K，大头是文章+参考文档）。因为流水线大部分是机械操作（术语锁定、残留检测、格式检查），用**便宜或免费模型**（Claude Haiku/Sonnet、GPT-4o-mini、DeepSeek 等）或任何带免费额度的 agent 就能跑得很好，不需要最贵的模型。
@@ -103,23 +120,26 @@ gwent-translation-style/
 │   ├── translation_workflow.md  # 工作流参考
 │   ├── pending_terms.md         # 待审核术语（运行时数据）
 │   └── changelog.md             # 更新历史
-└── scripts/                 # 16 个 Python 脚本
-    ├── auto_pipeline.py         # 唯一编排入口
-    ├── check_translation.py     # 残留 + 黑话检测
-    ├── completeness_guard.py    # 最终门禁
-    ├── phase_c_check.py         # 自检
-    ├── term_enforcer.py         # 卡牌数据校验
-    ├── context_lock.py          # 上下文/缩写锁定
-    ├── effect_verifier.py       # 官方效果文本检查
-    ├── build_effect_reference.py  # 重建 effect_text.json
-    ├── format_skeleton.py       # 格式保留
-    ├── diff_review.py           # diff 审查
-    ├── backtranslate.py         # 回译检查
-    ├── lookup.py                # 术语查询
-    ├── learn.py                 # 学习新术语
-    ├── health_check.py          # 完整性检查（44 PASS）
-    ├── _shared.py               # 共享逻辑（TermAuthority）
-    └── agent_utils.py           # JSON 信封辅助
+├── scripts/                 # 16 个 Python 脚本
+│   ├── auto_pipeline.py         # 唯一编排入口
+│   ├── check_translation.py     # 残留 + 黑话检测
+│   ├── completeness_guard.py    # 最终门禁
+│   ├── phase_c_check.py         # 自检
+│   ├── term_enforcer.py         # 卡牌数据校验
+│   ├── context_lock.py          # 上下文/缩写锁定
+│   ├── effect_verifier.py       # 官方效果文本检查
+│   ├── build_effect_reference.py  # 重建 effect_text.json
+│   ├── format_skeleton.py       # 格式保留
+│   ├── diff_review.py           # diff 审查
+│   ├── backtranslate.py         # 回译检查
+│   ├── lookup.py                # 术语查询
+│   ├── learn.py                 # 学习新术语
+│   ├── health_check.py          # 完整性检查（44 PASS）
+│   ├── _shared.py               # 共享逻辑（TermAuthority）
+│   └── agent_utils.py           # JSON 信封辅助
+└── lite/                    # 精简版 skill（聊天翻译）
+    ├── SKILL.md                 # 精简版 skill 工作流（聊天翻译）
+    └── AGENTS.md                # Agent 无关接口
 ```
 
 ## 术语示例
@@ -141,6 +161,8 @@ gwent-translation-style/
 ## Claude Code 用户
 
 安装到 `~/.claude/skills/gwent-translation-style/` 并重启 Claude Code。触发方式：`/gwent-translation-style`、"翻译这篇昆特牌文章"、"昆特翻译"。
+
+`install.sh` 会**一起安装主 skill 和精简版 skill**。精简版（`gwent-translation-lite`）在聊天/短内容翻译时触发——比如"翻一下这句"、聊天消息翻译。
 
 ## 贡献
 
