@@ -14,33 +14,52 @@ if [ ! -d "$(dirname "$SKILL_DIR")" ]; then
     mkdir -p "$(dirname "$SKILL_DIR")"
 fi
 
+NEEDS_CLONE=1
 if [ -d "$SKILL_DIR" ]; then
     echo "Found existing installation, updating..."
     if [ -d "$SKILL_DIR/.git" ]; then
         # Try fast update first to preserve local pending_terms.md
-        (cd "$SKILL_DIR" && git pull --ff-only) && exit 0
-        echo "Fast-forward pull failed. Re-cloning..."
+        if (cd "$SKILL_DIR" && git pull --ff-only); then
+            NEEDS_CLONE=0
+        else
+            echo "Fast-forward pull failed. Re-cloning..."
+        fi
     fi
-    # Preserve user data before re-cloning
-    if [ -f "$SKILL_DIR/references/pending_terms.md" ]; then
-        PENDING_BACKUP=$(mktemp)
-        cp "$SKILL_DIR/references/pending_terms.md" "$PENDING_BACKUP"
-        echo "Backed up pending_terms.md"
+    if [ "$NEEDS_CLONE" = "1" ]; then
+        # Preserve user data before re-cloning
+        if [ -f "$SKILL_DIR/references/pending_terms.md" ]; then
+            PENDING_BACKUP=$(mktemp)
+            cp "$SKILL_DIR/references/pending_terms.md" "$PENDING_BACKUP"
+            echo "Backed up pending_terms.md"
+        fi
+        rm -rf "$SKILL_DIR"
     fi
-    rm -rf "$SKILL_DIR"
 fi
 
-echo "Cloning from GitHub..."
-git clone --depth 1 "$REPO_URL" "$SKILL_DIR"
+if [ "$NEEDS_CLONE" = "1" ]; then
+    echo "Cloning from GitHub..."
+    git clone --depth 1 "$REPO_URL" "$SKILL_DIR"
+fi
 
 if [ -n "$PENDING_BACKUP" ] && [ -f "$PENDING_BACKUP" ]; then
     mv "$PENDING_BACKUP" "$SKILL_DIR/references/pending_terms.md"
     echo "Restored pending_terms.md"
 fi
 
+# Deploy lite skill (chat / short-content translation; reuses main skill's scripts)
+LITE_DIR="$(dirname "$SKILL_DIR")/gwent-translation-lite"
+if [ -f "$SKILL_DIR/lite/SKILL.md" ]; then
+    mkdir -p "$LITE_DIR"
+    cp "$SKILL_DIR/lite/SKILL.md" "$LITE_DIR/SKILL.md"
+    echo "Lite skill installed at: $LITE_DIR"
+else
+    echo "WARNING: lite/SKILL.md not found in repo, skipping lite skill"
+fi
+
 echo ""
 echo "Gwent Translation Skill installed successfully!"
-echo "Location: $SKILL_DIR"
+echo "  Full skill: $SKILL_DIR"
+echo "  Lite skill: $LITE_DIR (for chat / short content)"
 echo ""
-echo "To use with Claude Code, restart Claude Code or type '/' to see the skill."
+echo "To use with Claude Code, restart Claude Code or type '/' to see the skills."
 echo "To use with other agents, run scripts from $SKILL_DIR and see AGENTS.md."
