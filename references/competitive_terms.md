@@ -47,8 +47,8 @@
 | brick | 卡手 | | Draw unusable cards |
 | thin | 滤牌 / 压缩 | | Reduce deck size |
 | dry pass | 空过 | | Pass round without playing |
-| blue coin | 蓝币 | | Go first |
-| red coin | 红币 | | Go second |
+| blue coin | 蓝币 | | 先手 |
+| red coin | 红币 | | 后手 |
 | coin flip | 先后手 / 硬币 | | Opening determination |
 | card advantage | 卡差 | CA | Hand count advantage |
 | pass | 过牌 / 放弃 | | Stop playing this round |

@@ -195,6 +195,18 @@ marking the translation complete. The guard output should not be ignored.
 | abusive combo | 赖皮的组合技 |
 | revert | 改回去 |
 
+### Coin & Turn Order
+
+昆特先后手用「硬币」术语表达，中文里「硬币」与「先手/后手」两套说法互通：
+
+| English | Chinese | Note |
+|---------|---------|------|
+| blue coin | 蓝币 | = 先手 |
+| red coin | 红币 | = 后手 |
+| coin flip | 先后手 / 硬币 | 开局先后手归属 |
+
+> blue coin / red coin 在 TermAuthority 已锁定为「蓝币 / 红币」（译错会被 term_enforcer 拦）。此处补充语义：**蓝币 = 先手、红币 = 后手**。原文 "going first" 或 "on blue coin" 这类表达，中文可据语境选用「先手」（叙述更自然）或「蓝币」（机制讨论）。
+
 ### Faction Names
 
 | Abbr | Full (EN) | Full (CN) |
