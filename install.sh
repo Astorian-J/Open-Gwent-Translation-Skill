@@ -50,7 +50,7 @@ fi
 LITE_DIR="$(dirname "$SKILL_DIR")/gwent-translation-lite"
 if [ -f "$SKILL_DIR/lite/SKILL.md" ]; then
     mkdir -p "$LITE_DIR"
-    cp "$SKILL_DIR/lite/SKILL.md" "$LITE_DIR/SKILL.md"
+    cp "$SKILL_DIR/lite/"*.md "$LITE_DIR/"
     echo "Lite skill installed at: $LITE_DIR"
 else
     echo "WARNING: lite/SKILL.md not found in repo, skipping lite skill"

@@ -31,18 +31,25 @@ agent_created: true
 
 **不要预加载术语表。** 只在源文里出现具体卡牌名、术语、黑话且你不确定官方译法时，查一下：
 
-```bash
-# 主环境（Claude Code）
-python3 ~/.claude/skills/gwent-translation-style/scripts/lookup.py "Geralt" --plain
-python3 ~/.claude/skills/gwent-translation-style/scripts/lookup.py "blue coin" --plain
+先定位主 skill 目录（首次使用时跑一次，后续命令复用 `$GWENT_SKILL_DIR`）：
 
-# 只记得大概拼写时，模糊匹配
-python3 ~/.claude/skills/gwent-translation-style/scripts/lookup.py "siege" --fuzzy --plain
+```bash
+# 三选一：环境变量 > Claude Code 默认 > hermes 默认
+GWENT_SKILL_DIR="${GWENT_SKILL_DIR:-$HOME/.claude/skills/gwent-translation-style}"
+[ -d "$GWENT_SKILL_DIR" ] || GWENT_SKILL_DIR="$HOME/.hermes/skills/gwent-translation-style"
 ```
 
-> **hermes / 远程环境**：路径换 `~/.hermes/skills/gwent-translation-style/scripts/lookup.py`。
->
+查卡名 / 术语：
+
+```bash
+python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "Geralt" --plain
+python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "blue coin" --plain
+# 只记得大概拼写时，模糊匹配
+python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "siege" --fuzzy --plain
+```
+
 > **高频术语已在下方「快速参考」表里，不必查**——只查表里没有的具体卡名 / 冷门术语。
+> **其他环境**（opencode 等）：`export GWENT_SKILL_DIR=/path/to/gwent-translation-style` 指向主 skill 安装路径即可。
 
 ### 第 2 步：翻译
 
@@ -125,7 +132,7 @@ python3 ~/.claude/skills/gwent-translation-style/scripts/lookup.py "siege" --fuz
 如果译文已存成文件、且想兜底检查术语残留（不强制）：
 
 ```bash
-python3 ~/.claude/skills/gwent-translation-style/scripts/check_translation.py translated.txt --plain
+python3 "$GWENT_SKILL_DIR/scripts/check_translation.py" translated.txt --plain
 ```
 
 不带 `--source`，只跑基础规则检查（禁用术语、英文残留、中文数字、括号等）。
