@@ -22,6 +22,7 @@ from _shared import (
     extract_card_names,
     json_output,
 )
+from check_translation import load_forbidden_terms
 
 # Module-level constants
 _SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
@@ -48,28 +49,9 @@ def check_terminology(source: str, translation: str) -> list[dict]:
     """Check if key terms are correctly translated."""
     issues = []
 
-    # Load known terms
-    ref_dir = Path(__file__).parent.parent / "references"
-    known_swaps = {}
-
-    correction_guide = ref_dir / "correction_guide.md"
-    if correction_guide.exists():
-        text = correction_guide.read_text(encoding="utf-8")
-        in_table = False
-        for line in text.split("\n"):
-            line = line.strip()
-            if line.startswith("|") and "---" in line and "Wrong" in line:
-                in_table = True
-                continue
-            if in_table and line.startswith("|") and "---" not in line:
-                parts = [p.strip() for p in line.split("|")]
-                if len(parts) >= 3 and parts[1] and parts[2]:
-                    wrong = parts[1]
-                    right = parts[2]
-                    if wrong != "Wrong" and "provision" not in wrong.lower():
-                        known_swaps[wrong] = right
-            if in_table and not line.startswith("|"):
-                in_table = False
+    # 复用 check_translation 的正式 loader（按 section header 解析 correction_guide.md §1）。
+    # 原手写解析的触发条件「同一行同时含 --- 和 Wrong」永不成立，禁译词检测从未工作过。
+    known_swaps = load_forbidden_terms()
 
     # Check for forbidden terms in translation
     for wrong, right in known_swaps.items():

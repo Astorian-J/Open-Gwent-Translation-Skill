@@ -42,6 +42,7 @@ from _shared import (
     json_output,
     TermAuthority,
 )
+from term_enforcer import count_occurrences
 
 
 def load_lock(lock_file: str) -> dict:
@@ -167,16 +168,13 @@ def check_translation(translation_file: str, lock_file: str) -> dict:
         # Check if any variant of the Chinese term appears in the translation.
         cn_variants = [v.strip() for v in cn_term.split("/")]
         found_cn = any(v in translation for v in cn_variants)
-        translation_lower = translation.lower()
-        found_en = en_term.lower() in translation_lower
-        for abbrev in info.get("abbrevs", []):
-            if abbrev.strip().lower() in translation_lower:
-                found_en = True
-                break
-        for alias in info.get("aliases", []):
-            if alias.strip().lower() in translation_lower:
-                found_en = True
-                break
+        # 词边界匹配（与 term_enforcer.count_occurrences 对齐）：原裸子串会让短缩写
+        # （CA/UP/p）命中普通英文词内部（because/setup/cup），造成假"已找到"或假违规。
+        found_en = count_occurrences(translation, [en_term]) > 0
+        if not found_en:
+            found_en = count_occurrences(translation, info.get("abbrevs", [])) > 0
+        if not found_en:
+            found_en = count_occurrences(translation, info.get("aliases", [])) > 0
 
         if found_cn:
             confirmed.append(en_term)

@@ -309,6 +309,15 @@ def check_term_authority_invariants(script_dir: Path) -> list[tuple[str, str]]:
     else:
         results.append(("PASS", "7 阵营缩写 (NR/NG/MO/SK/ST/SY/NE) 解析正确"))
 
+    # H3 回归守护：competitive_terms.md 缩写列用分号分隔（Provision 的 "Porv; cost; p"），
+    # 旧代码 abbrev.split(",") 会得到整坨 ["Porv; cost; p"]，三个子别名都 resolve 不到。
+    r = ta.resolve("Provision")
+    prov_abbrevs = {a.lower() for a in (r.get("abbrevs", []) if r else [])}
+    if {"porv", "cost", "p"} <= prov_abbrevs:
+        results.append(("PASS", "Provision 分号缩写 (Porv; cost; p) 正确切分"))
+    else:
+        results.append(("FAIL", f"H3 回归: Provision 缩写切分错，得 {sorted(prov_abbrevs)}"))
+
     drifted = [
         e["canonical_en"] for e in ta._entries.values()
         if e.get("type") == "faction"
@@ -411,6 +420,25 @@ def check_reference_data_hygiene(ref_dir: Path) -> list[tuple[str, str]]:
 def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
     """Run basic test cases on scripts."""
     results = []
+
+    # H1 回归守护：表格空单元格必须保留（剥首尾空元素），旧的 [c for c in cells if c]
+    # 会删掉合法空单元格导致列错位 / restore 结构损坏。
+    fmt_path = script_dir / "format_skeleton.py"
+    if fmt_path.exists():
+        try:
+            import importlib.util
+            _spec = importlib.util.spec_from_file_location("_fmt_h1", fmt_path)
+            _mod = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(_mod)
+            _skel = _mod.extract_skeleton("| 1 |  | 3 |\n|---|---|---|\n| a | b | c |\n")
+            _tables = [b for b in _skel.get("blocks", []) if b.get("type") == "table"]
+            _row0 = _tables[0]["rows"][0] if _tables and _tables[0]["rows"] else []
+            if len(_row0) == 3 and _row0[1] == "":
+                results.append(("PASS", "format_skeleton: 空单元格保留（表格列不错位）"))
+            else:
+                results.append(("FAIL", f"H1 回归: 空单元格丢失，rows[0]={_row0}"))
+        except Exception as e:  # noqa: BLE001
+            results.append(("WARN", f"format_skeleton H1 测试失败 ({e})"))
 
     # Test check_translation.py with sample text
     check_script = script_dir / "check_translation.py"
@@ -595,6 +623,9 @@ def main():
         ("SKILL.md Structure", skill_results),
         ("Data Integrity", data_results),
         ("Phase C Checklist", phase_c_results),
+        ("TermAuthority Invariants", authority_results),
+        ("Effect Text", effect_results),
+        ("Reference Data Hygiene", hygiene_results),
         ("Functional Tests", test_results),
     ]
 

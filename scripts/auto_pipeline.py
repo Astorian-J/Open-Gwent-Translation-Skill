@@ -21,6 +21,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -232,6 +233,17 @@ def run_script(name: str, args: list[str], json_mode: bool = False) -> tuple[boo
 def pre_translation(source_path: Path, date: str | None, article_type: str, json_mode: bool = False) -> tuple[str | dict, bool]:
     """Run all preprocessing steps. Returns a report and overall success."""
     all_ok = True
+    # 清理上次 pre 遗留的陈旧临时文件（>1 小时），避免 /tmp 长期累积。不能清理本次/
+    # 并发刚创建的：skeleton/lock 路径会返回给调用方，供后续 completeness_guard
+    # --lock / format_skeleton restore 跨进程复用（故不能用 TemporaryDirectory 包本函数）。
+    _now = time.time()
+    for _pat in ("gwent_skeleton_*.json", "gwent_lock_*.json"):
+        for _stale in Path(tempfile.gettempdir()).glob(_pat):
+            try:
+                if _now - _stale.stat().st_mtime > 3600:
+                    _stale.unlink()
+            except OSError:
+                pass
     skeleton_file = Path(tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", prefix="gwent_skeleton_", delete=False
     ).name)

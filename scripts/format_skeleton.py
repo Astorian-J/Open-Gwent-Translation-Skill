@@ -79,7 +79,12 @@ def extract_skeleton(text: str) -> dict:
                     i += 1
                     continue
                 cells = [c.strip() for c in row.split("|")]
-                cells = [c for c in cells if c]  # Remove empty
+                # split("|") 的首尾管道会各产生一个空串，只剥首尾即可；
+                # 原写法 [c for c in cells if c] 会把合法的空单元格一并删除，导致列错位。
+                if cells and not cells[0]:
+                    cells = cells[1:]
+                if cells and not cells[-1]:
+                    cells = cells[:-1]
                 if cells:
                     rows.append(cells)
                 i += 1

@@ -158,6 +158,8 @@ def find_unknown_terms(source_text: str, translated_text: str) -> list[dict]:
 
     unknown = []
     seen = set()
+    # pending_terms 只读不写，循环外预读一次（原写法每个未知候选都重读重解析）
+    pending_keys = {p.get("source", "").lower() for p in load_pending_terms()}
 
     for term_type, term_text in candidates:
         key = term_text.lower()
@@ -192,10 +194,8 @@ def find_unknown_terms(source_text: str, translated_text: str) -> list[dict]:
                 if not suffix_in_db:
                     continue
 
-        # Check if already in pending
-        pending = load_pending_terms()
-        in_pending = any(p.get("source", "").lower() == key for p in pending)
-        if in_pending:
+        # Check if already in pending（pending_keys 在循环外预读一次）
+        if key in pending_keys:
             continue
 
         # Try to find Chinese translation in the translated text

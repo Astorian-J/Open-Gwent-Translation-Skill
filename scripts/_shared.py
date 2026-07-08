@@ -721,7 +721,9 @@ class TermAuthority:
             abbrevs: list[str] = []
             aliases: list[str] = []
             if abbrev:
-                for a in abbrev.split(","):
+                # competitive_terms.md 缩写列实际用分号分隔（如 "Porv; cost; p"），
+                # 同时兼容逗号，避免 TermAuthority 与 check_translation 解析漂移。
+                for a in re.split(r"[;,]", abbrev):
                     a = a.strip()
                     if a:
                         abbrevs.append(a)
