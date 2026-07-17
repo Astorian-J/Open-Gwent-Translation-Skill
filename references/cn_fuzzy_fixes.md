@@ -18,7 +18,7 @@ For correcting typos, homophones, and abbreviated deck names in Chinese Gwent te
 | Wrong | Correct | Type | Context |
 |-------|---------|------|---------|
 | 户口岛 | 互口岛 | 同音 | SK armor abuse deck slang |
-| 迪迦 | 辛迪加 | 谐音 | 阵营外号，辛迪加 → 迪迦 |
+| 迪迦 | 辛迪加 | ✓ | 社区对辛迪加(SY)卡组的外号，SKILL 鼓励使用 |
 | 弃牌岛 | 弃牌岛 | ✓ | Actually correct (discard SK) |
 | 气宗 | 气宗 | ✓ | Actually correct (no unit) |
 | 肾法 | 肾法 | ✓ | Actually correct (alchemy, 谐音梗) |

@@ -880,6 +880,11 @@ class TermAuthority:
             self._register(full_en, cn, "ambiguous_names.md", "card")
 
     def _load_cn_fuzzy_fixes(self) -> None:
+        # NOTE: this resolver intentionally ignores the "✓" Type-column marker that
+        # check_translation.load_fuzzy_fixes uses to skip "actually correct" rows.
+        # Here every wrong->correct pair is registered as a soft alias/correction,
+        # which is desired (e.g. 迪迦 resolves to 辛迪加/Syndicate for lookups). If you
+        # add a ✓-marked row expecting BOTH consumers to skip it, update this method.
         path = self.ref_dir / "cn_fuzzy_fixes.md"
         if not path.exists():
             return

@@ -227,11 +227,14 @@ def load_ambiguous_names():
 
 @functools.lru_cache(maxsize=1)
 def load_fuzzy_fixes():
-    """Load Chinese fuzzy fixes: typos, homophones, deck abbreviations."""
+    """Load Chinese fuzzy fixes: typos and homophones.
+
+    §3 (deck-name abbreviations) is intentionally skipped — SKILL.md encourages
+    those community short forms, so they must not be machine-enforced.
+    """
     fixes = {
         "typos": {},      # wrong -> correct
         "homophones": {}, # wrong -> correct (with context)
-        "deck_abbr": {},  # abbreviation -> full name
     }
 
     fuzzy_file = _get_ref_path("cn_fuzzy_fixes.md")
@@ -252,7 +255,7 @@ def load_fuzzy_fixes():
             current_section = "homophones"
             continue
         elif "## 3. Deck Name" in line:
-            current_section = "deck_abbr"
+            current_section = None  # deck abbreviations not enforced; skip section
             continue
         elif line.startswith("## ") and current_section:
             # New section ends deck abbreviation section
@@ -271,7 +274,12 @@ def load_fuzzy_fixes():
                 correct = parts[2]
                 notes = parts[3] if len(parts) > 3 else ""
 
-                if wrong and correct and wrong not in ("Wrong", "Abbreviation", "✓"):
+                # "✓" in the Type column (notes) marks "actually correct" rows
+                # (气宗/毒奶/弃牌岛/...) — not corrections. Also skip wrong==correct.
+                if (wrong and correct
+                        and wrong not in ("Wrong", "Abbreviation")
+                        and notes != "✓"
+                        and wrong != correct):
                     fixes[current_section][wrong] = {
                         "correct": correct,
                         "notes": notes,
@@ -508,6 +516,10 @@ def check_translation(
     for abbrev in set(found_abbrevs):
         if abbrev in abbreviations:
             cn, en = abbreviations[abbrev]
+            # Full Chinese term already appears anywhere in the text (e.g.
+            # 平衡委员会（BC）) — abbreviation is expanded, textbook-correct, do not flag.
+            if cn and cn in text:
+                continue
             issues.append(
                 f"abbreviation: 「{abbrev}」— consider expanding on first use: "
                 f"{cn} ({en})"
@@ -515,7 +527,7 @@ def check_translation(
         elif abbrev in ("R1", "R2", "R3"):
             pass
 
-    # 12. Check Chinese fuzzy fixes (typos, homophones, deck abbreviations)
+    # 12. Check Chinese fuzzy fixes (typos, homophones)
     fuzzy_fixes = load_fuzzy_fixes()
 
     # Collect already-detected terms to avoid duplicates
@@ -553,21 +565,11 @@ def check_translation(
                 f"(context: ...{ctx}...)"
             )
 
-    # 12c. Deck abbreviations
-    # Skip faction abbreviations (single-char meta rules like "北" = suffix marker)
-    # Only detect actual deck names with >= 3 chars
-    for abbr, info in fuzzy_fixes["deck_abbr"].items():
-        if len(abbr) < 3:
-            continue  # Skip faction abbreviation rules like "北", "岛", "怪"
-        if abbr in text:
-            idx = text.index(abbr)
-            start = max(0, idx - 20)
-            end = min(len(text), idx + len(abbr) + 20)
-            ctx = text[start:end].replace('\n', ' ')
-            issues.append(
-                f"deck abbreviation: 「{abbr}」→ 「{info['correct']}」 "
-                f"({info['notes']}) (context: ...{ctx}...)"
-            )
+    # 12c. Deck abbreviations — intentionally NOT enforced.
+    # SKILL.md's Community Slang table encourages these short forms (骑士北/破烂怪/
+    # 位移松/孽鬼店店/互口岛/...). Forcing them to expand to full deck names would
+    # contradict the skill's style. The deck_abbr table in cn_fuzzy_fixes.md remains
+    # as a human reference and CN->EN reverse lookup, just not a machine gate.
 
     # 13. Check English residue (untranslated card names)
     residue_issues = check_english_residue(text)
@@ -825,7 +827,6 @@ ISSUE_CATEGORIES = {
     "abbreviation:": "abbreviation",
     "typo:": "typo",
     "homophone:": "homophone",
-    "deck abbreviation:": "deck_abbreviation",
     "English residue:": "english_residue",
     "Chinese residue:": "chinese_residue",
     "term authority:": "term_authority_violation",
