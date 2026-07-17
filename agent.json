@@ -3,77 +3,158 @@
   "description": "Translation toolkit for Gwent: The Witcher Card Game articles between English and Chinese.",
   "version": "1.0.0",
   "entry_points": {
-    "workflow": "scripts/auto_pipeline.py",
+    "workflow": "scripts/translate.py",
     "health_check": "scripts/health_check.py",
     "lookup": "scripts/lookup.py"
   },
   "workflow": {
+    "entry": "python scripts/translate.py",
     "phases": [
       {
-        "name": "pre",
-        "command": "python scripts/auto_pipeline.py pre {source} --date {date} --type {type} --json",
+        "name": "prepare",
+        "command": "python scripts/translate.py prepare {source} --date {date} --type {type} --direction {direction} --json",
         "required_args": [
           "source"
         ],
         "optional_args": {
           "date": "YYYY-MM",
-          "type": "meta | bc-proposal | card-analysis | patch-notes | general"
+          "type": "meta | bc-proposal | card-analysis | patch-notes | general",
+          "direction": "encn | cnen (default encn)"
         },
         "state_outputs": [
-          "skeleton_path",
-          "lock_path",
-          "card_references",
-          "term_authority"
+          "pack_path",
+          "lock_built",
+          "ready"
         ]
       },
       {
         "name": "translate",
-        "note": "Performed by the agent or human translator. No script invocation."
+        "note": "Performed by the agent or human translator using the pack written by prepare. No script invocation."
       },
       {
-        "name": "phase_c_check",
-        "command": "python scripts/phase_c_check.py {translated} --source {source} --direction {direction} --json",
+        "name": "finish",
+        "command": "python scripts/translate.py finish {translated} --source {source} --direction {direction} --json",
         "required_args": [
           "translated",
           "source"
         ],
         "optional_args": {
           "direction": "encn | cnen (auto-detected if omitted)"
-        }
-      },
-      {
-        "name": "term_authority",
-        "command": "python scripts/term_enforcer.py {translated} --source {source} --json",
-        "required_args": [
-          "translated",
-          "source"
+        },
+        "state_outputs": [
+          "blocked",
+          "guard_all_passed",
+          "block_reason"
         ]
-      },
-      {
-        "name": "post",
-        "command": "python scripts/auto_pipeline.py post {source} {translated} --direction {direction} --json",
-        "required_args": [
-          "source",
-          "translated"
-        ],
-        "optional_args": {
-          "direction": "encn | cnen (auto-detected if omitted)"
-        }
-      },
-      {
-        "name": "guard",
-        "command": "python scripts/completeness_guard.py {translated} --source {source} --direction {direction} --json",
-        "required_args": [
-          "translated",
-          "source"
-        ],
-        "optional_args": {
-          "direction": "encn | cnen (auto-detected if omitted)"
-        }
       }
-    ]
+    ],
+    "internal_steps": [
+      "auto_pipeline pre (inside prepare)",
+      "auto_pipeline post",
+      "phase_c_check",
+      "term_enforcer",
+      "completeness_guard",
+      "learn (inside finish)"
+    ],
+    "note": "internal_steps run inside prepare/finish. Do not invoke them directly — use translate.py."
   },
   "commands": [
+    {
+      "name": "translate prepare",
+      "script": "scripts/translate.py",
+      "subcommand": "prepare",
+      "args": [
+        {
+          "name": "source",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--date",
+          "required": false,
+          "type": "string",
+          "format": "YYYY-MM"
+        },
+        {
+          "name": "--type",
+          "required": false,
+          "choices": [
+            "meta",
+            "bc-proposal",
+            "card-analysis",
+            "patch-notes",
+            "general"
+          ]
+        },
+        {
+          "name": "--direction",
+          "required": false,
+          "choices": [
+            "encn",
+            "cnen"
+          ]
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
+      ],
+      "json_output": [
+        "command",
+        "source",
+        "direction",
+        "date",
+        "type",
+        "pack_path",
+        "pre_exit_code",
+        "lock_built",
+        "skeleton_extracted",
+        "term_counts",
+        "ready"
+      ]
+    },
+    {
+      "name": "translate finish",
+      "script": "scripts/translate.py",
+      "subcommand": "finish",
+      "args": [
+        {
+          "name": "translated",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--source",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--direction",
+          "required": false,
+          "choices": [
+            "encn",
+            "cnen"
+          ]
+        },
+        {
+          "name": "--json",
+          "required": false,
+          "type": "flag"
+        }
+      ],
+      "json_output": [
+        "command",
+        "translated",
+        "source",
+        "direction",
+        "guard_exit_code",
+        "guard_all_passed",
+        "blocked",
+        "block_reason",
+        "learn"
+      ]
+    },
     {
       "name": "auto_pipeline pre",
       "script": "scripts/auto_pipeline.py",

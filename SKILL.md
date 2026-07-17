@@ -32,46 +32,59 @@ and reads like a native Gwent player wrote it. Casual but not stiff.
 
 ## Translation Workflow
 
-> **IMPORTANT**: The full pipeline below is required for every translation.
-> Skipping steps or calling sub-scripts manually may produce inconsistent results.
-> Use the single automation command provided at each phase.
+> **IMPORTANT**: Every translation MUST go through `translate.py` — a two-command
+> deterministic pipeline. Skipping either command produces UNVERIFIED output that
+> MUST NOT be finalized. Do NOT run `auto_pipeline pre/post`, `phase_c_check`,
+> `term_enforcer`, or `completeness_guard` manually — they are now internal steps
+> of `translate.py`. The pipeline is the only entry point:
+>
+> ```bash
+> # 1. Prepare — build the translation pack (locked terms, official effects, style rules)
+> python scripts/translate.py prepare source.md --date YYYY-MM --type general --direction encn
+> # 2. Translate using the generated source.pack.md  (the only LLM step)
+> # 3. Finish — hard gate; the translation is NOT final until this PASSes
+> python scripts/translate.py finish translated.txt --source source.md --direction encn
+> ```
+
+Step 2 (translate) is the only place judgment is applied. Steps 1 and 3 are
+deterministic code — they run the same way every time and cannot be skipped, which
+is the whole reason this pipeline exists: it removes the option to "forget" preprocessing
+or the final gate.
 
 ---
 
-### Phase A: Pre-Translation (Preprocessing)
+### Step 1: Prepare (备料)
 
-**Run this command FIRST — before you start translating:**
+**Run this FIRST, before translating:**
 
 ```bash
-python scripts/auto_pipeline.py pre source.md --date YYYY-MM --type general
+python scripts/translate.py prepare source.md --date YYYY-MM --type general --direction encn
 ```
 
-This automatically performs context setup, reference loading, context lock,
-and format skeleton extraction. These steps should not be run manually.
+This runs all preprocessing and writes **`source.pack.md`** — READ IT before translating.
+It is your single source of truth for this article and contains:
 
-> **TRANSLATION DISCIPLINE**: The pipeline outputs a **MANDATORY TERM LOCK TABLE** in
-> `term_authority.locked_terms`. You MUST use the provided Chinese translations exactly
-> as given. This table includes card names, terminology, and resolved abbreviations/aliases
-> (e.g., "OTB" → "Off the Books" → "黑市买卖").
->
-> **DO NOT translate locked terms literally.** If a term appears in the lock table, use
-> its provided Chinese translation. If a term is marked **ambiguous**, use the full
-> subtitle form (e.g., "Geralt: Igni", not just "Geralt").
->
-> Terms marked **pending** are not in the reference database. Translate them using your
-> judgment, then add them to the lock table if they recur.
->
-> **SLANG HINTS** (`slang_hints` in the pre-translation JSON): community slang/jargon
-> detected in THIS article with the intended Chinese register (e.g. "on steroids" →
-> 加强版, "broken" → 强到离谱). Use the intended register, not a literal translation.
-> These are hints, not hard locks — Phase C will warn if a detected slang was
-> translated literally.
+- **MANDATORY Term Lock Table** — card names, terminology, resolved abbreviations/aliases
+  (e.g. "OTB" → "Off the Books" → "黑市买卖"). Use these exact Chinese translations.
+  **DO NOT translate locked terms literally.**
+- **Ambiguous names** — must use the full subtitle form (e.g. "Geralt: Igni", not just "Geralt").
+- **Pending terms** — not in the reference database; translate by judgment, record if recurring.
+- **Official card effect text** — copy verbatim; do not paraphrase.
+- **Slang hints** — translate by intended register (e.g. "on steroids" → 加强版), not literally.
+  These are advisory; `finish` will warn if a detected slang was translated literally.
+- **Style rules + Phase C acceptance checklist** for your direction.
+
+If `prepare` reports the context lock failed (empty lock table), translate cautiously and
+re-run `prepare` — the lock is what lets `finish` verify terminology.
 
 ---
 
-### Phase B: Translation
+### Step 2: Translate (翻译)
 
-Translate the text according to the direction-specific constraints below.
+Open `source.pack.md` from Step 1. Translate the **full source** following the pack's
+locked terms and style rules, then save to a file (e.g. `translated.txt`).
+
+Direction-specific style reference (also embedded in the pack):
 
 **For EN → CN**:
 
@@ -103,76 +116,23 @@ For detailed step-by-step guidance, see `references/translation_workflow.md`.
 
 ---
 
-### Phase C: Self-Check (Before Output)
+### Step 3: Finish (定稿门禁)
 
-**Run this checklist before finalizing the translation:**
-
-**EN → CN**:
-- [ ] No "费/费用" in formal provision contexts
-- [ ] "X for Y" translated as "Y人口X战力" (not reversed, not identical numbers)
-- [ ] Passive voice converted to active
-- [ ] Arabic numerals throughout
-- [ ] **No English residue**: All card names from the quick reference table are translated to Chinese
-- [ ] Ambiguous card names include full subtitle (check ambiguous_names.md)
-- [ ] Abbreviations expanded on first use (BC, OP, CA, etc.)
-- [ ] Chinese parentheses 「（）」used, not English ()
-- [ ] Chinese colon "：" in card names
-- [ ] **Term authority compliance**: All locked terms from the pre-translation table are used with their official translations. No literal translations of abbreviations or aliases.
-- [ ] Context lock terms used consistently throughout article
-
-**CN → EN**:
-- [ ] "人口" translated as "provision" (formal), "cost" only for SY Tribute
-- [ ] "Y人口X战力" translated as "X for Y" (correct order)
-- [ ] **No Chinese residue**: All Chinese card names are translated to English
-- [ ] English parentheses () used, not Chinese 「（）」
-- [ ] English colon ":" in card names (e.g., "Geralt: Igni")
-- [ ] Community slang preserved: 气宗 → "no unit", 互口岛 → "armor abuse"
-- [ ] Oral verbs mapped naturally: 赚翻 → "generates huge value", 撑过 → "survives"
-- [ ] Tone: casual but not broken English. Reads like a native player wrote it
-
-The above checklist is also available in machine-checkable form in
-`references/phase_c_checklist.md`. After saving your translation, run:
+**Run AFTER saving your translation — this is the ONLY finalization gate:**
 
 ```bash
-python scripts/phase_c_check.py translated.txt --source source.md
+python scripts/translate.py finish translated.txt --source source.md --direction encn
 ```
 
-For `encn-10` (term authority), the `--source` flag is required; without it the check
-falls back to a manual warning. The final `completeness_guard.py` gate also runs
-term authority checks automatically when `--source` is provided.
+- **`PASS`** = all checks passed (terminology, residue, Phase C, term authority); new terms
+  recorded to `pending_terms.md`. You may finalize.
+- **`BLOCKED`** = **DO NOT FINALIZE**. Fix the reported issues and re-run until PASS.
 
----
+`finish` runs every check through `completeness_guard` and additionally refuses to pass if
+the context lock could not be built from the source — so terminology is never silently
+skipped. Always pass `--source` and `--direction` explicitly for a trustworthy gate.
 
-### Phase D: Post-Translation (Verification & Learning)
-
-**Run this command AFTER you have saved the translation:**
-
-```bash
-python scripts/auto_pipeline.py post source.md translated.txt
-```
-
-This automatically performs terminology check, consistency verification,
-and records new terms to `pending_terms.md`. Skipping this step may leave
-unrecorded terms.
-
-If you need to re-scan a translated file for untranslated card names
-(direction-aware: English residue for EN→CN, Chinese residue for CN→EN):
-```bash
-python scripts/auto_pipeline.py scan translated.txt
-```
-
----
-
-### Phase E: Completeness Guard (Final Gate)
-
-**Before finalizing the translation, run:**
-
-```bash
-python scripts/completeness_guard.py translated.txt
-```
-
-If this script reports any missing steps, resolve them before
-marking the translation complete. The guard output should not be ignored.
+The machine-checkable rules behind `finish` live in `references/phase_c_checklist.md`.
 
 ---
 
