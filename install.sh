@@ -46,6 +46,23 @@ if [ -n "$PENDING_BACKUP" ] && [ -f "$PENDING_BACKUP" ]; then
     echo "Restored pending_terms.md"
 fi
 
+# Build effect_text.json (CDPR official card ability text; NOT committed — see NOTICE).
+# Online fetch from api.gwent.one (~3 min, CN-reachable). Wrapped in `if` so a fetch
+# failure degrades gracefully under `set -e` instead of aborting the install:
+# translation still works, only official-effect verbatim injection is disabled.
+if command -v python3 >/dev/null 2>&1; then
+    echo "Fetching official card data from api.gwent.one (approx. 3 min, CN-reachable)..."
+    if python3 "$SKILL_DIR/scripts/build_effect_reference.py" --fetch; then
+        echo "effect_text.json built."
+    else
+        echo "WARNING: online fetch failed. Skill installed in degraded mode"
+        echo "         (translation works; official card-effect injection disabled)."
+        echo "         Retry later: python3 scripts/build_effect_reference.py --fetch"
+    fi
+else
+    echo "WARNING: python3 not found; skipping effect_text.json build."
+fi
+
 # Deploy lite skill (chat / short-content translation; reuses main skill's scripts)
 LITE_DIR="$(dirname "$SKILL_DIR")/gwent-translation-lite"
 if [ -f "$SKILL_DIR/lite/SKILL.md" ]; then

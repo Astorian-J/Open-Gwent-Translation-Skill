@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-07-23 — CDPR 版权文本清理（effect_text.json 改 fetch-at-build + NOTICE）
+
+公开仓库原 git 跟踪 references/effect_text.json（1366 张卡的 CDPR 官方能力文本），
+属第三方版权内容分发。本轮清理（经 4 路 workflow 对抗验证：版权严格派 vs 务实派 /
+影响面 / 技术方案）：
+
+- effect_text.json 移出 git 跟踪（.gitignore + git rm --cached），改为**构建期产物**。
+- scripts/build_effect_reference.py 新增 `--fetch` 在线模式（urllib stdlib，零依赖）：
+  从 api.gwent.one 拉 en+cn 单语言端点，按 card_id join；保留 `--src` 本地离线模式。
+  原子写（tempfile + os.replace）防崩溃半写损坏。install.sh 安装时自动跑 `--fetch`
+  （失败降级，翻译不受影响）。
+- health_check：effect_text.json 缺失从 FAIL 改为 INFO（构建期产物缺失非仓库损坏，
+  附 build 提示）；保留文件存在时的 parse/count 检查。
+- 新增 NOTICE：CDPR 归属 + GPL 边界切分（只覆盖原创代码，不覆盖 CDPR 数据）+
+  unofficial 标注 + 非商业 + 数据源溯源 + 撤回风险。
+- card_names.md / keywords_map.md **保留**（事实信息 + 核心运行时依赖，缺失会让
+  skill 停摆），NOTICE 已声明其 CDPR 衍生属性不在 GPL 内。
+- 四语种 README 目录树 effect_text.json 注释改 build-time + 加 unofficial 标注。
+
 ## 2026-06-30 — Slang 预防 + 检测（黑话"看不懂"修复）
 
 用户痛点：英文黑话（slang/jargon）翻出来"看不懂"。预防为主、检测兜底，两者都做。

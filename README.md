@@ -3,13 +3,15 @@
 **[English](README.md)** | [中文](README.zh-CN.md) | [Polski](README.pl.md) | [Русский](README.ru.md)
 
 > Accurate bidirectional translation between English and Chinese for *Gwent: The Witcher Card Game* content — official card terminology, community deck names, slang, and a natural Bilibili-player tone. Works with any AI agent or human translator.
+>
+> **Unofficial fan work — not affiliated with or endorsed by CD PROJEKT RED.** Card ability text is fetched at build time from the public api.gwent.one and is NOT committed to this repo; see [NOTICE](NOTICE) for the full copyright / license boundary.
 
 Machine translation of Gwent content breaks in predictable ways: official card names get translated literally, community deck nicknames become nonsense, English slang like "on steroids" or "sweet spot" turns into gibberish, and everything reads stiff. This toolkit fixes that with a three-layer pipeline that locks card data, guides rhetoric, and catches residue.
 
 ## Features
 
 - **Bidirectional & direction-aware** — EN→CN with a Bilibili-player community tone (short punchy sentences, active voice); CN→EN into natural English that keeps community terms. Each direction has its own pipeline, so CN→EN won't false-flag English card names as untranslated residue.
-- **1366 cards, locked verbatim** — Every card's official EN/CN name, category, attributes (rarity / faction), and ability text is loaded from CDPR's official data and enforced verbatim. Card info is never re-translated freely.
+- **1366 cards, locked verbatim** — Every card's official EN/CN name, category, attributes (rarity / faction), and ability text is loaded from CDPR's official data and enforced verbatim. Card info is never re-translated freely. Card data is fetched at install time (run `install.sh` or `scripts/build_effect_reference.py --fetch`); it is not committed to the repo — see NOTICE.
 - **200+ community deck names** — The nicknames Chinese players actually use (大金北, 孽鬼跳松, 赤诚骑士北, 状态帝国...), not literal translations.
 - **Slang & jargon injection** — English slang (op, brick, tutor, mulligan, on steroids, sweet spot...) is detected in the source and pre-injected with the intended translation, so it stops coming out as gibberish.
 - **Rhetoric & tone preservation** — Metaphor, hyperbole, and sarcasm are translated by *intent*, not word-by-word. "Loud design" won't become "too loud".
@@ -108,7 +110,7 @@ gwent-translation-style/
 │   ├── card_attributes_map.md   # Rarity + faction names / aliases
 │   ├── competitive_terms.md     # 200+ deck names + community slang
 │   ├── slang_map.md             # Slang / jargon hints (op, brick, tutor...)
-│   ├── effect_text.json         # 1366 cards' official ability text
+│   ├── effect_text.json         # official ability text (build-time, fetched by build_effect_reference.py; see NOTICE)
 │   ├── cn_fuzzy_fixes.md        # Chinese typo / abbreviation fixes
 │   ├── correction_guide.md      # Translation rules
 │   ├── common_pitfalls.md       # Common mistakes
@@ -128,7 +130,7 @@ gwent-translation-style/
 │   ├── term_enforcer.py         # Card data verification
 │   ├── context_lock.py          # Context / abbreviation lock
 │   ├── effect_verifier.py       # Official effect text check
-│   ├── build_effect_reference.py  # Rebuild effect_text.json
+│   ├── build_effect_reference.py  # Build effect_text.json (fetch-at-build: online/offline)
 │   ├── format_skeleton.py       # Format preservation
 │   ├── diff_review.py           # Diff review
 │   ├── backtranslate.py         # Back-translation check

@@ -3,13 +3,15 @@
 **[English](README.md)** | **[中文](README.zh-CN.md)** | [Polski](README.pl.md) | [Русский](README.ru.md)
 
 > 面向《昆特牌：巫师之昆特牌》内容的英中双向翻译工具——官方卡牌术语、社区卡组名、玩家黑话，以及地道的 Bilibili 玩家口吻。兼容任何 AI agent 或人工译者。
+>
+> **非官方粉丝作品——与 CD PROJEKT RED 无隶属、未经其认可。** 卡牌能力文本在构建时从公开 api.gwent.one 拉取，不入库；完整版权/许可边界见 [NOTICE](NOTICE)。
 
 机翻昆特内容会在几个固定地方翻车：官方卡牌名被直译、社区卡组绰号变不知所云、英文黑话（on steroids / sweet spot）翻出来看不懂、整篇生硬。本工具用三层流水线解决：硬层锁定卡牌数据、软层引导修辞、检测层兜底漏译残留。
 
 ## 特性
 
 - **双向 + 方向感知** —— EN→CN 用 Bilibili 玩家社区口吻（短句、主动语态）；CN→EN 译成自然英文并保留社区术语。两个方向各自独立流水线，CN→EN 不会把英文卡名误判为"未翻译残留"。
-- **1366 张卡逐字锁定** —— 每张卡的官方中英文名、类别、属性（稀有度/阵营）、效果文本从 CDPR 官方数据加载并逐字强制，卡牌信息绝不"再翻译"。
+- **1366 张卡逐字锁定** —— 每张卡的官方中英文名、类别、属性（稀有度/阵营）、效果文本从 CDPR 官方数据加载并逐字强制，卡牌信息绝不"再翻译"。卡牌数据在安装时拉取（运行 `install.sh` 或 `scripts/build_effect_reference.py --fetch`），不入库——见 NOTICE。
 - **200+ 社区卡组名** —— 中文玩家真正在用的绰号（大金北、孽鬼跳松、赤诚骑士北、状态帝国……），不是直译。
 - **黑话/行话注入** —— 源文里的英文黑话（op、brick、tutor、mulligan、on steroids、sweet spot……）会被检测并预注入意向译法，不再翻成看不懂的东西。
 - **修辞与语气保留** —— 比喻、夸张、反讽按*意图*翻译，而非逐字。"loud design"不会变成"太大声"。
@@ -108,7 +110,7 @@ gwent-translation-style/
 │   ├── card_attributes_map.md   # 稀有度 + 阵营名/缩写
 │   ├── competitive_terms.md     # 200+ 卡组名 + 社区黑话
 │   ├── slang_map.md             # 黑话/行话提示（op、brick、tutor……）
-│   ├── effect_text.json         # 1366 张卡官方效果文本
+│   ├── effect_text.json         # 官方效果文本（构建期生成，由 build_effect_reference.py 拉取；见 NOTICE）
 │   ├── cn_fuzzy_fixes.md        # 中文错字/缩写修正
 │   ├── correction_guide.md      # 翻译规则
 │   ├── common_pitfalls.md       # 常见错误
@@ -128,7 +130,7 @@ gwent-translation-style/
 │   ├── term_enforcer.py         # 卡牌数据校验
 │   ├── context_lock.py          # 上下文/缩写锁定
 │   ├── effect_verifier.py       # 官方效果文本检查
-│   ├── build_effect_reference.py  # 重建 effect_text.json
+│   ├── build_effect_reference.py  # 构建 effect_text.json（fetch-at-build：在线/离线）
 │   ├── format_skeleton.py       # 格式保留
 │   ├── diff_review.py           # diff 审查
 │   ├── backtranslate.py         # 回译检查

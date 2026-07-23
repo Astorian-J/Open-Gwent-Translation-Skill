@@ -4,3 +4,7 @@ __pycache__/
 
 # 本地回归测试样本（真实文章译文，不入库）
 samples/
+
+# effect_text.json：构建期产物（CDPR 官方卡牌能力文本，第三方版权，见 NOTICE）
+# 由 scripts/build_effect_reference.py 在安装时生成，不入库
+references/effect_text.json

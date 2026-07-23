@@ -5,13 +5,15 @@
 > **Uwaga:** To jest polskie tłumaczenie dokumentacji, wygenerowane maszynowo i **wymagające korekty przez native speakera języka polskiego**. Narzędzie tłumaczy wyłącznie **angielski ↔ chiński** (EN↔CN) — nie obsługuje języka polskiego jako języka źródłowego ani docelowego. Najbardziej aktualna jest [wersja angielska](README.md).
 
 > Dokładne dwukierunkowe tłumaczenie treści *Gwent: The Witcher Card Game* między angielskim a chińskim — oficjalna terminologia kart, nazwy talii społeczności, slang i naturalny ton graczy Bilibili. Działa z dowolnym agentem AI lub tłumaczem.
+>
+> **Nieoficjalne dzieło fanowskie — niezależne od CD PROJEKT RED, bez ich oficjalnego poparcia.** Teksty kart są pobierane w czasie budowy z publicznego api.gwent.one i nie są commitowane do tego repozytorium; pełne informacje o prawach autorskich/licencji — w [NOTICE](NOTICE).
 
 Tłumaczenie maszynowe treści o Gwincie zawodzi w przewidywalny sposób: oficjalne nazwy kart są tłumaczone dosłownie, przydomki talii społeczności stają się nonsensem, angielski slang typu "on steroids" czy "sweet spot" zamienia się w bełkot, a cały tekst brzmi sztywno. Ten zestaw narzędzi rozwiązuje to trzywarstwowym potokiem, który blokuje dane kart, prowadzi retorykę i wyłapuje resztki.
 
 ## Możliwości
 
 - **Dwukierunkowe i świadome kierunku** — EN→CN z tonem społeczności graczy Bilibili (krótkie, dosadne zdania, strona czynna); CN→EN w naturalny angielski zachowujący terminy społeczności. Każdy kierunek ma własny potok, więc CN→EN nie oflaguje angielskich nazw kart jako nieprzetłumaczonych resztek.
-- **1366 kart zablokowanych dosłownie** — Oficjalna nazwa EN/CN każdej karty, kategoria, atrybuty (rzadkość / frakcja) i tekst zdolności są ładowane z oficjalnych danych CDPR i egzekwowane dosłownie. Dane kart nigdy nie są ponownie tłumaczone.
+- **1366 kart zablokowanych dosłownie** — Oficjalna nazwa EN/CN każdej karty, kategoria, atrybuty (rzadkość / frakcja) i tekst zdolności są ładowane z oficjalnych danych CDPR i egzekwowane dosłownie. Dane kart nigdy nie są ponownie tłumaczone. Dane kart są pobierane w czasie instalacji (uruchom `install.sh` lub `scripts/build_effect_reference.py --fetch`); nie są commitowane do repozytorium — patrz NOTICE.
 - **200+ nazw talii społeczności** — Przydomki, których faktycznie używają chińscy gracze (大金北, 孽鬼跳松, 赤诚骑士北, 状态帝国...), nie tłumaczenia dosłowne.
 - **Wstrzykiwanie slangu i żargonu** — Angielski slang (op, brick, tutor, mulligan, on steroids, sweet spot...) jest wykrywany w źródle i wstępnie wstrzykiwany z docelowym tłumaczeniem, więc przestaje być bełkotem.
 - **Zachowanie retoryki i tonu** — Metafory, hiperbola i sarkazm są tłumaczone przez *intencję*, nie słowo w słowo. "Loud design" nie stanie się "zbyt głośnym".
@@ -112,7 +114,7 @@ gwent-translation-style/
 │   ├── card_attributes_map.md   # Rarity + faction names / aliases
 │   ├── competitive_terms.md     # 200+ deck names + community slang
 │   ├── slang_map.md             # Slang / jargon hints (op, brick, tutor...)
-│   ├── effect_text.json         # 1366 cards' official ability text
+│   ├── effect_text.json         # official ability text (build-time, fetched; see NOTICE)
 │   ├── cn_fuzzy_fixes.md        # Chinese typo / abbreviation fixes
 │   ├── correction_guide.md      # Translation rules
 │   ├── common_pitfalls.md       # Common mistakes
@@ -135,7 +137,7 @@ gwent-translation-style/
     ├── term_enforcer.py         # Card data verification
     ├── context_lock.py          # Context / abbreviation lock
     ├── effect_verifier.py       # Official effect text check
-    ├── build_effect_reference.py  # Rebuild effect_text.json
+    ├── build_effect_reference.py  # Build effect_text.json (fetch-at-build: online/offline)
     ├── format_skeleton.py       # Format preservation
     ├── diff_review.py           # Diff review
     ├── backtranslate.py         # Back-translation check
