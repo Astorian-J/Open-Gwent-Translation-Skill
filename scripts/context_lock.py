@@ -40,6 +40,7 @@ from _shared import (
     extract_card_names_no_colon,
     extract_terms_from_markdown,
     json_output,
+    source_is_chinese,
     TermAuthority,
 )
 from term_enforcer import count_occurrences
@@ -88,30 +89,41 @@ def extract_terms_from_source(source_text: str) -> dict[str, str]:
 def build_lock(source_file: str, lock_file: str) -> dict:
     """Build a new lock table from source text.
 
-    Official translations are pre-filled from TermAuthority when available.
-    Unknown terms remain pending for manual resolution.
+    Direction-aware: a Chinese source (CN->EN article) is extracted with the
+    Chinese dictionary lookup (TermAuthority.get_all_for_text_cn); an English
+    source (EN->CN article) keeps the existing English regex extraction. Source
+    language is detected via source_is_chinese (reusing detect_direction), so
+    the EN->CN path is unchanged. Official translations are pre-filled from
+    TermAuthority when available; unknown terms remain pending.
     """
     source_text = Path(source_file).read_text(encoding="utf-8")
     ref_dir = Path(__file__).parent.parent / "references"
     authority = TermAuthority(ref_dir)
+    source_cn = source_is_chinese(source_text)
 
     lock = {
         "document": Path(source_file).stem,
         "created_at": datetime.now().isoformat(),
+        "direction": "cnen" if source_cn else "encn",
         "terms": {}
     }
 
-    for resolved in authority.get_all_for_text(source_text):
+    resolved_iter = (
+        authority.get_all_for_text_cn(source_text) if source_cn
+        else authority.get_all_for_text(source_text)
+    )
+
+    for resolved in resolved_iter:
         term = resolved["term"]
-        if resolved["match_type"] == "ambiguous_base":
+        if resolved["match_type"] in ("ambiguous_base", "cn_collision"):
             lock["terms"][term] = {
-                "canonical_en": resolved["canonical_en"],
-                "cn": "",
+                "canonical_en": resolved.get("canonical_en") or term,
+                "cn": resolved.get("cn", ""),
                 "status": "ambiguous",
                 "first_seen": "auto-detected",
                 "source_ref": resolved["source"],
                 "type": resolved["type"],
-                "variants": resolved.get("variants", []),
+                "variants": resolved.get("candidates") or resolved.get("variants", []),
             }
         elif resolved["cn"]:
             lock["terms"][term] = {

@@ -76,6 +76,18 @@ def detect_direction(text: str) -> str:
     return "encn" if chinese_chars >= english_words else "cnen"
 
 
+def source_is_chinese(text: str) -> bool:
+    """True when the text reads predominantly Chinese — i.e. a CN->EN source.
+
+    detect_direction reports the language a text reads as the TARGET of a
+    translation; applied to a SOURCE file, "encn" (Chinese target) means the
+    source itself is Chinese. We invert that label to name the SOURCE language
+    for extraction-strategy selection, reusing detect_direction's thresholds so
+    the extractor and the checker can never disagree on what counts as Chinese.
+    """
+    return detect_direction(text) == "encn"
+
+
 # --- Regex patterns ---
 
 CARD_NAME_PATTERN = re.compile(
@@ -626,6 +638,14 @@ class TermAuthority:
         # (slang is register guidance, not a hard lock). Used by auto_pipeline pre
         # (slang_hints injection) and check_translation (reverse-scan warn).
         self._slang: dict[str, dict] = {}
+        # CN -> [canonical_en, ...]: reverse index for the CN->EN source
+        # extractor (get_all_for_text_cn). Unlike _cn_entries (first-wins) this
+        # keeps EVERY English candidate, so a CN name shared by several cards
+        # (e.g. 迪门家族水手 -> Dimun Pirate AND Dimun Corsair) surfaces as a
+        # collision. Only en values that START with an ASCII letter are kept, so
+        # correction rows whose "english" field is itself Chinese
+        # (出场率 -> 登场率) never pollute the CN->EN lock.
+        self._cn_to_ens: dict[str, list[str]] = {}
 
         self._loaded = False
         self._load_all()
@@ -692,6 +712,12 @@ class TermAuthority:
             self._add_alias(alias, en)
         for abbrev in abbrevs or []:
             self._add_abbrev(abbrev, en)
+
+        # Feed the multi-candidate CN->EN index used by CN-source extraction.
+        if cn and re.match(r"[A-Za-z]", en):
+            lst = self._cn_to_ens.setdefault(cn, [])
+            if en not in lst:
+                lst.append(en)
 
     def _add_alias(self, alias: str, canonical_en: str) -> None:
         alias = alias.strip().lower()
@@ -798,6 +824,17 @@ class TermAuthority:
         entry["source"] = "card_overrides.md"
         if cn not in self._cn_entries:
             self._cn_entries[cn] = entry
+        # Mirror the forced CN swap into the multi-candidate CN->EN index.
+        if re.match(r"[A-Za-z]", en):
+            lst = self._cn_to_ens.setdefault(cn, [])
+            if en not in lst:
+                lst.append(en)
+            if old_cn and old_cn != cn:
+                stale = self._cn_to_ens.get(old_cn)
+                if stale and en in stale:
+                    stale.remove(en)
+                    if not stale:
+                        del self._cn_to_ens[old_cn]
 
     def _load_terminology_map(self) -> None:
         path = self.ref_dir / "terminology_map.md"
@@ -932,6 +969,16 @@ class TermAuthority:
                 "literal_forbidden": row.get("literal_forbidden", "").strip(),
                 "note": row.get("note", "").strip(),
             }
+            # Surface slang CN in the CN->EN extraction index too: a CN source
+            # using 加强版 should lock to "on steroids". intended_cn may carry
+            # "/"-separated community variants; register each (>=2 chars).
+            if re.match(r"[A-Za-z]", en):
+                for variant in re.split(r"/", intended):
+                    variant = variant.strip()
+                    if variant and len(variant) >= 2:
+                        lst = self._cn_to_ens.setdefault(variant, [])
+                        if en not in lst:
+                            lst.append(en)
 
     def _load_card_attributes_map(self) -> None:
         """Load rarity + faction (name & abbreviation) terms.
@@ -1332,6 +1379,157 @@ class TermAuthority:
                 continue
             seen.add(seen_key)
             results.append({"term": variant, **resolved})
+
+        return results
+
+    # --- CN->EN source extraction (dictionary lookup) -------------------------
+
+    def _cn_to_ens_index(self) -> dict[str, list[dict]]:
+        """Build the collision-aware CN -> [entry] map used by CN extraction.
+
+        Joins self._cn_to_ens (CN -> [canonical_en]) to self._entries. Slang /
+        community terms are deliberately NOT registered as hard terms, so their
+        English is absent from _entries; a minimal synthetic record keeps them
+        resolvable so they still surface from a Chinese source.
+        """
+        out: dict[str, list[dict]] = {}
+        for cn, ens in self._cn_to_ens.items():
+            entries: list[dict] = []
+            for en in ens:
+                e = self._entries.get(en.lower())
+                if e:
+                    entries.append(e)
+                else:
+                    entries.append({
+                        "canonical_en": en, "cn": cn,
+                        "source": "slang_map.md", "type": "slang",
+                    })
+            if entries:
+                out[cn] = entries
+        return out
+
+    @staticmethod
+    def _emit_cn_result(
+        term: str,
+        entries: list[dict],
+        match_type: str,
+        canonical_cn: str | None,
+        results: list[dict],
+        seen_terms: set[str],
+    ) -> None:
+        """Append one resolved CN->EN hit (single candidate or collision)."""
+        if term in seen_terms:
+            return
+        cc = canonical_cn or entries[0].get("cn", term)
+        seen_terms.add(term)
+        ens = [e["canonical_en"] for e in entries]
+        if len({e.lower() for e in ens}) <= 1:
+            e0 = entries[0]
+            results.append({
+                "term": term,
+                "canonical_en": e0["canonical_en"],
+                "cn": cc,
+                "source": e0.get("source", ""),
+                "type": e0.get("type", ""),
+                "match_type": match_type,
+                "candidates": [{"en": e0["canonical_en"], "cn": cc}],
+                "variants": [],
+                "aliases": [],
+                "abbrevs": [],
+            })
+        else:
+            cands = [{"en": e["canonical_en"], "cn": e.get("cn", cc)}
+                     for e in entries]
+            results.append({
+                "term": term,
+                "canonical_en": "",
+                "cn": cc,
+                "source": entries[0].get("source", ""),
+                "type": "ambiguous",
+                "match_type": "cn_collision",
+                "candidates": cands,
+                "variants": cands,
+                "aliases": [],
+                "abbrevs": [],
+            })
+
+    def get_all_for_text_cn(self, text: str) -> list[dict]:
+        """Extract known Chinese card/term names from a CN->EN source text.
+
+        Mirror of get_all_for_text for the CN->EN direction. The existing
+        extractors are English regexes and yield nothing on a Chinese source
+        (empty lock -> silent-pass). This layer does dictionary lookup of every
+        known Chinese name (4lang CN column + card_overrides + keywords /
+        terminology / competitive / slang CN) found in the source, then:
+
+          1. exact substring lookup (longest keys first),
+          2. wrong->correct CN corrections (community / typo variants), and
+          3. a bounded edit-distance fuzzy pass for single-char typos.
+
+        Each hit resolves to its official English; a CN name shared by several
+        cards (迪门家族水手 -> Dimun Pirate AND Dimun Corsair) is reported as a
+        collision carrying every candidate.
+        """
+        if not text:
+            return []
+
+        cn_to_entries = self._cn_to_ens_index()
+        results: list[dict] = []
+        seen_terms: set[str] = set()
+        matched: set[str] = set()
+
+        # 1. Exact dictionary-substring lookup, longest CN keys first so a
+        #    longer card name is matched before a shorter one it contains.
+        for cn in sorted(cn_to_entries, key=len, reverse=True):
+            if len(cn) < 2 or cn in matched:
+                continue
+            if cn in text:
+                matched.add(cn)
+                self._emit_cn_result(cn, cn_to_entries[cn], "cn_exact",
+                                     cn, results, seen_terms)
+
+        # 2. wrong->correct CN corrections (card_overrides Renamed/Corrected,
+        #    cn_fuzzy_fixes): a community/typo CN in the source resolves to the
+        #    corrected CN's official English candidates.
+        for wrong, correct in self._cn_corrections.items():
+            if len(wrong) < 2 or wrong in matched or correct in matched:
+                continue
+            if wrong in text:
+                entries = cn_to_entries.get(correct)
+                if entries:
+                    matched.add(wrong)
+                    self._emit_cn_result(wrong, entries, "cn_correction",
+                                         correct, results, seen_terms)
+
+        # 3. Bounded fuzzy: overlapping all-hanzi windows of length 4..6 not
+        #    matched exactly, within edit distance 1 of a known CN key of the
+        #    same length. Restricted to PROPER-NOUN CARD names (>=4 chars): a
+        #    3-char or terminology/slang key collides too often with ordinary
+        #    prose (e.g. 测试句 ~ ptr/pts), and known typos are already covered
+        #    by the correction layer above. Capped to bound cost/noise.
+        by_len: dict[int, list[str]] = {}
+        for cn, entries in cn_to_entries.items():
+            if len(cn) >= 4 and all(e.get("type") == "card" for e in entries):
+                by_len.setdefault(len(cn), []).append(cn)
+        fuzzy_emitted = 0
+        FUZZY_CAP = 25
+        for L in range(4, 7):
+            keys = by_len.get(L)
+            if not keys:
+                continue
+            windows: set[str] = set()
+            for m in re.finditer(rf"(?=([一-鿿]{{{L}}}))", text):
+                windows.add(m.group(1))
+            for w in windows:
+                if w in matched or w in seen_terms:
+                    continue
+                hit = next((k for k in keys if _edit_distance(w, k) == 1), None)
+                if hit:
+                    self._emit_cn_result(w, cn_to_entries[hit], "cn_fuzzy",
+                                         hit, results, seen_terms)
+                    fuzzy_emitted += 1
+                    if fuzzy_emitted >= FUZZY_CAP:
+                        return results
 
         return results
 
