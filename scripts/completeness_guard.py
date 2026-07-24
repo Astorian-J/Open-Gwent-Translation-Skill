@@ -139,13 +139,16 @@ def run_term_authority_check(file_path: Path, lock_path: Path | None, direction:
     """Run term_enforcer.py and return (pass, violation_count, status).
 
     status is one of:
-      "not_applicable" — CN->EN output; enforcing official CN terms does not apply
-      "skipped"        — EN->CN but no lock file (or term_enforcer.py missing); not run
+      "not_applicable" — reserved (no longer used; CN->EN now enforces too)
+      "skipped"        — no lock file (or term_enforcer.py missing); not run
       "ran"            — actually executed; pass/count are meaningful
       "error"          — the check itself raised (set by the caller's except guard)
+
+    Direction-aware since the lock carries the official target for both ways:
+    EN->CN asserts the official Chinese appears in the Chinese translation;
+    CN->EN asserts the official English appears in the English translation
+    (term_enforcer.enforce_terms branches on the lock's direction).
     """
-    if direction == "cnen":
-        return True, 0, "not_applicable"
     if lock_path is None:
         return True, 0, "skipped"
 
@@ -246,7 +249,7 @@ def main() -> None:
     except Exception as e:
         checks.append({"name": "phase_c", "passed": False, "issue_count": 0, "message": f"Phase C check failed: {e}"})
 
-    # Check 5: Term authority enforcement (EN->CN only)
+    # Check 5: Term authority enforcement (both directions)
     try:
         passed, count, status = run_term_authority_check(file_path, lock_path, direction, args.json)
         if status == "not_applicable":

@@ -583,32 +583,41 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
         except Exception as e:
             results.append(("WARN", f"check_translation.py: Residue test failed ({e})"))
 
-    # Test completeness_guard term_authority status contract (CN->EN => not_applicable)
+    # Test completeness_guard term_authority actually enforces CN->EN
+    # (was a hard not_applicable skip; now runs term_enforcer on the English
+    # output and blocks when a locked official English term is missing).
     guard_script = script_dir / "completeness_guard.py"
     if guard_script.exists():
+        src_file = None
+        test_file = None
         try:
-            test_content = "Geralt of Rivia is a witcher traveling the Continent."
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".txt", encoding="utf-8", delete=False
-            ) as tf:
-                tf.write(test_content)
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".md", encoding="utf-8", delete=False) as sf:
+                sf.write("这是一篇讨论希里与烧灼强度的中文源文，关于天梯环境。\n")
+                src_file = Path(sf.name)
+            # English output that DROPS the locked official card names entirely.
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", encoding="utf-8", delete=False) as tf:
+                tf.write("This English output intentionally omits the locked card name.\n")
                 test_file = Path(tf.name)
-            try:
-                result = subprocess.run(
-                    [sys.executable, str(guard_script), str(test_file),
-                     "--direction", "cnen", "--json"],
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                )
-                if '"status": "not_applicable"' in result.stdout:
-                    results.append(("PASS", "completeness_guard.py: term_authority status=not_applicable for CN->EN"))
-                else:
-                    results.append(("WARN", "completeness_guard.py: term_authority status contract broken"))
-            finally:
-                test_file.unlink(missing_ok=True)
+            result = subprocess.run(
+                [sys.executable, str(guard_script), str(test_file),
+                 "--source", str(src_file), "--direction", "cnen", "--json"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if ('"status": "ran"' in result.stdout
+                    and '"blocked": true' in result.stdout
+                    and '"name": "term_authority"' in result.stdout):
+                results.append(("PASS", "completeness_guard.py: term_authority enforces CN->EN (status=ran, blocks missing EN)"))
+            else:
+                results.append(("WARN", "completeness_guard.py: CN->EN term_authority enforcement not active"))
         except Exception as e:
             results.append(("WARN", f"completeness_guard.py: Test failed ({e})"))
+        finally:
+            if src_file:
+                src_file.unlink(missing_ok=True)
+            if test_file:
+                test_file.unlink(missing_ok=True)
 
     # Test slang reverse-scan warn (literal translation of source slang warns, non-blocking)
     check_script = script_dir / "check_translation.py"

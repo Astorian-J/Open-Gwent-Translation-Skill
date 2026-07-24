@@ -18,7 +18,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import build_lock_from_source, extract_cn_variants, json_output
+from _shared import (
+    build_lock_from_source,
+    detect_direction,
+    extract_cn_variants,
+    get_term_authority,
+    json_output,
+)
 
 
 def load_lock(lock_file: Path) -> dict:
@@ -31,14 +37,23 @@ def _contains_cjk(target: str) -> bool:
     return bool(re.search(r"[一-鿿]", target))
 
 
-def count_occurrences(text: str, targets: list[str]) -> int:
+def count_occurrences(text: str, targets: list[str], cjk_suppress: set[str] | None = None) -> int:
     """Count how many times any of the targets appears as a whole word/phrase.
 
-    For CJK targets, word boundaries are unreliable because CJK characters are
-    all considered word characters by \b. We therefore use substring matching
-    for any target that contains CJK characters, and word-boundary matching for
-    pure ASCII/alphabetic targets. Single-CJK-char targets are skipped because
-    bare-substring matching would inflate the count across the whole text.
+    For CJK targets, word boundaries are unreliable (CJK has no delimiters and
+    ``\b`` treats every Hanzi as a word char), so a bare substring match is used
+    — but with one guard against false positives: an occurrence does NOT count
+    when it is part of a longer KNOWN name. Otherwise the official name 希里
+    would falsely match inside a different card like 冒牌希里 / 希里：冲刺 and the
+    enforcer would report a false pass. ``cjk_suppress`` is the set of lowercased
+    known CJK names; any occurrence of ``target`` fully covered by an occurrence
+    of a longer suppress-name is absorbed. A structural two-sided boundary is
+    deliberately NOT used: Chinese card names are normally glued to verbs /
+    particles with no delimiter, so that would drop ~a third of real matches.
+
+    Without ``cjk_suppress`` (other callers) behavior is unchanged bare-substring
+    matching. Pure-ASCII/alphabetic targets keep ``\b`` word-boundary matching.
+    Single-CJK-char targets are skipped (too noisy).
     """
     count = 0
     text_lower = text.lower()
@@ -49,11 +64,36 @@ def count_occurrences(text: str, targets: list[str]) -> int:
         if _contains_cjk(target):
             if len(target) < 2:
                 continue
-            # Substring match for CJK; escape still needed for regex specials.
-            pattern = rf"{re.escape(target)}"
+            longer = [
+                n for n in (cjk_suppress or ())
+                if len(n) > len(target) and target in n
+            ]
+            if not longer:
+                count += len(re.findall(re.escape(target), text_lower))
+                continue
+            # Spans of every longer known name actually present in the text.
+            spans: list[tuple[int, int]] = []
+            for n in longer:
+                if n in text_lower:
+                    for m in re.finditer(re.escape(n), text_lower):
+                        spans.append((m.start(), m.end()))
+            spans.sort()
+            for m in re.finditer(re.escape(target), text_lower):
+                s, e = m.start(), m.end()
+                # Covered by some longer-name span [p, q) with p <= s and q >= e.
+                # spans are sorted by start; once p > s no earlier span remains.
+                absorbed = False
+                for p, q in spans:
+                    if p > s:
+                        break
+                    if q >= e:
+                        absorbed = True
+                        break
+                if not absorbed:
+                    count += 1
         else:
             pattern = rf"\b{re.escape(target)}\b"
-        count += len(re.findall(pattern, text_lower))
+            count += len(re.findall(pattern, text_lower))
     return count
 
 
@@ -114,13 +154,55 @@ def _locked_phrase_disambiguates(
     return any(base in phrase and phrase in translation for phrase in locked_phrases)
 
 
+def _build_cjk_suppress(lock: dict) -> set[str]:
+    """Set of lowercased known CJK names for count_occurrences absorption.
+
+    Draws from the full TermAuthority CN index (so 希里 is absorbed by ANY known
+    longer name like 冒牌希里, even one absent from this article's lock) plus this
+    lock's own CN / variant phrases. Stops a short official CN from falsely
+    matching inside a different, longer known name (false positive -> false pass).
+    """
+    suppress: set[str] = set()
+    try:
+        ta = get_term_authority()
+        suppress.update(cn.lower() for cn in ta._cn_entries)
+    except Exception:
+        pass
+    for info in lock.get("terms", {}).values():
+        cn = info.get("cn", "")
+        if cn:
+            for v in cn.split("/"):
+                v = v.strip()
+                if v:
+                    suppress.add(v.lower())
+        for var in info.get("variants", []):
+            vcn = var.get("cn", "")
+            if vcn:
+                suppress.add(vcn.lower())
+    return suppress
+
+
 def enforce_terms(translated_path: Path, lock: dict) -> dict:
-    """Check translated text against the lock table.
+    """Check translated text against the lock table (direction-aware).
+
+    EN->CN (encn): each locked term's official Chinese must appear in the Chinese
+    translation; an English/abbrev/alias left behind is untranslated; neither is
+    missing-or-literal.
+
+    CN->EN (cnen): the mirror — each locked term's official English must appear in
+    the English translation; the Chinese source form left behind is untranslated;
+    neither is missing-or-literal. A collision (one Chinese name -> several
+    English cards) passes when ANY candidate English is present.
+
+    Direction is taken from the lock's ``direction`` field (set by context_lock
+    build_lock) and falls back to detect_direction on the translation.
 
     Returns:
         dict with violation_count, violations, pass_count, locked_terms_checked.
     """
     translation = translated_path.read_text(encoding="utf-8")
+    direction = lock.get("direction") or detect_direction(translation)
+    is_cnen = direction == "cnen"
     violations: list[dict] = []
     passed = 0
     checked = 0
@@ -129,6 +211,8 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
     # disambiguated only when a locked phrase containing it appears in the
     # translation (see _locked_phrase_disambiguates).
     locked_cn_phrases = extract_cn_variants(lock)
+    # Known CJK names used to absorb false-positive substring matches.
+    suppress = _build_cjk_suppress(lock)
 
     for term, info in lock.get("terms", {}).items():
         status = info.get("status", "pending")
@@ -136,26 +220,83 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
 
         if status == "ambiguous" and variants:
             checked += 1
-            variant_cns = [v["cn"] for v in variants if v.get("cn")]
-            found = any(vcn in translation for vcn in variant_cns)
-            if found or _locked_phrase_disambiguates(variant_cns, locked_cn_phrases, translation):
+            if is_cnen:
+                # Collision: one Chinese name -> several official English cards.
+                # Any candidate English present in the (English) translation passes.
+                candidate_ens = [v["en"] for v in variants if v.get("en")]
+                found = count_occurrences(translation, candidate_ens) > 0
+                expected = " / ".join(candidate_ens)
+            else:
+                variant_cns = [v["cn"] for v in variants if v.get("cn")]
+                found = any(vcn in translation for vcn in variant_cns) or \
+                    _locked_phrase_disambiguates(variant_cns, locked_cn_phrases, translation)
+                expected = " / ".join(variant_cns)
+            if found:
                 passed += 1
             else:
-                expected = " / ".join(variant_cns)
-                violations.append({
+                v = {
                     "term": term,
                     "canonical_en": info.get("canonical_en", term),
-                    "expected_cn": expected,
+                    "expected_cn": "" if is_cnen else expected,
                     "found_in_translation": "",
                     "issue_type": "ambiguous_not_disambiguated",
                     "context": get_context_snippet(translation, term),
                     "severity": "error",
-                })
+                }
+                if is_cnen:
+                    v["expected_en"] = expected
+                violations.append(v)
             continue
 
         if status not in ("confirmed", "auto_locked"):
             continue
 
+        if is_cnen:
+            canonical_en = info.get("canonical_en", "")
+            if not canonical_en:
+                continue
+            checked += 1
+            cn_source = info.get("cn", "") or term
+            en_targets = [canonical_en]
+            for alias in info.get("aliases", []):
+                en_targets.append(alias.strip())
+            for abbrev in info.get("abbrevs", []):
+                en_targets.append(abbrev.strip())
+            en_in_translation = count_occurrences(translation, en_targets)
+            cn_in_translation = (
+                count_occurrences(translation, [cn_source], cjk_suppress=suppress)
+                if cn_source else 0
+            )
+            if en_in_translation > 0:
+                passed += 1
+            elif cn_in_translation > 0:
+                # Chinese source form left in the English output — untranslated.
+                violations.append({
+                    "term": term,
+                    "canonical_en": canonical_en,
+                    "expected_cn": "",
+                    "expected_en": canonical_en,
+                    "found_in_translation": cn_source,
+                    "issue_type": "term_left_untranslated",
+                    "context": get_context_snippet(translation, cn_source),
+                    "severity": "error",
+                })
+            else:
+                # Neither official English nor the CN source form appears — the
+                # term may be missing or rendered with an unrecognized phrase.
+                violations.append({
+                    "term": term,
+                    "canonical_en": canonical_en,
+                    "expected_cn": "",
+                    "expected_en": canonical_en,
+                    "found_in_translation": "",
+                    "issue_type": "term_missing_or_literal",
+                    "context": get_context_snippet(translation, canonical_en),
+                    "severity": "warning",
+                })
+            continue
+
+        # --- EN->CN (existing) ---
         cn_term = info.get("cn", "")
         if not cn_term:
             continue
@@ -172,7 +313,7 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
             en_targets.append(alias.strip())
 
         en_in_translation = count_occurrences(translation, en_targets)
-        cn_in_translation = count_occurrences(translation, cn_variants)
+        cn_in_translation = count_occurrences(translation, cn_variants, cjk_suppress=suppress)
 
         if cn_in_translation > 0:
             passed += 1
@@ -184,7 +325,7 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
                 "expected_cn": cn_term,
                 "found_in_translation": ", ".join(
                     t for t in en_targets
-                    if count_occurrences(translation, [t]) > 0
+                    if count_occurrences(translation, [t], cjk_suppress=suppress) > 0
                 ) or "(english term)",
                 "issue_type": "term_left_untranslated",
                 "context": get_context_snippet(translation, term),
@@ -208,6 +349,7 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
         "violations": violations,
         "pass_count": passed,
         "locked_terms_checked": checked,
+        "direction": direction,
     }
 
 
@@ -263,7 +405,8 @@ def main():
         print("-" * 60)
         for v in result["violations"]:
             print(f"- {v['term']} ({v['issue_type']})")
-            print(f"  Expected: 「{v['expected_cn']}」")
+            expected = v.get("expected_en") or v.get("expected_cn", "")
+            print(f"  Expected: 「{expected}」")
             if v["found_in_translation"]:
                 print(f"  Found:    「{v['found_in_translation']}」")
             if v.get("context"):
