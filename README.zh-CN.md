@@ -102,7 +102,8 @@ gwent-translation-style/
 ├── agent.json               # 机器可读命令清单
 ├── install.sh               # 一行安装器
 ├── references/              # 20 个 reference 文件
-│   ├── card_names.md            # 卡牌名（官方 EN<->CN）
+│   ├── card_overrides.md       # 卡牌别名/修正（人工维护，committed）
+│   ├── card_names_4lang.json   # 卡牌名 EN<->CN（构建期生成，gitignored）
 │   ├── terminology_map.md       # EN->CN 术语
 │   ├── reverse_terminology_map.md  # CN->EN 术语
 │   ├── keywords_map.md          # 关键词翻译

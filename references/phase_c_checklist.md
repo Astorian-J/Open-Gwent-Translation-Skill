@@ -21,7 +21,7 @@ Manual rules are surfaced as warnings that a human must confirm.
 | encn-02 | "X for Y" has correct order and no identical numbers | regex_forbidden | `(\d+)\s*人口\s*\1\s*点?\s*战力` | identical numbers: 「{match}」— may indicate reversed or duplicated X for Y | Also catches "5人口5战力" mistakes |
 | encn-03 | Passive voice converted to active | regex_forbidden | `(?:未被\|被解\|被削\|被增强\|被削弱\|被打出\|被移除)` | passive voice: convert "{match}" to active voice | Matches common passive indicators from correction_guide.md |
 | encn-04 | Arabic numerals throughout | regex_forbidden | `[一二三四五六七八九十]+点\|[一二三四五六七八九十]+人口` | Chinese numerals: 「{match}」— use Arabic numerals | Covers 五点, 十二人口, etc. Parser unescapes \| to regex alternation |
-| encn-05 | No English residue | reference | card_names.md | English residue: untranslated card name | Delegated to check_translation.py residue scanner |
+| encn-05 | No English residue | reference | card_names_4lang.json | English residue: untranslated card name | Delegated to check_translation.py residue scanner |
 | encn-06 | Ambiguous card names include full subtitle | reference | ambiguous_names.md | ambiguous name: specify full subtitle | Delegated to check_translation.py ambiguous-name scanner |
 | encn-07 | Abbreviations expanded on first use | manual | competitive_terms.md | abbreviation used — confirm it is expanded on first use | Requires semantic/contextual judgment |
 | encn-08 | Chinese parentheses used, not English () | regex_forbidden | `\([^）]*\)` | English parentheses: 「{match}」— use Chinese brackets 「（）」 | English parens in Chinese text |
@@ -36,7 +36,7 @@ Manual rules are surfaced as warnings that a human must confirm.
 |----|-------------|------------|---------------------|---------------|-------|
 | cnen-01 | "人口" translated as "provision" (formal) | regex_forbidden | `人口` | Chinese residue: "人口" should be "provision" (or "cost" only for SY Tribute) | Exception for SY Tribute cost is not machine-distinguishable |
 | cnen-02 | "Y人口X战力" translated as "X for Y" | manual | — | X for Y format — verify correct order and no Chinese residue | Requires source-aware verification |
-| cnen-03 | No Chinese residue: all Chinese card names translated | reference | card_names.md (reverse) | Chinese residue: untranslated Chinese card name | Reverse lookup of card_names.md |
+| cnen-03 | No Chinese residue: all Chinese card names translated | reference | card_names_4lang.json (reverse) | Chinese residue: untranslated Chinese card name | Reverse lookup of card_names_4lang.json |
 | cnen-04 | English parentheses () used, not Chinese 「（）」 | regex_forbidden | `[（）]` | Chinese parentheses: 「{match}」— use English parentheses () | Chinese brackets in English text |
 | cnen-05 | English colon ":" in card names | regex_forbidden | `[一-鿿]：` | Chinese colon in card name: 「{match}」— use English colon ":" | e.g. "Geralt：Igni" |
 | cnen-06 | Community slang preserved | manual | competitive_terms.md | community slang — verify English slang equivalents are preserved | Quality check; see quick reference table |
@@ -50,7 +50,7 @@ Manual rules are surfaced as warnings that a human must confirm.
 - **regex_forbidden**: Pattern must NOT appear in the translated text.
 - **regex_required**: Pattern MUST appear at least once in the translated text.
 - **regex**: Pattern is used to validate/confirm a format (informational or conditional).
-- **reference**: Requires cross-referencing another reference file (card_names.md, ambiguous_names.md, etc.).
+- **reference**: Requires cross-referencing another reference file (card_names_4lang.json, ambiguous_names.md, etc.).
 - **manual**: Cannot be machine-verified; surfaced as a warning for human confirmation.
 
 ## Validation

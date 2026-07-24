@@ -386,7 +386,7 @@ The following scripts also support `--json` and can be used independently:
 All translation rules and data live in `references/`:
 
 - `phase_c_checklist.md` — Machine-checkable Phase C rules.
-- `card_names.md` — Verified English↔Chinese card name mappings.
+- `card_names_4lang.json` — Verified English↔Chinese card name mappings (build-time generated; see `card_overrides.md` for hand-maintained aliases/renamed).
 - `terminology_map.md` — Core concept translations.
 - `keywords_map.md` — Game keyword translations.
 - `competitive_terms.md` — Community slang and deck names.

@@ -106,7 +106,8 @@ gwent-translation-style/
 ├── agent.json               # Machine-readable command manifest
 ├── install.sh               # One-line installer
 ├── references/              # 20 reference files
-│   ├── card_names.md            # Card names (official EN<->CN)
+│   ├── card_overrides.md       # Hand-maintained card aliases / renamed (committed)
+│   ├── card_names_4lang.json   # Card names EN<->CN (build-time, gitignored)
 │   ├── terminology_map.md       # EN->CN terminology
 │   ├── reverse_terminology_map.md  # CN->EN terminology
 │   ├── keywords_map.md          # Keyword translations

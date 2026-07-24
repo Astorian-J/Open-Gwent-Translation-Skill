@@ -51,7 +51,7 @@ Systematic error patterns. Check this list before finalizing any translation.
 | Medium | 夜宴 | 女巫夜宴 |
 | Medium | 怀柔 (as Tactical Decision) | 战术决策 |
 
-**Rule**: Check card_names.md "Renamed / Corrected" section for outdated names.
+**Rule**: Check card_overrides.md "Renamed / Corrected" section for outdated names.
 
 ### Trap 2.3: Leader name confusion
 
@@ -185,7 +185,7 @@ Before delivering translation, verify:
 
 - [ ] No "费/费用" in formal provision contexts
 - [ ] "X for Y" translated as "Y人口X战力" (numbers not identical)
-- [ ] Card names match card_names.md confirmed section
+- [ ] Card names match card_names_4lang.json (official card names)
 - [ ] Ambiguous card names include full subtitle
 - [ ] Passive voice converted to active
 - [ ] Arabic numerals throughout

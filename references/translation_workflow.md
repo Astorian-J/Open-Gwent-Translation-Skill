@@ -35,7 +35,7 @@ Read direction-specific references first:
 2. `references/style_reference.md` — Style examples and proven patterns
 3. `references/terminology_map.md` — Term lookup table (EN → CN)
 4. `references/keywords_map.md` — Game keyword translations
-5. `references/card_names.md` — Card name mappings
+5. `references/card_names_4lang.json` — Card name mappings (EN↔CN; build-time generated, not in git)
 6. `references/ambiguous_names.md` — Cards with multiple versions
 7. `references/competitive_terms.md` — Competitive/community slang
 8. `references/common_pitfalls.md` — Systematic error patterns
@@ -46,7 +46,7 @@ Read direction-specific references first:
 **For CN → EN**: Load these references
 1. `references/reverse_terminology_map.md` — Reverse term lookup (CN → EN)
 2. `references/cn_fuzzy_fixes.md` — Chinese fuzzy word fixes (typos, homophones, deck abbreviations)
-3. `references/card_names.md` — Card name mappings (Chinese name → English)
+3. `references/card_names_4lang.json` — Card name mappings (Chinese name → English; build-time generated)
 4. `references/keywords_map.md` — Game keyword translations (CN → EN)
 5. `references/competitive_terms.md` — Community slang (CN → EN)
 6. `references/version_map.md` — Expansion timeline
@@ -140,7 +140,7 @@ our reference database:
    - Game keywords not in keywords_map.md
 
 2. **Check against existing references**:
-   - Search terminology_map.md, card_names.md, keywords_map.md, competitive_terms.md
+   - Search terminology_map.md, card_names_4lang.json, keywords_map.md, competitive_terms.md
    - If the term is already covered, skip
    - If the term is new, note it
 
