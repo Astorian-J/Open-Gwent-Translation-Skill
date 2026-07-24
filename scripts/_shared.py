@@ -176,6 +176,126 @@ def is_likely_common_word(word: str) -> bool:
         return True
     return bool(_SKIP_COMPARATIVE_RE.match(word))
 
+
+# --- Aggressive card-variant matching -------------------------------------
+# Catch-all layer for source-text card-name VARIANTS the strict regex
+# extractors miss: "Double-Bladed Dagur" -> Dagur Two Blades (reverse
+# containment), "Geraltt of Rivia" -> Geralt of Rivia (edit distance),
+# "Schirru" -> Schirrú (accent-insensitive). Applied AFTER the strict
+# extractors in get_all_for_text so exact matches keep their fast path.
+
+CARD_VARIANT_MIN_TOKEN = 4   # reverse-containment: source-token min length (chars)
+CARD_FUZZY_MAX_EDIT = 2      # normalized Levenshtein threshold for a fuzzy match
+CARD_FUZZY_MIN_TOKEN = 5     # edit-distance source-token min length (short = noisy)
+
+# Common English nouns/adjectives that complete exactly one card name and so
+# would be false-positive reverse-containment hits (Baron->Bloody Baron,
+# Rain->Torrential Rain, Justice->Novigradian Justice). Proper card nouns
+# (Donimir, Erland, Froth, Dagur) are NOT here. Grows as new collisions surface.
+CARD_VARIANT_COMMON_WORDS: frozenset[str] = frozenset({
+    "aristocrats", "baron", "books", "boost", "cache", "cave", "combat",
+    "compass", "covenant", "decision", "dormant", "formation", "gale",
+    "gift", "glory", "golem", "jackal", "justice", "lady", "larva",
+    "lined", "muscle", "poet", "rain", "scroll", "season", "seductress",
+    "senior", "sentinel", "shadows", "stations", "steel", "sunset",
+    "tainted", "thug", "wanderers", "zeal",
+    # common fantasy/game nouns that also complete card names
+    "blood", "fire", "storm", "gold", "wind", "death", "dream", "vision",
+    "curse", "blessing", "rite", "ritual", "oath", "vow", "tome", "blade",
+    "spear", "helm", "gem", "bone", "ash", "mist", "frost", "flame",
+    "tomb", "tower", "gate", "bridge", "master", "guard", "warrior",
+    "soldier", "hunter", "scout", "priest", "beast", "dragon", "wolf",
+    "bear", "tree", "stone", "silver",
+})
+
+# Single capitalized token (Latin accents / apostrophes / hyphens OK).
+_VARIANT_TOKEN_RE = re.compile(r"[A-Z][A-Za-zÀ-ÿ'’\-]*")
+
+
+def _fold_ascii(s: str) -> str:
+    """Lowercase + NFKD accent-fold + drop non-alphanumerics.
+
+    Accent/typo-insensitive comparison key: "Schirrú" and "Schirru" both fold to
+    "schirru"; "Geralt of Rivia" folds to "geraltofrivia".
+    """
+    import unicodedata
+    s = unicodedata.normalize("NFKD", s).lower()
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
+def _edit_distance(a: str, b: str) -> int:
+    """Levenshtein edit distance (pure stdlib, two-row DP)."""
+    if a == b:
+        return 0
+    if len(a) < len(b):
+        a, b = b, a
+    lb = len(b)
+    prev = list(range(lb + 1))
+    for i, ca in enumerate(a, start=1):
+        cur = [i] + [0] * lb
+        for j in range(1, lb + 1):
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1,
+                         prev[j - 1] + (0 if ca == b[j - 1] else 1))
+        prev = cur
+    return prev[lb]
+
+
+_card_variant_index_cache: dict[str, dict] = {}
+
+
+def _card_variant_index(ref_dir: "Path | str") -> dict:
+    """Build + cache a folded card-name lookup index for aggressive matching.
+
+      norm_to_display: folded-name -> canonical EN display (accent-insensitive exact)
+      word_to_norms:   folded single word -> set of folded canonical names
+                       (reverse-containment: source token ⊂ canonical name)
+      by_len:          folded-length -> list of folded canonical names
+                       (length-windowed edit distance)
+    Cards-only (from get_card_names_index) so common terms never participate.
+    """
+    key = str(ref_dir)
+    cached = _card_variant_index_cache.get(key)
+    if cached is not None:
+        return cached
+    en_index = get_card_names_index(ref_dir)  # en_lower -> (display_en, cn)
+    norm_to_display: dict[str, str] = {}
+    word_to_norms: dict[str, set[str]] = {}
+    by_len: dict[int, list[str]] = {}
+    for display in (v[0] for v in en_index.values()):
+        n = _fold_ascii(display)
+        if not n:
+            continue
+        norm_to_display.setdefault(n, display)
+        by_len.setdefault(len(n), []).append(n)
+        # Split the display name into words BEFORE folding (folding drops the
+        # spaces, which would fuse multi-word names into one blob) so each word
+        # keys reverse-containment (Dagur -> Dagur Two Blades).
+        for w in re.split(r"[\s\-:;,/'’]+", display.lower()):
+            fw = _fold_ascii(w)
+            if fw:
+                word_to_norms.setdefault(fw, set()).add(n)
+    idx = {"norm_to_display": norm_to_display,
+           "word_to_norms": word_to_norms,
+           "by_len": by_len}
+    _card_variant_index_cache[key] = idx
+    return idx
+
+
+def _best_fuzzy(norm: str, by_len: dict[int, list[str]]) -> str | None:
+    """Return the folded canonical name within CARD_FUZZY_MAX_EDIT of `norm`
+    (min distance; None if none qualifies). Length-windowed to bound the scan."""
+    L = len(norm)
+    best_d = CARD_FUZZY_MAX_EDIT + 1
+    best: str | None = None
+    for cl in range(max(1, L - CARD_FUZZY_MAX_EDIT), L + CARD_FUZZY_MAX_EDIT + 1):
+        for cand in by_len.get(cl, ()):
+            if cand == norm:
+                continue
+            d = _edit_distance(norm, cand)
+            if d < best_d:
+                best_d, best = d, cand
+    return best
+
 # Minimal abbreviations skip set (used by context_lock.py and diff_review.py).
 SKIP_ABBREVS_MINIMAL: frozenset[str] = frozenset({
     "THE", "AND", "FOR", "ARE", "BUT", "NOT", "YOU", "ALL", "ANY",
@@ -594,83 +714,90 @@ class TermAuthority:
     # -- reference loaders --
 
     def _load_card_names(self) -> None:
-        path = self.ref_dir / "card_names.md"
-        if not path.exists():
-            return
+        # Main card data: the build-time 4-language table (card_names_4lang.json,
+        # generated by build_card_names_reference.py from the official gwent.one
+        # mirror). Supersedes the old hand-maintained card_names.md main table
+        # (~1260 cards) with the full official set (1381 cards). EN drives
+        # registration; CN is attached so resolve() can look up either direction.
+        path = self.ref_dir / "card_names_4lang.json"
+        if path.exists():
+            import json
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (ValueError, OSError):
+                data = {}
+            for rec in data.values():
+                en = (rec.get("en") or "").strip()
+                cn = (rec.get("cn") or "").strip()
+                if en and cn:
+                    self._register(en, cn, "card_names_4lang.json", "card")
 
-        text = path.read_text(encoding="utf-8")
-        rows = parse_markdown_table(text, min_columns=3)
+        # Manual overrides (aliases / renamed / direct EN->CN). Applied AFTER the
+        # 4lang table so leader-alias canonicals are already registered; direct
+        # Overrides force-win over the 4lang CN.
+        self._load_card_overrides()
 
-        # Verified cards and leaders share similar schemas.
-        for row in rows:
-            en = row.get("english", "").strip()
-            cn = row.get("chinese", "").strip()
-            if not en or not cn or en.lower() == "english":
-                continue
-            self._register(en, cn, "card_names.md", "card")
+    def _load_card_overrides(self) -> None:
+        """Load hand-maintained card overrides from card_overrides.md.
 
-        # Leader aliases: Alias | Maps To | Notes
-        # We map alias -> canonical EN, then copy canonical's CN.
-        in_aliases = False
-        for line in text.split("\n"):
-            line = line.strip()
-            if line.startswith("## Leader Aliases"):
-                in_aliases = True
-                continue
-            if in_aliases and line.startswith("## "):
-                break
-            if not in_aliases:
-                continue
-            if not line.startswith("|") or "---" in line or "Alias" in line:
-                continue
-            parts = [p.strip() for p in line.split("|")]
-            # Remove leading/trailing empty slots introduced by outer pipes.
-            if parts and not parts[0]:
-                parts = parts[1:]
-            if parts and not parts[-1]:
-                parts = parts[:-1]
-            if len(parts) < 3:
-                continue
-            alias, maps_to = parts[0], parts[1]
-            if not alias or not maps_to:
-                continue
-            maps_to_lower = maps_to.lower()
-            if maps_to_lower in self._entries:
-                entry = self._entries[maps_to_lower]
+        Three section types (manual override wins over the 4lang table on
+        conflict):
+          ## Overrides        (English | Chinese | Notes)   direct EN->CN, force-win
+          ## Leader Aliases   (Alias | Maps To | Notes)     EN alias -> canonical EN
+          ## Renamed/Corrected (Skill原版 | 修正后 | 说明)   CN wrong -> correct
+
+        Parsed via the shared module-level _parse_card_overrides so this resolver
+        and the card-index helpers (get_card_names_index etc.) cannot drift apart.
+        """
+        parsed = _parse_card_overrides(self.ref_dir / "card_overrides.md")
+
+        # Direct EN->CN overrides: force-win over the 4lang registration.
+        for en, cn in parsed["overrides"]:
+            self._force_card_override(en, cn)
+
+        # Leader aliases: alias resolves to the canonical card (already registered
+        # from the 4lang table). Copy the canonical's CN so the alias locks to it.
+        for alias, maps_to in parsed["aliases"]:
+            canonical = self._entries.get(maps_to.strip().lower())
+            if canonical:
                 self._register(
-                    maps_to,
-                    entry["cn"],
-                    "card_names.md",
-                    "leader_alias",
-                    aliases=[alias],
+                    canonical["canonical_en"], canonical["cn"],
+                    "card_overrides.md", "leader_alias", aliases=[alias],
                 )
             else:
-                # Alias points to an EN not in the verified list; register alias as EN.
-                self._register(alias, maps_to, "card_names.md", "leader_alias")
+                # Canonical not registered (e.g. 4lang table missing) — record the
+                # alias pointing at the EN literal so it is at least resolvable.
+                self._register(alias, maps_to, "card_overrides.md", "leader_alias")
 
-        # Renamed / Corrected: Skill原版 | 修正后 | 说明
-        in_renamed = False
-        for line in text.split("\n"):
-            line = line.strip()
-            if "Renamed / Corrected" in line:
-                in_renamed = True
-                continue
-            if in_renamed and line.startswith("## "):
-                break
-            if not in_renamed:
-                continue
-            if not line.startswith("|") or "---" in line or "Skill原版" in line:
-                continue
-            parts = [p.strip() for p in line.split("|")]
-            # Remove leading/trailing empty slots introduced by outer pipes.
-            if parts and not parts[0]:
-                parts = parts[1:]
-            if parts and not parts[-1]:
-                parts = parts[:-1]
-            if len(parts) < 3:
-                continue
-            wrong, correct = parts[0], parts[1]
+        # CN corrections (wrong -> correct): soft alias layer, additive.
+        for wrong, correct in parsed["renamed"].items():
             self._add_cn_correction(wrong, correct)
+
+    def _force_card_override(self, en: str, cn: str) -> None:
+        """Register an EN->CN card mapping that WINS over an existing entry.
+
+        Unlike _register (first-wins), this overwrites the CN of an existing card
+        so a manual override in card_overrides.md takes precedence over the
+        generated 4lang table. Also fixes the reverse (_cn_entries) index.
+        """
+        en = en.strip()
+        cn = cn.strip()
+        if not en or not cn:
+            return
+        en_lower = en.lower()
+        entry = self._entries.get(en_lower)
+        if entry is None:
+            self._register(en, cn, "card_overrides.md", "card")
+            return
+        old_cn = entry.get("cn", "")
+        if old_cn and old_cn != cn:
+            # Drop the stale reverse mapping so resolve(cn) cannot double-resolve.
+            if self._cn_entries.get(old_cn) is entry:
+                del self._cn_entries[old_cn]
+        entry["cn"] = cn
+        entry["source"] = "card_overrides.md"
+        if cn not in self._cn_entries:
+            self._cn_entries[cn] = entry
 
     def _load_terminology_map(self) -> None:
         path = self.ref_dir / "terminology_map.md"
@@ -1040,6 +1167,104 @@ class TermAuthority:
             return None
         return self._effects.get(en_name.strip().lower())
 
+    def _aggressive_card_matches(
+        self, text: str, unresolved: list[str] | None = None,
+    ) -> list[tuple[str, str]]:
+        """Aggressive deterministic matching for card-name VARIANTS the strict
+        regex extractors miss. Returns list of (canonical_en_display, variant)
+        pairs for get_all_for_text to resolve exactly and lock.
+
+        Order: accent-insensitive exact -> reverse containment -> edit distance.
+        All paths guarded against common-word false positives (token ≥
+        CARD_VARIANT_MIN_TOKEN, Capitalized/ALLCAPS, not is_likely_common_word).
+
+          text:       source text (scanned for single capitalized words)
+          unresolved: candidates the strict extractors produced but resolve()
+                      rejected (phrases like "Geraltt of Rivia"); fed to edit
+                      distance so the robust phrase extractor is reused.
+        """
+        idx = _card_variant_index(self.ref_dir)
+        norm_to_display = idx["norm_to_display"]
+        word_to_norms = idx["word_to_norms"]
+        by_len = idx["by_len"]
+
+        # Words that appear in LOWERCASE in the text. A proper-noun card name
+        # (Donimir, Erland, Froth) is always capitalized; a common English word
+        # that only coincidentally completes one card name (baron, rain, season)
+        # virtually also appears lowercase in prose. Used to keep reverse
+        # containment from locking generic words.
+        lowercase_words = {_fold_ascii(w) for w in re.findall(r"\b[a-z][a-z]+\b", text)}
+
+        results: list[tuple[str, str]] = []
+        seen_canon: set[str] = set()
+
+        def _emit(norm_canon: str, variant: str) -> None:
+            display = norm_to_display.get(norm_canon)
+            if display and norm_canon not in seen_canon:
+                seen_canon.add(norm_canon)
+                results.append((display, variant))
+
+        def _word_ok(span: str) -> bool:
+            if len(_fold_ascii(span)) < CARD_VARIANT_MIN_TOKEN:
+                return False
+            return not (is_likely_common_word(span) or is_likely_common_word(span.title()))
+
+        # 1. Single capitalized words from the text.
+        for span in {m.group(0) for m in _VARIANT_TOKEN_RE.finditer(text)}:
+            norm = _fold_ascii(span)
+            if not norm or len(norm) < CARD_VARIANT_MIN_TOKEN:
+                continue
+            # (a) accent-insensitive exact (Schirru -> Schirrú).
+            if norm in norm_to_display:
+                _emit(norm, span)
+                continue
+            # (b) reverse containment (Dagur -> Dagur Two Blades, Froth -> Golden
+            #     Froth) — ONLY when unambiguous: the token must be a whole word
+            #     of EXACTLY ONE longer canonical name, and not a faction or common
+            #     word. Ambiguous fragments (Knight, Brokvar, Arachas) and factions
+            #     (Skellige) are left to the strict extractor, which catches the
+            #     full names (Redanian Knight, Brokvar Warrior ...) they belong to.
+            sl = span.lower()
+            if (sl not in self._factions
+                    and norm not in lowercase_words
+                    and norm not in CARD_VARIANT_COMMON_WORDS
+                    and not is_likely_common_word(span)
+                    and not is_likely_common_word(span.title())):
+                longer = [c for c in word_to_norms.get(norm, ())
+                          if len(c) > len(norm)]
+                if len(longer) == 1:
+                    _emit(longer[0], span)
+                    continue
+            # (c) edit distance for single words (Geraltt -> Geralt) — the risky
+            #     step, so guard against common words (blacklist + comparative).
+            if len(norm) >= CARD_FUZZY_MIN_TOKEN and _word_ok(span):
+                best = _best_fuzzy(norm, by_len)
+                if best:
+                    _emit(best, span)
+
+        # 2. Unresolved candidates (phrases) -> accent-exact or edit distance.
+        for cand in unresolved or ():
+            s = cand.strip()
+            if not s:
+                continue
+            first = s.split()[0] if s.split() else s
+            # Blacklist-only guard (NOT the comparative regex): the -er/-est rule
+            # would wrongly drop real card names ending in -er (Yennefer), so
+            # phrases rely on the curated SKIP_WORDS_FULL list to drop pure prose.
+            if first in SKIP_WORDS_FULL or first.title() in SKIP_WORDS_FULL:
+                continue
+            norm = _fold_ascii(s)
+            if len(norm) < CARD_FUZZY_MIN_TOKEN:
+                continue
+            if norm in norm_to_display:
+                _emit(norm, s)
+                continue
+            best = _best_fuzzy(norm, by_len)
+            if best:
+                _emit(best, s)
+
+        return results
+
     def get_all_for_text(self, text: str) -> list[dict]:
         """Extract and resolve all known terms from a source text."""
         candidates: set[str] = set()
@@ -1081,15 +1306,32 @@ class TermAuthority:
 
         results: list[dict] = []
         seen: set[tuple[str, str]] = set()
+        unresolved: list[str] = []
         for cand in candidates:
             resolved = self.resolve(cand)
             if not resolved:
+                unresolved.append(cand)
                 continue
             seen_key = (resolved["canonical_en"].lower(), resolved["cn"])
             if seen_key in seen:
                 continue
             seen.add(seen_key)
             results.append({"term": cand, **resolved})
+
+        # Aggressive catch-all for VARIANTS the strict extractors/resolve missed
+        # (reverse containment + edit distance, e.g. Double-Bladed Dagur,
+        # Froth, Schirru, Geraltt of Rivia). Each hit resolves to the canonical
+        # card and locks its official CN via the same mechanism above; the source
+        # variant is recorded as the matched term.
+        for canonical_en, variant in self._aggressive_card_matches(text, unresolved):
+            resolved = self.resolve(canonical_en)
+            if not resolved:
+                continue
+            seen_key = (resolved["canonical_en"].lower(), resolved["cn"])
+            if seen_key in seen:
+                continue
+            seen.add(seen_key)
+            results.append({"term": variant, **resolved})
 
         return results
 
@@ -1130,3 +1372,153 @@ def get_term_authority(ref_dir: "Path | str | None" = None) -> TermAuthority:
     if key not in _term_authority_cache:
         _term_authority_cache[key] = TermAuthority(ref_dir)
     return _term_authority_cache[key]
+
+
+# --- Card-name indices for the residue scanners / card-reference extractors ---
+#
+# TermAuthority above is the resolution/locking layer. The terminology checker's
+# residue scanner (check_english_residue / load_chinese_card_names), the pipeline's
+# card-reference extractor (build_card_lookup_table), and learn.py each used to
+# parse card_names.md directly. Those readers need a CARDS-ONLY map — not the mixed
+# term+keyword+card _entries of TermAuthority, which would false-positive on common
+# words like 'leader'/'mage'. These helpers build that cards-only map from the new
+# 4lang table + card_overrides.md, keeping the scanners' behavior identical while
+# switching the data source. Shared _parse_card_overrides keeps this and
+# TermAuthority._load_card_overrides from drifting apart.
+
+_card_data_cache: dict[str, dict] = {}
+
+
+def _parse_card_overrides(path: "Path | str") -> dict:
+    """Parse card_overrides.md into {overrides, aliases, renamed}.
+
+    Section-aware (walks ## headers) so the three table schemas do not collide.
+      overrides: list[(en, cn)]   direct EN->CN (force-win)
+      aliases:   list[(alias, maps_to_en)]
+      renamed:   dict[wrong_cn -> correct_cn]
+    """
+    overrides: list[tuple[str, str]] = []
+    aliases: list[tuple[str, str]] = []
+    renamed: dict[str, str] = {}
+
+    path = Path(path)
+    if not path.exists():
+        return {"overrides": overrides, "aliases": aliases, "renamed": renamed}
+    text = path.read_text(encoding="utf-8")
+
+    section: str | None = None
+    for line in text.split("\n"):
+        s = line.strip()
+        if s.startswith("## "):
+            low = s.lower()
+            # "Overrides" must not match "Leader Aliases" — guard the word.
+            if low.startswith("## override"):
+                section = "overrides"
+            elif "leader alias" in low or low.startswith("## alias"):
+                section = "aliases"
+            elif "renamed" in low or "corrected" in low:
+                section = "renamed"
+            else:
+                section = None
+            continue
+        if section is None or not s.startswith("|") or "---" in s:
+            continue
+        parts = [p.strip() for p in s.split("|")]
+        if parts and not parts[0]:
+            parts = parts[1:]
+        if parts and not parts[-1]:
+            parts = parts[:-1]
+        if len(parts) < 2:
+            continue
+        a, b = parts[0], parts[1]
+        if section == "overrides":
+            if a and b and a.lower() != "english":
+                overrides.append((a, b))
+        elif section == "aliases":
+            if a and b and a.lower() != "alias":
+                aliases.append((a, b))
+        elif section == "renamed":
+            if a and b and a != "Skill原版" and a.lower() != "wrong":
+                renamed[a] = b
+    return {"overrides": overrides, "aliases": aliases, "renamed": renamed}
+
+
+def _load_card_data(ref_dir: "Path | str") -> dict:
+    """Build + cache the cards-only name indices for a references directory.
+
+    Returns {en_index, cn_index, corrections}:
+      en_index:    en_lower -> (en, cn)   (EN-residue + card-reference extract)
+      cn_index:    cn -> en              (CN-residue scanning)
+      corrections: wrong_cn -> correct_cn (Renamed/Corrected section)
+    Cards come from card_names_4lang.json; manual overrides (leader aliases,
+    direct EN->CN) are applied on top with override-wins priority.
+    """
+    ref_dir = Path(ref_dir)
+    key = str(ref_dir)
+    if key in _card_data_cache:
+        return _card_data_cache[key]
+
+    en_index: dict[str, tuple[str, str]] = {}
+    cn_index: dict[str, str] = {}
+
+    path = ref_dir / "card_names_4lang.json"
+    if path.exists():
+        import json
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            data = {}
+        for rec in data.values():
+            en = (rec.get("en") or "").strip()
+            cn = (rec.get("cn") or "").strip()
+            if en and cn:
+                en_index.setdefault(en.lower(), (en, cn))
+                cn_index.setdefault(cn, en)
+
+    parsed = _parse_card_overrides(ref_dir / "card_overrides.md")
+    # Direct EN->CN overrides: force-win.
+    for en, cn in parsed["overrides"]:
+        en_index[en.lower()] = (en, cn)
+        cn_index[cn] = en
+    # Leader aliases: alias -> canonical's CN (canonical from the 4lang table).
+    for alias, maps_to in parsed["aliases"]:
+        canon = en_index.get(maps_to.lower())
+        if canon:
+            en_index[alias.lower()] = (alias, canon[1])
+        else:
+            en_index[alias.lower()] = (alias, maps_to)
+
+    result = {
+        "en_index": en_index,
+        "cn_index": cn_index,
+        "corrections": parsed["renamed"],
+    }
+    _card_data_cache[key] = result
+    return result
+
+
+def get_card_names_index(ref_dir: "Path | str | None" = None) -> dict[str, tuple[str, str]]:
+    """Cards-only EN->CN index (en_lower -> (en, cn)) from card_names_4lang.json +
+    card_overrides.md. Use for English-residue scanning and card-reference
+    extraction. Contains ONLY card names (no terminology/keywords) so common
+    words are not false-flagged as untranslated cards."""
+    if ref_dir is None:
+        ref_dir = Path(__file__).resolve().parent.parent / "references"
+    return _load_card_data(ref_dir)["en_index"]
+
+
+def get_card_names_cn_index(ref_dir: "Path | str | None" = None) -> dict[str, str]:
+    """Cards-only CN->EN index (cn -> en): the mirror of get_card_names_index
+    for scanning CN->EN translations for leftover Chinese card names."""
+    if ref_dir is None:
+        ref_dir = Path(__file__).resolve().parent.parent / "references"
+    return _load_card_data(ref_dir)["cn_index"]
+
+
+def get_card_name_corrections(ref_dir: "Path | str | None" = None) -> dict[str, str]:
+    """CN wrong->correct corrections (wrong_cn -> correct_cn) from the
+    Renamed/Corrected section of card_overrides.md."""
+    if ref_dir is None:
+        ref_dir = Path(__file__).resolve().parent.parent / "references"
+    return _load_card_data(ref_dir)["corrections"]
+

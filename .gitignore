@@ -8,3 +8,7 @@ samples/
 # effect_text.json：构建期产物（CDPR 官方卡牌能力文本，第三方版权，见 NOTICE）
 # 由 scripts/build_effect_reference.py 在安装时生成，不入库
 references/effect_text.json
+
+# card_names_4lang.json：构建期产物（CDPR 衍生卡牌名称表，4 语种，第三方版权，见 NOTICE）
+# 由 scripts/build_card_names_reference.py 在安装时生成，不入库
+references/card_names_4lang.json

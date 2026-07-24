@@ -27,6 +27,7 @@ from _shared import (
     extract_abbreviations,
     extract_capitalized_phrases,
     extract_card_names,
+    get_card_names_index,
     is_likely_common_word,
     json_output,
     parse_markdown_table,
@@ -73,20 +74,10 @@ def load_all_terms() -> dict[str, str]:
                 for part in abbr.split(";"):
                     _add_term(terms, part.strip(), cn)
 
-    # card_names.md — verified section only
-    card_file = _get_ref_path("card_names.md")
-    if card_file.exists():
-        text = card_file.read_text(encoding="utf-8")
-        # Slice from the verified header to the renamed/corrected header.
-        verified_start = text.find("## Verified")
-        renamed_start = text.find("## Renamed / Corrected")
-        if verified_start != -1:
-            end = renamed_start if renamed_start != -1 else len(text)
-            verified_text = text[verified_start:end]
-            for row in parse_markdown_table(verified_text, min_columns=2):
-                en = row.get("english", "")
-                cn = row.get("chinese", "")
-                _add_term(terms, en, cn)
+    # Card names — cards-only, from the 4lang table + card_overrides.md (via the
+    # shared helper). Supersedes the old card_names.md verified section.
+    for en, cn in get_card_names_index().values():
+        _add_term(terms, en, cn)
 
     return terms
 

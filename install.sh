@@ -63,6 +63,29 @@ else
     echo "WARNING: python3 not found; skipping effect_text.json build."
 fi
 
+# Build card_names_4lang.json (4-language card name table; NOT committed — see NOTICE).
+# This table is the FOUNDATION for the skill rebuild: every later extraction /
+# cross-check query reads it, so — unlike effect_text.json — it does NOT degrade.
+# A missing/truncated table would silently disable downstream checks (empty-table
+# silent-pass). Local mirror preferred; online --fetch fallback; hard-fail on both
+# so the install aborts loudly instead of shipping a broken skill.
+if command -v python3 >/dev/null 2>&1; then
+    echo "Building 4-language card name table (card_names_4lang.json)..."
+    if python3 "$SKILL_DIR/scripts/build_card_names_reference.py"; then
+        echo "card_names_4lang.json built (local mirror)."
+    elif python3 "$SKILL_DIR/scripts/build_card_names_reference.py" --fetch; then
+        echo "card_names_4lang.json built (api.gwent.one online)."
+    else
+        echo "ERROR: card_names_4lang.json 构建失败（本地镜像 + 在线拉取均失败）。" >&2
+        echo "       这是 skill 地基表，缺失会导致后续提取/核对静默漏检，故安装中止。" >&2
+        echo "       请设置 GWENT_CARD_DB 指向本地镜像，或稍后重试 --fetch 后重新安装。" >&2
+        exit 1
+    fi
+else
+    echo "ERROR: python3 未找到；card_names_4lang.json 无法构建（skill 地基表，不可跳过）。" >&2
+    exit 1
+fi
+
 # Deploy lite skill (chat / short-content translation; reuses main skill's scripts)
 LITE_DIR="$(dirname "$SKILL_DIR")/gwent-translation-lite"
 if [ -f "$SKILL_DIR/lite/SKILL.md" ]; then

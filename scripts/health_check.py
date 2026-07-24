@@ -56,7 +56,7 @@ def check_reference_files(ref_dir: Path) -> list[tuple[str, str]]:
         ("terminology_map.md", "Terminology map"),
         ("reverse_terminology_map.md", "Reverse terminology map (CN→EN)"),
         ("keywords_map.md", "Keyword translations"),
-        ("card_names.md", "Card name mappings"),
+        ("card_overrides.md", "Card name overrides (aliases/renamed)"),
         ("ambiguous_names.md", "Ambiguous names"),
         ("competitive_terms.md", "Competitive terms"),
         ("common_pitfalls.md", "Common pitfalls"),
@@ -153,21 +153,18 @@ def check_data_integrity(ref_dir: Path) -> list[tuple[str, str]]:
     """Check data integrity in reference files."""
     results = []
 
-    # Check card_names.md has verified section
-    card_file = ref_dir / "card_names.md"
-    if card_file.exists():
-        text = card_file.read_text(encoding="utf-8")
-        verified_count = sum(
-            1 for line in text.split("\n")
-            if line.strip().startswith("|")
-            and "---" not in line
-            and "English" not in line
-            and len([p for p in line.split("|") if p.strip()]) >= 2
-        )
-        if "Verified" in text:
-            results.append(("PASS", f"card_names.md: Has verified section ({verified_count} entries)"))
-        else:
-            results.append(("WARN", "card_names.md: No verified section header"))
+    # Card name data is split: generated 4lang table (build-time) + hand overrides.
+    json4 = ref_dir / "card_names_4lang.json"
+    if json4.exists():
+        try:
+            import json
+            n = len(json.loads(json4.read_text(encoding="utf-8")))
+            results.append(("PASS", f"card_names_4lang.json: {n} 卡牌名（4 语种）"))
+        except Exception as exc:  # noqa: BLE001
+            results.append(("FAIL", f"card_names_4lang.json: 解析失败 ({exc})"))
+    else:
+        results.append(("WARN", "card_names_4lang.json: 未构建（运行 "
+                        "python3 scripts/build_card_names_reference.py 生成）"))
 
     # Check terminology_map.md has tables
     term_file = ref_dir / "terminology_map.md"
@@ -358,6 +355,82 @@ def check_effect_text(ref_dir: Path) -> list[tuple[str, str]]:
     return results
 
 
+def check_card_overrides_quality(ref_dir: Path) -> list[tuple[str, str]]:
+    """Data-quality checks for the hand-maintained card overrides.
+
+    Guards the two dirty points the rebuild fixed from regressing back in:
+      - the stale `Unseen Elder -> Overwhelming Hunger` leader alias (it
+        mis-resolved the unit card Unseen Elder=暗影长者 to the leader
+        Overwhelming Hunger=无尽渴望);
+      - the Dagon bidirectional EN aliases (`Dagon: The Promised One` old /
+        `Dagon: Promised` db-new, both -> 达冈：应许者).
+    Plus a strip check on the override tables.
+    """
+    results = []
+    ov = ref_dir / "card_overrides.md"
+    if not ov.exists():
+        # required_refs already FAILs a missing file; avoid double-counting.
+        return results
+    text = ov.read_text(encoding="utf-8")
+
+    # 1. Stale Unseen Elder -> Overwhelming Hunger alias must be gone.
+    #    Only TABLE rows count (the explanatory note legitimately mentions both).
+    stale = [
+        l for l in text.split("\n")
+        if l.strip().startswith("|")
+        and "Unseen Elder" in l and "Overwhelming Hunger" in l
+    ]
+    if stale:
+        results.append((
+            "FAIL",
+            "card_overrides.md: 过期别名 Unseen Elder→Overwhelming Hunger 仍在 "
+            "（会把暗影长者误导向无尽渴望）",
+        ))
+    else:
+        results.append((
+            "PASS",
+            "card_overrides.md: 无 Unseen Elder→Overwhelming Hunger 过期别名",
+        ))
+
+    # 2. Dagon bidirectional EN aliases present.
+    has_old = "Dagon: The Promised One" in text
+    has_new = "Dagon: Promised" in text
+    if has_old and has_new:
+        results.append((
+            "PASS",
+            "card_overrides.md: Dagon 双向 EN alias 在（The Promised One / Promised）",
+        ))
+    else:
+        missing = [
+            n for n, ok in [("Dagon: The Promised One", has_old), ("Dagon: Promised", has_new)]
+            if not ok
+        ]
+        results.append(("WARN", f"card_overrides.md: Dagon alias 缺 {missing}"))
+
+    # 3. Strip check: flag only NON-standard whitespace in cells (tabs, double
+    #    spaces, missing pad) — a normally padded `| value |` cell is clean.
+    dirty = 0
+    for line in text.split("\n"):
+        s = line.strip()
+        if not s.startswith("|") or "---" in s:
+            continue
+        cells = s.split("|")
+        if cells and cells[0] == "":
+            cells = cells[1:]
+        if cells and cells[-1] == "":
+            cells = cells[:-1]
+        for c in cells:
+            v = c.strip()
+            if v and c != " " + v + " ":
+                dirty += 1
+    if dirty:
+        results.append(("WARN", f"card_overrides.md: {dirty} 个单元格空白异常（含制表符/双空格/缺填充）"))
+    else:
+        results.append(("PASS", "card_overrides.md: 表格单元格空白正常"))
+
+    return results
+
+
 def check_reference_data_hygiene(ref_dir: Path) -> list[tuple[str, str]]:
     """Detect structural corruption in table-based reference files.
 
@@ -373,7 +446,7 @@ def check_reference_data_hygiene(ref_dir: Path) -> list[tuple[str, str]]:
     # 会进 TermAuthority 强制层、格式脏了直接影响翻译，故只扫这批；
     # 叙事/风格类(common_pitfalls/style_reference 等)不进强制层，不扫。
     targets = [
-        "competitive_terms.md", "card_names.md", "terminology_map.md",
+        "competitive_terms.md", "card_overrides.md", "terminology_map.md",
         "reverse_terminology_map.md", "keywords_map.md", "category_map.md",
         "card_attributes_map.md", "slang_map.md", "ambiguous_names.md",
     ]
@@ -596,6 +669,7 @@ def main():
     phase_c_results = run_section("Phase C Checklist", lambda: check_phase_c_checklist(ref_dir))
     authority_results = run_section("TermAuthority Invariants", lambda: check_term_authority_invariants(script_dir))
     effect_results = run_section("Effect Text", lambda: check_effect_text(ref_dir))
+    card_ov_results = run_section("Card Overrides", lambda: check_card_overrides_quality(ref_dir))
     hygiene_results = run_section("Reference Data Hygiene", lambda: check_reference_data_hygiene(ref_dir))
     test_results = run_section("Functional Tests", lambda: run_test_cases(script_dir))
 
@@ -630,6 +704,7 @@ def main():
         ("Phase C Checklist", phase_c_results),
         ("TermAuthority Invariants", authority_results),
         ("Effect Text", effect_results),
+        ("Card Overrides", card_ov_results),
         ("Reference Data Hygiene", hygiene_results),
         ("Functional Tests", test_results),
     ]

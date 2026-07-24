@@ -26,6 +26,9 @@ from _shared import (
     extract_card_names,
     extract_card_names_no_colon,
     extract_cn_variants,
+    get_card_name_corrections,
+    get_card_names_cn_index,
+    get_card_names_index,
     get_term_authority,
     json_output,
     load_lock_file,
@@ -80,29 +83,8 @@ def load_forbidden_terms():
 
 @functools.lru_cache(maxsize=1)
 def load_card_corrections():
-    """Load outdated card names from card_names.md"""
-    corrections = {}
-    card_file = _get_ref_path("card_names.md")
-    if not card_file.exists():
-        return corrections
-
-    text = card_file.read_text(encoding="utf-8")
-    in_renamed = False
-    for line in text.split("\n"):
-        line = line.strip()
-        if "Renamed / Corrected" in line:
-            in_renamed = True
-            continue
-        if in_renamed and line.startswith("##"):
-            break
-        if in_renamed and line.startswith("|") and "---" not in line:
-            parts = [p.strip() for p in line.split("|")]
-            if len(parts) >= 4 and parts[1] and parts[2]:
-                old, new = parts[1], parts[2]
-                if old and new and old != "Skill原版":
-                    corrections[old] = new
-
-    return corrections
+    """Load outdated Chinese card names (wrong -> correct) from card_overrides.md."""
+    return dict(get_card_name_corrections())
 
 
 def load_locked_phrases_from_source(source_path: Path) -> set[str]:
@@ -592,23 +574,10 @@ def check_english_residue(text: str) -> list[str]:
     """
     issues = []
 
-    # Load card database
-    card_file = _get_ref_path("card_names.md")
-    if not card_file.exists():
-        return issues
-
-    card_map = {}
-    card_text = card_file.read_text(encoding="utf-8")
-    for line in card_text.split("\n"):
-        line = line.strip()
-        if line.startswith("|") and "---" not in line and "English" not in line:
-            parts = [p.strip() for p in line.split("|")]
-            if len(parts) >= 4 and parts[1] and parts[2]:
-                en = parts[1]
-                cn = parts[2]
-                if en not in ("English", "—", "") and cn not in ("Chinese", "—", ""):
-                    card_map[en.lower()] = (en, cn)
-
+    # Load card database (cards-only, from the 4lang table + card_overrides.md —
+    # NOT the mixed TermAuthority entries, which would false-flag common words
+    # like 'leader'/'mage' as untranslated card residue).
+    card_map = get_card_names_index()
     if not card_map:
         return issues
 
@@ -669,7 +638,7 @@ def check_english_residue(text: str) -> list[str]:
                 found.add(phrase)
                 issues.append(
                     f"English residue: 「{phrase}」→ 「{cn}」 "
-                    f"(found in card_names.md, may be untranslated)"
+                    f"(found in card database, may be untranslated)"
                 )
         else:
             # Try partial match for colon-style card names
@@ -697,27 +666,13 @@ def check_english_residue(text: str) -> list[str]:
 
 @functools.lru_cache(maxsize=1)
 def load_chinese_card_names() -> dict[str, str]:
-    """Build a Chinese card name -> English map from card_names.md.
+    """Build a Chinese card name -> English map (cards-only, from 4lang table).
 
     The mirror of the English card map used by check_english_residue, keyed
     by the Chinese name so a CN->EN translation can be scanned for Chinese
     card names that were not translated to English.
     """
-    card_file = _get_ref_path("card_names.md")
-    if not card_file.exists():
-        return {}
-
-    mapping: dict[str, str] = {}
-    card_text = card_file.read_text(encoding="utf-8")
-    for line in card_text.split("\n"):
-        line = line.strip()
-        if line.startswith("|") and "---" not in line and "English" not in line:
-            parts = [p.strip() for p in line.split("|")]
-            if len(parts) >= 4 and parts[1] and parts[2]:
-                en, cn = parts[1], parts[2]
-                if en not in ("English", "—", "") and cn not in ("Chinese", "—", ""):
-                    mapping[cn] = en
-    return mapping
+    return dict(get_card_names_cn_index())
 
 
 def check_chinese_residue(text: str) -> list[str]:

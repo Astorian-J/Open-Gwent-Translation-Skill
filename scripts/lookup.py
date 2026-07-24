@@ -77,7 +77,7 @@ def search_references(query: str, ref_dir: Path, fuzzy: bool = False) -> list[di
     ref_files = [
         "terminology_map.md",
         "reverse_terminology_map.md",
-        "card_names.md",
+        "card_overrides.md",
         "keywords_map.md",
         "competitive_terms.md",
         "ambiguous_names.md",
@@ -177,9 +177,9 @@ def format_result(r: dict, plain: bool = False) -> str:
         if notes:
             lines.append(f"    Notes: {notes}")
 
-    elif file == "card_names.md":
-        en = row.get("english", "")
-        cn = row.get("chinese", "")
+    elif file == "card_overrides.md":
+        en = row.get("english", "") or row.get("alias", "")
+        cn = row.get("chinese", "") or row.get("maps to", "") or row.get("修正后", "")
         cid = row.get("card id", "")
         faction = row.get("faction", "")
         parts = []

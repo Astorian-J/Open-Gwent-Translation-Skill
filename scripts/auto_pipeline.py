@@ -64,6 +64,7 @@ def build_card_lookup_table(source_path: Path) -> list[tuple[str, str]]:
         extract_card_names,
         extract_card_names_no_colon,
         extract_terms_from_markdown,
+        get_card_names_index,
     )
 
     source_text = source_path.read_text(encoding="utf-8")
@@ -79,30 +80,13 @@ def build_card_lookup_table(source_path: Path) -> list[tuple[str, str]]:
     for name in extract_capitalized_phrases(source_text, max_words=3, min_length=4):
         candidates.add(name.strip())
 
-    if not candidates:
-        return []
-
-    # Load card_names.md and build EN -> CN mapping
-    ref_dir = get_script_dir().parent / "references"
-    card_file = ref_dir / "card_names.md"
-    if not card_file.exists():
-        return []
-
-    card_map = {}
-    text = card_file.read_text(encoding="utf-8")
-    for line in text.split("\n"):
-        line = line.strip()
-        if line.startswith("|") and "---" not in line and "English" not in line:
-            parts = [p.strip() for p in line.split("|")]
-            if len(parts) >= 4 and parts[1] and parts[2]:
-                en = parts[1]
-                cn = parts[2]
-                if en not in ("English", "—", "") and cn not in ("Chinese", "—", ""):
-                    card_map[en.lower()] = (en, cn)
+    # Load card names (cards-only, from the 4lang table + card_overrides.md).
+    card_map = get_card_names_index()
 
     # Match candidates against card database
     results = []
     seen = set()
+    unresolved: list[str] = []
     for cand in sorted(candidates):
         key = cand.lower()
         if key in card_map:
@@ -110,18 +94,33 @@ def build_card_lookup_table(source_path: Path) -> list[tuple[str, str]]:
             if en.lower() not in seen:
                 seen.add(en.lower())
                 results.append((en, cn))
-        else:
-            # Partial match: collect ALL cards that contain or are contained by this candidate.
-            # This surfaces ambiguous base names (e.g. "Geralt" matches all 6 variants).
-            partial_hits = [
-                (db_en, db_cn)
-                for db_key, (db_en, db_cn) in card_map.items()
-                if key in db_key or db_key in key
-            ]
+            continue
+        # Partial match: collect ALL cards that contain or are contained by this candidate.
+        # This surfaces ambiguous base names (e.g. "Geralt" matches all 6 variants).
+        partial_hits = [
+            (db_en, db_cn)
+            for db_key, (db_en, db_cn) in card_map.items()
+            if key in db_key or db_key in key
+        ]
+        if partial_hits:
             for db_en, db_cn in partial_hits:
                 if db_en.lower() not in seen:
                     seen.add(db_en.lower())
                     results.append((db_en, db_cn))
+        else:
+            unresolved.append(cand)
+
+    # Aggressive variant matching (reverse-containment + edit distance) for
+    # variants the candidate/partial matchers miss (Double-Bladed Dagur, Froth,
+    # Schirru). Delegates to TermAuthority so card_references stays in sync with
+    # the lock produced by context_lock (get_all_for_text).
+    from _shared import get_term_authority
+    ta = get_term_authority()
+    for canon_en, _variant in ta._aggressive_card_matches(source_text, unresolved):
+        rec = card_map.get(canon_en.lower())
+        if rec and rec[0].lower() not in seen:
+            seen.add(rec[0].lower())
+            results.append(rec)
 
     return results
 
