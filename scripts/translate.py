@@ -420,6 +420,8 @@ def cmd_finish(args: argparse.Namespace) -> None:
     # Hard gate: completeness_guard with --source (mandatory, so the lock is built and
     # term_authority actually runs) and --direction (so residue scanning targets the right lang).
     guard_args = [str(translated_path), "--source", str(source_path), "--direction", direction]
+    if getattr(args, "verbose_terms", False):
+        guard_args.append("--verbose-terms")
     _ok, parsed, raw = run_script_json("completeness_guard.py", guard_args, GUARD_TIMEOUT)
 
     if not parsed or "data" not in parsed:
@@ -577,6 +579,7 @@ def main() -> None:
     )
     fin.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
     fin.add_argument("--json", action="store_true", help="Output structured JSON")
+    fin.add_argument("--verbose-terms", action="store_true", help="Emit full violation/term lists (default: counts + top 5)")
 
     args = parser.parse_args()
     if args.command == "prepare":

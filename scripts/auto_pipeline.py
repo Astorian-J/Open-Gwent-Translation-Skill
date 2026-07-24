@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import detect_direction, json_output, TermAuthority
+from _shared import detect_direction, json_output, terms_summary, TermAuthority
 
 
 # Scripts that already support --json in Phase 1.
@@ -229,7 +229,7 @@ def run_script(name: str, args: list[str], json_mode: bool = False) -> tuple[boo
     return result.returncode == 0, output, parsed
 
 
-def pre_translation(source_path: Path, date: str | None, article_type: str, json_mode: bool = False) -> tuple[str | dict, bool]:
+def pre_translation(source_path: Path, date: str | None, article_type: str, json_mode: bool = False, verbose_terms: bool = False) -> tuple[str | dict, bool]:
     """Run all preprocessing steps. Returns a report and overall success."""
     all_ok = True
     # 清理上次 pre 遗留的陈旧临时文件（>1 小时），避免 /tmp 长期累积。不能清理本次/
@@ -299,6 +299,19 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
     slang_hits = authority.get_slang_for_text(source_text)
 
     if json_mode:
+        card_refs = [{"english": en, "chinese": cn} for en, cn in quick_ref]
+        ta_report = term_authority
+        # Default --json emits COUNTS + a top-N sample of the big lists so a
+        # card-heavy article cannot flood agent context; --verbose-terms returns
+        # the full lists. Counts (card_references_found / *_count) stay complete.
+        if not verbose_terms:
+            card_refs = terms_summary(card_refs, False)
+            ta_report = {
+                **term_authority,
+                "locked_terms": terms_summary(term_authority["locked_terms"], False),
+                "ambiguous_terms": terms_summary(term_authority["ambiguous_terms"], False),
+                "pending_terms": terms_summary(term_authority["pending_terms"], False),
+            }
         data = {
             "command": "pre",
             "source": str(source_path),
@@ -309,12 +322,12 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
             "lock_built": lock_built,
             "lock_path": str(lock_file),
             "card_references_found": len(quick_ref),
-            "card_references": [{"english": en, "chinese": cn} for en, cn in quick_ref],
+            "card_references": card_refs,
             "official_effects": official_effects[:OFFICIAL_EFFECTS_CAP],
             "official_effects_total": len(official_effects),
             "slang_hints": slang_hits[:SLANG_HINTS_CAP],
             "slang_hints_total": len(slang_hits),
-            "term_authority": term_authority,
+            "term_authority": ta_report,
         }
         return data, all_ok
 
@@ -633,6 +646,7 @@ def main():
     pre.add_argument("--type", choices=["meta", "bc-proposal", "card-analysis", "patch-notes", "general"],
                      default="general", help="Article type")
     pre.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
+    pre.add_argument("--verbose-terms", action="store_true", help="Emit full term/violation lists (default: counts + top 5)")
 
     post = subparsers.add_parser("post", help="Post-translation checks")
     post.add_argument("source", help="Original source file")
@@ -669,7 +683,7 @@ def main():
         sys.exit(1)
 
     if args.command == "pre":
-        report, ok = pre_translation(source_path, args.date, args.type, json_mode=json_mode)
+        report, ok = pre_translation(source_path, args.date, args.type, json_mode=json_mode, verbose_terms=args.verbose_terms)
         if json_mode:
             json_output(report, exit_code=0 if ok else 1)
         print(report)

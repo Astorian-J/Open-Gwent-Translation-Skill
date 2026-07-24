@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import build_lock_from_source, detect_direction, json_output
+from _shared import build_lock_from_source, detect_direction, json_output, terms_summary
 
 
 def run_script_json(script_name: str, args: list[str]) -> tuple[bool, dict | None, str]:
@@ -188,6 +188,7 @@ def main() -> None:
     parser.add_argument("--source", help="Source file for term authority enforcement")
     parser.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
+    parser.add_argument("--verbose-terms", action="store_true", help="Emit full violation/term lists (default: counts + top 5)")
     args = parser.parse_args()
 
     file_path = Path(args.file)
@@ -262,7 +263,7 @@ def main() -> None:
             msg = "Term authority: skipped (no lock file)"
         else:
             msg = "Term authority checks passed" if passed else f"Term authority: {count} violation(s)"
-        checks.append({"name": "term_authority", "passed": passed, "issue_count": count, "status": status, "violations": ta_violations, "message": msg})
+        checks.append({"name": "term_authority", "passed": passed, "issue_count": count, "status": status, "violations": terms_summary(ta_violations, args.verbose_terms), "message": msg})
     except Exception as e:
         checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "status": "error", "violations": [], "message": f"Term authority check failed: {e}"})
 

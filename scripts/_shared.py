@@ -88,6 +88,23 @@ def source_is_chinese(text: str) -> bool:
     return detect_direction(text) == "encn"
 
 
+# --- --verbose-terms output sizing ---
+
+# Default cap for term/violation lists in --json output. Without --verbose-terms a
+# report emits COUNTS plus this many entries (top N); with --verbose-terms it emits
+# the full list. Keeps a card-heavy article from flooding agent context.
+TERMS_SUMMARY_TOP_N = 5
+
+
+def terms_summary(items, verbose: bool, n: int = TERMS_SUMMARY_TOP_N):
+    """Return the full list when ``verbose`` else the first ``n`` items.
+
+    Callers still report the true total count separately, so the default mode is
+    "counts + top N" and ``--verbose-terms`` switches to the complete list.
+    """
+    return list(items) if verbose else list(items)[:n]
+
+
 # --- Regex patterns ---
 
 CARD_NAME_PATTERN = re.compile(
@@ -646,6 +663,13 @@ class TermAuthority:
         # correction rows whose "english" field is itself Chinese
         # (出场率 -> 登场率) never pollute the CN->EN lock.
         self._cn_to_ens: dict[str, list[str]] = {}
+        # en_lower -> canonical_en for keyword / terminology / competitive /
+        # deck_name terms. Scanned directly in get_all_for_text (EN->CN source)
+        # because these single-word game terms (deploy, provision, order, Meta, ...)
+        # appear lowercase in prose and are missed by the capitalized card-name
+        # extractors — without this the EN->CN lock drops them, an asymmetry vs the
+        # CN->EN dictionary lookup (which already catches them via _cn_to_ens).
+        self._game_terms: dict[str, str] = {}
 
         self._loaded = False
         self._load_all()
@@ -718,6 +742,14 @@ class TermAuthority:
             lst = self._cn_to_ens.setdefault(cn, [])
             if en not in lst:
                 lst.append(en)
+        # Track core game-mechanic terms (keywords / terminology) for the EN->CN
+        # direct scan in get_all_for_text. Competitive terms and deck names are
+        # excluded: they are looser meta vocabulary / long multi-word phrases that
+        # are already caught by the capitalized card-name extractors, and
+        # force-locking them (then requiring their exact CN) would over-flag
+        # legitimately paraphrased translations.
+        if term_type in ("keyword", "terminology"):
+            self._game_terms.setdefault(en_lower, en)
 
     def _add_alias(self, alias: str, canonical_en: str) -> None:
         alias = alias.strip().lower()
@@ -1346,6 +1378,14 @@ class TermAuthority:
         # extractor. Plain word match (faction names are not pluralized).
         for fac_lower, canonical_en in self._factions.items():
             if re.search(rf"\b{re.escape(fac_lower)}\b", text_lower):
+                candidates.add(canonical_en)
+
+        # Game terms (deploy / provision / order / Meta / deck names) usually appear
+        # as single lowercase or capitalized words in prose and are missed by the
+        # capitalized card-name extractors above. Scan them directly (word-boundary)
+        # so the EN->CN lock covers them, matching the CN->EN dictionary lookup.
+        for gt_lower, canonical_en in self._game_terms.items():
+            if re.search(rf"\b{re.escape(gt_lower)}\b", text_lower):
                 candidates.add(canonical_en)
 
         # Sort by length descending so full names are resolved before abbreviations.
