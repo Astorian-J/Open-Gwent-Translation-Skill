@@ -135,8 +135,8 @@ def run_phase_c_check(file_path: Path, lock_path: Path | None, direction: str, j
     return issue_count == 0 and result.returncode == 0, issue_count
 
 
-def run_term_authority_check(file_path: Path, lock_path: Path | None, direction: str, json_mode: bool) -> tuple[bool, int, str]:
-    """Run term_enforcer.py and return (pass, violation_count, status).
+def run_term_authority_check(file_path: Path, lock_path: Path | None, direction: str, json_mode: bool) -> tuple[bool, int, str, list[dict]]:
+    """Run term_enforcer.py and return (pass, violation_count, status, violations).
 
     status is one of:
       "not_applicable" — reserved (no longer used; CN->EN now enforces too)
@@ -148,19 +148,23 @@ def run_term_authority_check(file_path: Path, lock_path: Path | None, direction:
     EN->CN asserts the official Chinese appears in the Chinese translation;
     CN->EN asserts the official English appears in the English translation
     (term_enforcer.enforce_terms branches on the lock's direction).
+
+    violations: the per-term violation dicts (populated in json_mode; empty
+    otherwise), each carrying term / expected_official / severity /
+    offending_quote so a BLOCKED report is agent-actionable.
     """
     if lock_path is None:
-        return True, 0, "skipped"
+        return True, 0, "skipped", []
 
     script = Path(__file__).parent / "term_enforcer.py"
     if not script.exists():
-        return True, 0, "skipped"
+        return True, 0, "skipped", []
 
     if json_mode:
         ok, parsed, _ = run_script_json("term_enforcer.py", [str(file_path), "--lock", str(lock_path)])
         if parsed and "data" in parsed:
-            return ok, parsed["data"].get("violation_count", 0), "ran"
-        return ok, 0, "ran"
+            return ok, parsed["data"].get("violation_count", 0), "ran", parsed["data"].get("violations", [])
+        return ok, 0, "ran", []
 
     result = subprocess.run(
         [sys.executable, str(script), str(file_path), "--lock", str(lock_path)],
@@ -175,7 +179,7 @@ def run_term_authority_check(file_path: Path, lock_path: Path | None, direction:
             issue_count = int(output.split("Issues:")[1].strip().split()[0])
         except (IndexError, ValueError):
             pass
-    return issue_count == 0 and result.returncode == 0, issue_count, "ran"
+    return issue_count == 0 and result.returncode == 0, issue_count, "ran", []
 
 
 def main() -> None:
@@ -251,16 +255,16 @@ def main() -> None:
 
     # Check 5: Term authority enforcement (both directions)
     try:
-        passed, count, status = run_term_authority_check(file_path, lock_path, direction, args.json)
+        passed, count, status, ta_violations = run_term_authority_check(file_path, lock_path, direction, args.json)
         if status == "not_applicable":
             msg = "Term authority: not applicable (CN->EN)"
         elif status == "skipped":
             msg = "Term authority: skipped (no lock file)"
         else:
             msg = "Term authority checks passed" if passed else f"Term authority: {count} violation(s)"
-        checks.append({"name": "term_authority", "passed": passed, "issue_count": count, "status": status, "message": msg})
+        checks.append({"name": "term_authority", "passed": passed, "issue_count": count, "status": status, "violations": ta_violations, "message": msg})
     except Exception as e:
-        checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "status": "error", "message": f"Term authority check failed: {e}"})
+        checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "status": "error", "violations": [], "message": f"Term authority check failed: {e}"})
 
     if lock_path:
         lock_path.unlink(missing_ok=True)

@@ -344,6 +344,17 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
                 "severity": "warning",
             })
 
+    # Additive: precise, agent-actionable fields so a BLOCKED report tells the
+    # agent exactly what to fix. expected_official is the official rendering to
+    # use (CN for EN->CN, EN for CN->EN; a " / "-joined option list for a
+    # collision / ambiguous name). offending_quote is the locatable snippet in
+    # the translation (empty when the term is simply absent -> nothing to point
+    # at). existing fields (expected_cn / expected_en / found_in_translation /
+    # context) are preserved for back-compat.
+    for v in violations:
+        v["expected_official"] = v.get("expected_en") or v.get("expected_cn", "")
+        v["offending_quote"] = v.get("context", "")
+
     return {
         "violation_count": len(violations),
         "violations": violations,

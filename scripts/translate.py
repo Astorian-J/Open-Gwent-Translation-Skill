@@ -459,11 +459,13 @@ def cmd_finish(args: argparse.Namespace) -> None:
         block_reason = "guard checks failed: " + "; ".join(
             c.get("message", c.get("name", "?")) for c in failed
         )
-    elif direction == "encn":
+    else:
+        # Fail-closed for BOTH directions: term_authority must have actually run
+        # (status=="ran"). The CN->EN direction now enforces official English too
+        # (it is no longer "not_applicable"), so a skipped/missing check in EITHER
+        # direction means terminology was NOT verified — refuse to trust the
+        # guard's PASS. Absence of the signal must block (not pass).
         ta_check = next((c for c in checks if c.get("name") == "term_authority"), None)
-        # Fail-closed: if the term_authority check is missing entirely OR did not actually
-        # run, refuse to trust the guard's PASS. The whole point of this orchestrator is to
-        # catch the silent-pass hole, so absence of the signal must block (not pass).
         if ta_check is None or ta_check.get("status") != "ran":
             status = ta_check.get("status") if ta_check else "missing"
             block_reason = (
@@ -473,6 +475,12 @@ def cmd_finish(args: argparse.Namespace) -> None:
             )
 
     blocked = block_reason is not None
+
+    # Surface the agent-actionable term-authority violations at the top level so a
+    # BLOCKED report can be fixed directly: each carries term / expected_official /
+    # severity / offending_quote. (Also nested under guard.checks.term_authority.)
+    _ta = next((c for c in checks if c.get("name") == "term_authority"), None)
+    term_authority_violations = (_ta or {}).get("violations", [])
 
     # Learn only after a genuine PASS; never let it affect the gate.
     learn_result = None
@@ -494,6 +502,7 @@ def cmd_finish(args: argparse.Namespace) -> None:
         "guard": guard_data,
         "blocked": blocked,
         "block_reason": block_reason,
+        "violations": term_authority_violations,
         "learn": learn_result,
     }
 

@@ -152,8 +152,10 @@
         "guard_all_passed",
         "blocked",
         "block_reason",
+        "violations",
         "learn"
-      ]
+      ],
+      "on_blocked": "Agent-driven re-translate loop (translate.py calls no LLM and does no find-replace). For each entry in `violations` (term / expected_official / severity / offending_quote), re-render the offending segment in the translation using expected_official, save, then re-run finish. Repeat until all_passed or 3 rounds; if still BLOCKED after 3 rounds, hand off to a human. Never finalize while BLOCKED."
     },
     {
       "name": "auto_pipeline pre",

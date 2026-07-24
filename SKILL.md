@@ -134,6 +134,22 @@ skipped. Always pass `--source` and `--direction` explicitly for a trustworthy g
 
 The machine-checkable rules behind `finish` live in `references/phase_c_checklist.md`.
 
+#### If `finish` is BLOCKED — the re-translate loop (agent-driven)
+
+`finish` calls **no LLM** and edits **no file**. When it reports `BLOCKED`, the agent
+drives the fix loop from the violation list. Each violation carries `term`,
+`expected_official`, `severity`, and `offending_quote` (the locatable snippet in the
+translation; empty for "missing" — the term was dropped, so add it):
+
+1. Read `violations` from the `finish` JSON (or the `[BLOCKED]` lines).
+2. For each violation, open the translation, jump to `offending_quote`, and re-render
+   that segment using `expected_official`.
+3. Save the file and re-run `finish`.
+4. Repeat until `all_passed`, **up to 3 rounds**. If still `BLOCKED` after 3 rounds,
+   stop and hand the translation to a human — **never finalize while `BLOCKED`**.
+
+`translate.py` is deterministic glue; all re-translation is done by the agent / human.
+
 ---
 
 ## Quick Reference
