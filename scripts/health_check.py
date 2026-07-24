@@ -649,6 +649,18 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
     return results
 
 
+def _run_rebuild_behavior_tests() -> list[tuple[str, str]]:
+    """Run the committed synthetic rebuild-behavior suite (scripts/test_rebuild.py).
+
+    Returns the suite's (status, message) list; any import/runtime failure degrades
+    to a single WARN so a broken test module never silently masks a real PASS."""
+    try:
+        import test_rebuild
+        return test_rebuild.run()
+    except Exception as e:  # noqa: BLE001
+        return [("WARN", f"test_rebuild.py: failed to run ({type(e).__name__}: {e})")]
+
+
 def main():
     parser = argparse.ArgumentParser(description="Gwent Translation Skill Health Check")
     parser.add_argument("--verbose", action="store_true", help="Show detailed output")
@@ -681,6 +693,7 @@ def main():
     card_ov_results = run_section("Card Overrides", lambda: check_card_overrides_quality(ref_dir))
     hygiene_results = run_section("Reference Data Hygiene", lambda: check_reference_data_hygiene(ref_dir))
     test_results = run_section("Functional Tests", lambda: run_test_cases(script_dir))
+    rebuild_results = run_section("Rebuild Behavior Tests", lambda: _run_rebuild_behavior_tests())
 
     pass_count = sum(1 for s, _ in all_results if s == "PASS")
     fail_count = sum(1 for s, _ in all_results if s == "FAIL")
@@ -716,6 +729,7 @@ def main():
         ("Card Overrides", card_ov_results),
         ("Reference Data Hygiene", hygiene_results),
         ("Functional Tests", test_results),
+        ("Rebuild Behavior Tests", rebuild_results),
     ]
 
     for name, results in sections:
