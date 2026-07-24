@@ -214,18 +214,37 @@ def is_likely_common_word(word: str) -> bool:
 # extractors in get_all_for_text so exact matches keep their fast path.
 
 CARD_VARIANT_MIN_TOKEN = 4   # reverse-containment: source-token min length (chars)
-CARD_FUZZY_MAX_EDIT = 2      # normalized Levenshtein threshold for a fuzzy match
+CARD_FUZZY_MAX_EDIT = 2      # normalized Levenshtein threshold for a fuzzy match (long tokens)
 CARD_FUZZY_MIN_TOKEN = 5     # edit-distance source-token min length (short = noisy)
+# Short tokens use a TIGHTER edit-distance threshold so a 6-char game keyword
+# cannot fuzzy-lock an unrelated card 2 edits away (Deploy -> Decoy). Real
+# single-char typos (Geraltt -> Geralt, 7 chars) and accent / reverse-containment
+# variants (Schirru, Dagur, Froth) are unaffected.
+CARD_FUZZY_SHORT_MAXLEN = 6
+CARD_FUZZY_SHORT_MAX_EDIT = 1
+
+# High-frequency game verbs / mechanics words that are NEVER card names but
+# fuzzy- or substring-match one (Deploy -> Decoy, Boost -> 布荷特). Excluded from
+# aggressive card matching outright; they belong to the keyword/terminology layer.
+# (self._game_terms is the authoritative dynamic check; this set covers common
+# verbs that may be typed as competitive/other and so absent from _game_terms.)
+AGGRESSIVE_SKIP_GAME_WORDS: frozenset[str] = frozenset({
+    "deploy", "deployed", "play", "played", "draw", "draws", "summon", "summoned",
+    "bleed", "bleeding", "boost", "boosted", "order", "ordered", "armor",
+    "cost", "buff", "buffed", "nerf", "nerfed", "discard", "banish", "heal",
+    "damage", "lock", "locked", "reveal", "revealed", "spawn", "transform",
+    "destroy", "purify", "poison", "shield",
+})
 
 # Common English nouns/adjectives that complete exactly one card name and so
 # would be false-positive reverse-containment hits (Baron->Bloody Baron,
 # Rain->Torrential Rain, Justice->Novigradian Justice). Proper card nouns
 # (Donimir, Erland, Froth, Dagur) are NOT here. Grows as new collisions surface.
 CARD_VARIANT_COMMON_WORDS: frozenset[str] = frozenset({
-    "aristocrats", "baron", "books", "boost", "cache", "cave", "combat",
-    "compass", "covenant", "decision", "dormant", "formation", "gale",
-    "gift", "glory", "golem", "jackal", "justice", "lady", "larva",
-    "lined", "muscle", "poet", "rain", "scroll", "season", "seductress",
+    "armor", "aristocrats", "baron", "books", "boost", "cache", "cave", "combat",
+    "compass", "cost", "covenant", "decision", "dormant", "formation", "gale",
+    "gift", "glory", "golem", "jackal", "justice", "knight", "lady", "larva",
+    "lined", "muscle", "order", "poet", "rain", "scroll", "season", "seductress",
     "senior", "sentinel", "shadows", "stations", "steel", "sunset",
     "tainted", "thug", "wanderers", "zeal",
     # common fantasy/game nouns that also complete card names
@@ -310,13 +329,16 @@ def _card_variant_index(ref_dir: "Path | str") -> dict:
     return idx
 
 
-def _best_fuzzy(norm: str, by_len: dict[int, list[str]]) -> str | None:
-    """Return the folded canonical name within CARD_FUZZY_MAX_EDIT of `norm`
-    (min distance; None if none qualifies). Length-windowed to bound the scan."""
+def _best_fuzzy(norm: str, by_len: dict[int, list[str]], max_edit: int = CARD_FUZZY_MAX_EDIT) -> str | None:
+    """Return the folded canonical name within `max_edit` of `norm`
+    (min distance; None if none qualifies). Length-windowed to bound the scan.
+
+    Callers pass a tighter `max_edit` for short tokens (see CARD_FUZZY_SHORT_*),
+    so a 6-char game keyword cannot fuzzy-lock an unrelated card 2 edits away."""
     L = len(norm)
-    best_d = CARD_FUZZY_MAX_EDIT + 1
+    best_d = max_edit + 1
     best: str | None = None
-    for cl in range(max(1, L - CARD_FUZZY_MAX_EDIT), L + CARD_FUZZY_MAX_EDIT + 1):
+    for cl in range(max(1, L - max_edit), L + max_edit + 1):
         for cand in by_len.get(cl, ()):
             if cand == norm:
                 continue
@@ -1283,15 +1305,24 @@ class TermAuthority:
                 seen_canon.add(norm_canon)
                 results.append((display, variant))
 
-        def _word_ok(span: str) -> bool:
+        def _word_ok(norm: str, span: str) -> bool:
             if len(_fold_ascii(span)) < CARD_VARIANT_MIN_TOKEN:
                 return False
-            return not (is_likely_common_word(span) or is_likely_common_word(span.title()))
+            # Common-word guard applies to the FUZZY path too (not only reverse
+            # containment): otherwise Boost / Baron / Armor still fuzzy-lock a card.
+            return not (is_likely_common_word(span)
+                        or is_likely_common_word(span.title())
+                        or norm in CARD_VARIANT_COMMON_WORDS)
 
         # 1. Single capitalized words from the text.
         for span in {m.group(0) for m in _VARIANT_TOKEN_RE.finditer(text)}:
             norm = _fold_ascii(span)
             if not norm or len(norm) < CARD_VARIANT_MIN_TOKEN:
+                continue
+            # Game keywords / terminology (deploy, boost, order, ...) and common
+            # game verbs are NOT cards — never route them through card matching;
+            # the keyword/terminology layer handles them. Fixes Deploy -> Decoy etc.
+            if norm in self._game_terms or norm in AGGRESSIVE_SKIP_GAME_WORDS:
                 continue
             # (a) accent-insensitive exact (Schirru -> Schirrú).
             if norm in norm_to_display:
@@ -1315,9 +1346,14 @@ class TermAuthority:
                     _emit(longer[0], span)
                     continue
             # (c) edit distance for single words (Geraltt -> Geralt) — the risky
-            #     step, so guard against common words (blacklist + comparative).
-            if len(norm) >= CARD_FUZZY_MIN_TOKEN and _word_ok(span):
-                best = _best_fuzzy(norm, by_len)
+            #     step, so guard against common words (blacklist + comparative) and
+            #     tighten the threshold for short tokens (<=6 chars use edit-dist 1
+            #     so Deploy cannot reach Decoy at distance 2).
+            if len(norm) >= CARD_FUZZY_MIN_TOKEN and _word_ok(norm, span):
+                max_edit = (CARD_FUZZY_SHORT_MAX_EDIT
+                            if len(norm) <= CARD_FUZZY_SHORT_MAXLEN
+                            else CARD_FUZZY_MAX_EDIT)
+                best = _best_fuzzy(norm, by_len, max_edit)
                 if best:
                     _emit(best, span)
 
