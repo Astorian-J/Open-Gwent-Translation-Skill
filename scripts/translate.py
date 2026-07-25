@@ -31,6 +31,7 @@ Exit code:
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -211,6 +212,50 @@ def _card_db_status() -> tuple[int, bool]:
     return count, count >= 1000
 
 
+def _ensure_card_db() -> tuple[int, bool]:
+    """Ensure card_names_4lang.json is built; auto-build on first run if missing.
+
+    The 4lang DB is a build-time artifact (CDPR copyright, gitignored). On a fresh
+    clone with no install.sh run, it is absent and the lock would be silently
+    hollow. Auto-build it here instead of failing: prefer a local card-db
+    (offline, fast), else fetch online (~3 min, once; cached afterward). This makes
+    the skill work out-of-the-box — users need not know to run install.sh first.
+    Returns (count, ready) after the attempt.
+    """
+    count, ready = _card_db_status()
+    if ready:
+        return count, ready
+
+    print("=" * 60)
+    print("[AUTO] Card database (card_names_4lang.json) not built — building now")
+    print("[AUTO] First run only; ~3 min if fetching online, needs internet.")
+    print("=" * 60)
+    build_script = SCRIPTS_DIR / "build_card_names_reference.py"
+    src_dir = os.environ.get("GWENT_CARD_DB") or str(Path.home() / "gwent-card-db")
+    if Path(src_dir).is_dir():
+        build_args = ["--src", src_dir]
+        print(f"[AUTO] Using local card-db: {src_dir}")
+    else:
+        build_args = ["--fetch"]
+        print("[AUTO] No local card-db found; fetching from api.gwent.one ...")
+    try:
+        result = subprocess.run(
+            [sys.executable, str(build_script), *build_args],
+            capture_output=True, text=True, timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        print("[WARN] Auto-build timed out (5 min). Build manually:")
+        print("       python scripts/build_card_names_reference.py --fetch")
+        return _card_db_status()
+    if result.returncode != 0:
+        msg = (result.stderr or result.stdout or "").strip()[:200]
+        print(f"[WARN] Auto-build failed: {msg}")
+        print("[WARN] Build manually: python scripts/build_card_names_reference.py --fetch")
+        return _card_db_status()
+    print("[AUTO] Card database built.")
+    return _card_db_status()
+
+
 def build_pack(source_path: Path, direction: str, date: str | None,
                article_type: str, pre_data: dict, lock_built: bool) -> str:
     """Assemble the Markdown translation pack from auto_pipeline pre's JSON output."""
@@ -380,6 +425,16 @@ def cmd_prepare(args: argparse.Namespace) -> None:
     direction = args.direction or "encn"  # EN->CN is the common case; banner + style table
     article_type = args.type
 
+    # Ensure the card DB BEFORE pre (pre loads it via TermAuthority; a missing DB
+    # would silently produce a hollow lock). Auto-builds on first run.
+    card_db_count, cards_ready = _ensure_card_db()
+
+    # effect_text is an enhancement layer (official ability text injection). If
+    # missing, translation still works — just warn, don't auto-build (slow fetch).
+    if not (SCRIPTS_DIR.parent / "references" / "effect_text.json").exists():
+        print("[INFO] effect_text.json 缺失（官方效果逐字注入不可用，翻译照跑）。")
+        print("       想补跑: python scripts/build_effect_reference.py --fetch  (约 3 分钟)")
+
     # Run auto_pipeline pre (Phase A, reused wholesale).
     pre_args = ["pre", str(source_path), "--type", article_type]
     if args.date:
@@ -410,7 +465,6 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         print(f"Error: failed to write pack to {pack_path}: {e}")
         sys.exit(1)
 
-    card_db_count, cards_ready = _card_db_status()
     ready = lock_built and skeleton_extracted and pre_exit_code == 0 and cards_ready
 
     data = {
