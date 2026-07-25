@@ -1556,13 +1556,25 @@ class TermAuthority:
 
         # 1. Exact dictionary-substring lookup, longest CN keys first so a
         #    longer card name is matched before a shorter one it contains.
+        #    Consume matched text spans so a short key that is a substring of an
+        #    already-matched longer term (e.g. 松鼠 inside 松鼠党 -> Squirrel) is
+        #    NOT separately matched to a different card.
+        consumed: list[tuple[int, int]] = []
         for cn in sorted(cn_to_entries, key=len, reverse=True):
             if len(cn) < 2 or cn in matched:
                 continue
-            if cn in text:
-                matched.add(cn)
-                self._emit_cn_result(cn, cn_to_entries[cn], "cn_exact",
-                                     cn, results, seen_terms)
+            occ = next(
+                (m for m in re.finditer(re.escape(cn), text)
+                 if not any(not (m.end() <= s or m.start() >= e)
+                            for s, e in consumed)),
+                None,
+            )
+            if occ is None:
+                continue
+            consumed.append((occ.start(), occ.end()))
+            matched.add(cn)
+            self._emit_cn_result(cn, cn_to_entries[cn], "cn_exact",
+                                 cn, results, seen_terms)
 
         # 2. wrong->correct CN corrections (card_overrides Renamed/Corrected,
         #    cn_fuzzy_fixes): a community/typo CN in the source resolves to the

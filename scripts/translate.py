@@ -159,6 +159,39 @@ def _join_list(value) -> str:
     return str(value) if value else ""
 
 
+def _load_lock_terms(lock_path: str | None) -> list[dict]:
+    """Read the FULL term lock from the context-lock file built by auto_pipeline pre.
+
+    pre's JSON envelope trims `term_authority.locked_terms` down to a small subset
+    (a token optimization), but the lock FILE written next to it holds every term
+    that finish's term_authority will actually enforce. The translation pack must
+    surface that complete set — otherwise the agent never sees mappings like
+    终末之战 -> Ragh Nar Roog until finish rejects the translation, which forces a
+    wasteful re-translate round (translate blind, then get corrected). Read the file.
+
+    Returns a list of term dicts (each carrying canonical_en / cn / type / aliases /
+    abbrevs). Empty list if the file is missing or unreadable; the caller falls back
+    to the trimmed JSON subset in that case.
+    """
+    if not lock_path:
+        return []
+    try:
+        data = json.loads(Path(lock_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    terms = data.get("terms") or {}
+    out: list[dict] = []
+    if isinstance(terms, dict):
+        for key, val in terms.items():
+            if isinstance(val, dict):
+                row = dict(val)
+                row.setdefault("cn", key)  # the dict key is the term itself
+                out.append(row)
+    elif isinstance(terms, list):
+        out = [t for t in terms if isinstance(t, dict)]
+    return out
+
+
 def build_pack(source_path: Path, direction: str, date: str | None,
                article_type: str, pre_data: dict, lock_built: bool) -> str:
     """Assemble the Markdown translation pack from auto_pipeline pre's JSON output."""
@@ -203,15 +236,23 @@ def build_pack(source_path: Path, direction: str, date: str | None,
         L.append(f"| {dim} | {rule} |")
     L.append("")
 
-    # Mandatory term lock table
-    L.append("## MANDATORY Term Lock Table (强制术语锁表 — 用这些精确中文，勿字面直译)")
+    # Mandatory term lock table — show the SAME complete lock set that finish's
+    # term_authority enforces. pre's JSON `locked_terms` is a token-trimmed subset;
+    # the lock FILE has the full set. Fall back to the JSON subset only if the file
+    # is unreadable. Cards sorted first (the agent most needs card-name mappings).
+    full_terms = _load_lock_terms(pre_data.get("lock_path"))
+    lock_rows = full_terms if full_terms else locked
+    lock_rows = sorted(lock_rows, key=lambda t: (0 if t.get("type") == "card" else 1,))
+    L.append("## MANDATORY Term Lock Table (强制术语锁表 — 卡牌在前，照此译名，勿字面直译)")
     L.append("")
-    if locked:
+    if lock_rows:
         L.append("| English | Chinese | Aliases | Abbrevs |")
         L.append("|---------|---------|---------|---------|")
-        for t in locked:
+        for t in lock_rows:
+            en = t.get("canonical_en", "")
+            cn = t.get("cn") or t.get("chinese", "")
             L.append(
-                f"| {t.get('canonical_en', '')} | {t.get('chinese', '')} "
+                f"| {en} | {cn} "
                 f"| {_join_list(t.get('aliases'))} | {_join_list(t.get('abbrevs'))} |"
             )
     else:

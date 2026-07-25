@@ -11,7 +11,7 @@ enforcement. Loaded into `TermAuthority._slang` (kept out of the enforced lock o
 
 | english | intended_cn | literal_forbidden | note |
 |---|---|---|---|
-| broken | 强到离谱/超模 | 破碎的 | strength imbalance, not damaged |
+| broken | 强到离谱 | 破碎的 | strength imbalance, not damaged |
 | tier 0 | T0/独一档 | 零级 | top meta tier |
 | unplayable | 没法玩/废卡 | 不可游玩 | synonym: 废卡 (hard-locked) |
 | auto-win | 躺赢/保赢 | 自动胜利 | guaranteed win |

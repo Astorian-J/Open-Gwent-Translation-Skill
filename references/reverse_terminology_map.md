@@ -15,7 +15,6 @@ For translating Chinese Gwent articles into English.
 | 蹭血 | ping damage | |
 | 撑过 | survive/endure | |
 | 康博 | combo/synergy | Community slang, use "combo" in formal English |
-| 配合 | synergy/cooperation | |
 | 协同配合 | synergy | Technical term |
 
 ## Number Formulas (反向)
@@ -42,31 +41,33 @@ For translating Chinese Gwent articles into English.
 | 赖皮的组合技 | abusive combo | |
 | 改回去 | revert | More natural than "change back" |
 
-## Oral Verbs → English (反向)
+## Oral Verbs → English (反向) — 译法灵活，仅作引导，不强制锁定
 
-| Chinese | English | Notes |
-|---------|---------|-------|
-| 塞进 | slot in / fit in | Not "insert" |
-| 拍下 | play (a card) | |
-| 骗出 | bait out | |
-| 处理掉 | deal with / remove | |
-| 赚翻 | generate huge value / profit massively | |
-| 撑过 | survive / last through | |
-| 不管她 | leave unanswered / ignore | Active voice |
-| 没人带 | sees no play / almost unused | |
-| 强度不太行 | not very effective / underwhelming | |
-| 让它更亮眼 | make it stand out / shine | |
+> 以下口语动词译法灵活（按语境选），仅作翻译引导，不作为强制术语锁
+>（`_load_reverse_terminology_map` 只解析表格；列表形式不进锁）。
 
-## Round/Turn Terms (反向)
+- 塞进 → slot in / fit in（不译 "insert"）
+- 拍下 → play (a card)
+- 骗出 → bait out
+- 处理掉 → deal with / remove
+- 赚翻 → generate huge value / profit massively
+- 撑过 → survive / last through
+- 不管她 → leave unanswered / ignore（主动语态）
+- 没人带 → sees no play / almost unused
+- 强度不太行 → not very effective / underwhelming
+- 让它更亮眼 → make it stand out / shine
+- 配合 → synergy / cooperation |
 
-| Chinese | English |
-|---------|---------|
-| R1 / 第一小局 | Round 1 / R1 |
-| R2 / 第二小局 | Round 2 / R2 |
-| R3 / 第三小局 | Round 3 / R3 |
-| 回合 | turn |
-| 小局 | round |
-| 对局 | match / game |
+## Round/Turn Terms (反向) — 通用词，仅作引导，不强制锁定
+
+> Gwent 里中文"回合/小局"都对应 round（一局），没有 turn 概念。
+> 以下仅作引导，不作为强制术语锁。
+
+- R1 / 第一小局 → Round 1 / R1
+- R2 / 第二小局 → Round 2 / R2
+- R3 / 第三小局 → Round 3 / R3
+- 回合 / 小局 → round
+- 对局 → match / game
 
 ## Factions (派系)
 

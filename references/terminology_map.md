@@ -35,7 +35,6 @@
 | English | Chinese | Notes |
 |---------|---------|-------|
 | Round 1/2/3 | R1/R2/R3 or 小局 | Context-dependent |
-| Turn | 回合 | Single action |
 | deploy | 部署 | Deploy ability |
 | echo | 回响 | Reusable special card |
 | Sabbath | 夜宴 | Yaga's token |
