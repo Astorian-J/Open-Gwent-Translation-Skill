@@ -68,10 +68,12 @@
 curl -fsSL https://raw.githubusercontent.com/Astorian-J/Open-Gwent-Translation-Skill/main/install.sh | bash
 ```
 
-或手动克隆：
+或手动克隆——**之后必须跑 `install.sh`**。卡牌数据库（`card_names_4lang.json`、`effect_text.json`）是 CDPR 版权数据、**不入库**，要由 `install.sh` 在本地构建。不跑的话 skill 无法锁定卡牌名：
 
 ```bash
 git clone --depth 1 https://github.com/Astorian-J/Open-Gwent-Translation-Skill.git
+cd Open-Gwent-Translation-Skill
+bash install.sh
 ```
 
 需要 Python 3.10+。无第三方依赖。

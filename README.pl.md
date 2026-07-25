@@ -72,10 +72,12 @@ Narzędzie wstrzykuje zablokowaną tabelę terminów, oficjalne efekty kart i po
 curl -fsSL https://raw.githubusercontent.com/Astorian-J/Open-Gwent-Translation-Skill/main/install.sh | bash
 ```
 
-Lub sklonuj ręcznie:
+Lub sklonuj ręcznie — po tym MUSISZ uruchomić `install.sh`. Baza danych kart (`card_names_4lang.json`, `effect_text.json`) to dane chronione prawem autorskim CDPR i **nie znajdują się w repozytorium**; `install.sh` buduje je lokalnie. Bez tego skill nie może blokować nazw kart:
 
 ```bash
 git clone --depth 1 https://github.com/Astorian-J/Open-Gwent-Translation-Skill.git
+cd Open-Gwent-Translation-Skill
+bash install.sh
 ```
 
 Wymaga Python 3.10+. Brak zewnętrznych zależności.

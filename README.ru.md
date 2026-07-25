@@ -72,10 +72,12 @@
 curl -fsSL https://raw.githubusercontent.com/Astorian-J/Open-Gwent-Translation-Skill/main/install.sh | bash
 ```
 
-Или клонируйте вручную:
+Или клонируйте вручную — после этого ОБЯЗАТЕЛЬНО запустите `install.sh`. База данных карт (`card_names_4lang.json`, `effect_text.json`) — это данные CDPR под авторским правом и **не входят в репозиторий**; `install.sh` собирает её локально. Без этого skill не может блокировать названия карт:
 
 ```bash
 git clone --depth 1 https://github.com/Astorian-J/Open-Gwent-Translation-Skill.git
+cd Open-Gwent-Translation-Skill
+bash install.sh
 ```
 
 Требуется Python 3.10+. Нет сторонних зависимостей.

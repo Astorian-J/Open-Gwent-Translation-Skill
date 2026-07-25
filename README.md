@@ -68,10 +68,12 @@ This skill injects a locked term table, official card effects, and slang hints t
 curl -fsSL https://raw.githubusercontent.com/Astorian-J/Open-Gwent-Translation-Skill/main/install.sh | bash
 ```
 
-Or clone manually:
+Or clone manually — you MUST run `install.sh` afterwards. The card database (`card_names_4lang.json`, `effect_text.json`) is CDPR-copyright data and is **not in the repo**; `install.sh` builds it locally. Without it the skill cannot lock card names:
 
 ```bash
 git clone --depth 1 https://github.com/Astorian-J/Open-Gwent-Translation-Skill.git
+cd Open-Gwent-Translation-Skill
+bash install.sh
 ```
 
 Requires Python 3.10+. No third-party dependencies.
