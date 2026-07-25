@@ -5,9 +5,17 @@ flow for short chat content. The interface is mechanical: locate the shared
 scripts, run lookup, translate, self-check. No Claude Code-specific knowledge
 required.
 
+## Your Task Now
+
+**This skill being loaded means: TRANSLATE Gwent text now — not chat, not analyze.**
+
+Do this right now: get the content to translate → pick a direction (EN↔CN) →
+follow the 3 steps below. If the user posts Gwent text in either language
+without explicit instruction, default to translating it.
+
 > For **full-article** translation (meta reports, BC proposals, card analysis),
 > use the main skill `gwent-translation-style` instead — see `../AGENTS.md` for
-> its five-phase pipeline with pre-injection and completeness guard.
+> its `translate.py` three-step pipeline with pre-injection and completeness guard.
 
 ## When to use lite
 

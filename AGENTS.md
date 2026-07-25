@@ -4,23 +4,37 @@ This document describes how any AI agent can use the Gwent translation skill.
 The interface is purely mechanical: commands, arguments, exit codes, and JSON
 schemas. No Claude Code-specific knowledge is required.
 
+## 你现在的任务 / Your Task Now
+
+**本 skill 一被调用 = 你现在要做昆特牌（Gwent）翻译。**
+不是聊天、不是分析、不是总结——是翻译。
+**This skill being loaded means: TRANSLATE Gwent text now — not chat, not analyze, not summarize.**
+
+立刻做三件事 / Do this right now:
+
+1. **拿到要翻译的内容** — 用户已贴在对话里；若没有，主动问「把要翻译的昆特牌文章发给我」
+2. **判断方向** — 英文→中文 (`encn`) 还是 中文→英文 (`cnen`)
+3. **走流程** — `translate.py prepare` → 翻译 → `translate.py finish`（见下方 Quick Start）
+
+> 只要用户贴了昆特牌相关的中文或英文，哪怕没明说「翻译」，默认就是要翻译，直接开干。
+> If the user posts Gwent text in either language without explicit instruction, default to translating it.
+
 ## Quick Start
 
 ```bash
-# 1. Pre-process a source article
-python scripts/auto_pipeline.py pre source.md --date 2026-05 --type general --json
+# 1. Prepare — build the translation pack (locked terms, official effects, style rules)
+python scripts/translate.py prepare source.md --date 2026-05 --type general --direction encn
 
-# 2. Translate the article (performed by the agent)
+# 2. Translate using the generated source.pack.md (the only LLM step, performed by the agent)
 
-# 3. Post-process and verify
-python scripts/auto_pipeline.py post source.md translated.txt --json
-
-# 4. Run Phase C self-check (requires --source for term authority)
-python scripts/phase_c_check.py translated.txt --source source.md --json
-
-# 5. Final check (requires --source for term authority)
-python scripts/completeness_guard.py translated.txt --source source.md --json
+# 3. Finish — hard gate; the translation is NOT final until this PASSes
+python scripts/translate.py finish translated.txt --source source.md --direction encn
 ```
+
+> `translate.py` is the ONLY entry point. `auto_pipeline.py`, `phase_c_check.py`,
+> `term_enforcer.py`, and `completeness_guard.py` are now **internal steps** of
+> `translate.py` — do NOT run them manually. Their JSON schemas are documented
+> below only for programmatic / advanced inspection of intermediate output.
 
 ## Installation
 
@@ -34,17 +48,20 @@ Requirements:
 
 ## Translation Workflow
 
-A complete translation consists of five phases. Agents should execute the
-automated phases and use the returned data to guide any manual work.
+A complete translation goes through `translate.py` — a two-command deterministic
+pipeline. The agent drives only the translation step in between; everything else
+is deterministic code. Do NOT run `auto_pipeline`, `phase_c_check`, `term_enforcer`,
+or `completeness_guard` manually — they are internal steps of `translate.py` now.
 
-| Phase | Command | Who runs it |
-|-------|---------|-------------|
-| A. Pre-translation | `auto_pipeline.py pre` | Agent |
-| B. Translation | Agent's own translation step | Agent |
-| C. Self-check | `phase_c_check.py --source source.md` | Agent |
-| D. Term authority | `term_enforcer.py --source source.md` | Agent (also run by guard) |
-| E. Post-translation | `auto_pipeline.py post` | Agent |
-| F. Completeness guard | `completeness_guard.py --source source.md` | Agent |
+| Step | Command | Who runs it |
+|------|---------|-------------|
+| 1. Prepare | `translate.py prepare source.md --date YYYY-MM --type general --direction encn` | `translate.py` (deterministic; internally calls `auto_pipeline pre`) |
+| 2. Translate | Agent reads `source.pack.md`, translates the full source, saves to `translated.txt` | Agent (the only LLM step) |
+| 3. Finish | `translate.py finish translated.txt --source source.md --direction encn` | `translate.py` (deterministic gate; internally runs `completeness_guard` + `learn`) |
+
+`finish` returns `PASS` (finalize) or `BLOCKED` (fix and re-run, up to 3 rounds,
+never finalize while BLOCKED). See `SKILL.md` Step 3 for the agent-driven
+re-translate loop on BLOCKED.
 
 ## Global Conventions
 

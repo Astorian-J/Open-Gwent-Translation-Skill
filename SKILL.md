@@ -11,6 +11,21 @@ agent_created: true
 
 > For non-Claude agents and programmatic usage, see [AGENTS.md](AGENTS.md).
 
+## 你现在的任务 / Your Task Now
+
+**本 skill 一被调用 = 你现在要做昆特牌（Gwent）翻译。**
+不是聊天、不是分析、不是总结——是翻译。
+**This skill being loaded means: TRANSLATE Gwent text now — not chat, not analyze, not summarize.**
+
+立刻做三件事 / Do this right now:
+
+1. **拿到要翻译的内容** — 用户已贴在对话里；若没有，主动问「把要翻译的昆特牌文章发给我」
+2. **判断方向** — 英文→中文 (`encn`) 还是 中文→英文 (`cnen`)
+3. **走流程** — `prepare` → 翻译 → `finish`（见下方 Translation Workflow）
+
+> 只要用户贴了昆特牌相关的中文或英文，哪怕没明说「翻译」，默认就是要翻译，直接开干。
+> If the user posts Gwent text in either language without explicit instruction, default to translating it.
+
 ## Overview
 
 Bidirectional translation for Gwent articles between English and Chinese.
