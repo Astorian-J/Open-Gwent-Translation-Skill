@@ -254,6 +254,10 @@ CARD_VARIANT_COMMON_WORDS: frozenset[str] = frozenset({
     "tomb", "tower", "gate", "bridge", "master", "guard", "warrior",
     "soldier", "hunter", "scout", "priest", "beast", "dragon", "wolf",
     "bear", "tree", "stone", "silver",
+    # common English prose words that aggressive-matched onto card names.
+    # right (from "Right now"), main / northern / seeing / shadow are not cards;
+    # wagon is the fuzzy source that wrongly matched Dagon (-> "货车").
+    "main", "northern", "right", "seeing", "shadow", "wagon",
 })
 
 # Single capitalized token (Latin accents / apostrophes / hyphens OK).

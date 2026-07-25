@@ -17,7 +17,7 @@ Manual rules are surfaced as warnings that a human must confirm.
 
 | ID | Description | Check Type | Pattern | Issue Message | Notes |
 |----|-------------|------------|---------------------|---------------|-------|
-| encn-01 | No "费/费用" in formal provision contexts | regex_forbidden | `(?<![低高])费(?:用)?(?!(?:战士|铜卡|单位|核心))` | forbidden provision term: 「{match}」— use "人口" instead of "费/费用" in formal contexts | Allows casual "低费铜卡", "高费战士", "4费战士"; see correction_guide.md |
+| encn-01 | No "费/费用" in formal provision contexts | regex_forbidden | `(?<![低高浪])费(?:用)?(?!(?:恩|战士|铜卡|单位|核心))` | forbidden provision term: 「{match}」— use "人口" instead of "费/费用" in formal contexts | Allows casual "低费铜卡", "高费战士", "4费战士"; see correction_guide.md |
 | encn-02 | "X for Y" has correct order and no identical numbers | regex_forbidden | `(\d+)\s*人口\s*\1\s*点?\s*战力` | identical numbers: 「{match}」— may indicate reversed or duplicated X for Y | Also catches "5人口5战力" mistakes |
 | encn-03 | Passive voice converted to active | regex_forbidden | `(?:未被\|被解\|被削\|被增强\|被削弱\|被打出\|被移除)` | passive voice: convert "{match}" to active voice | Matches common passive indicators from correction_guide.md |
 | encn-04 | Arabic numerals throughout | regex_forbidden | `[一二三四五六七八九十]+点\|[一二三四五六七八九十]+人口` | Chinese numerals: 「{match}」— use Arabic numerals | Covers 五点, 十二人口, etc. Parser unescapes \| to regex alternation |

@@ -37,6 +37,16 @@ def _contains_cjk(target: str) -> bool:
     return bool(re.search(r"[一-鿿]", target))
 
 
+# Quote normalization: official card names carry Chinese quotes ("" U+201C/U+201D,
+# '' U+2018/U+2019), but translations often use ASCII quotes. Normalize to ASCII
+# before matching, or "残翼" (CN quotes) vs "残翼" (ASCII) mismatch and term_authority
+# reports a false negative (card treated as missing from the translation).
+_QUOTE_NORM = str.maketrans({
+    "“": '"', "”": '"',
+    "‘": "'", "’": "'",
+})
+
+
 def count_occurrences(text: str, targets: list[str], cjk_suppress: set[str] | None = None) -> int:
     """Count how many times any of the targets appears as a whole word/phrase.
 
@@ -56,16 +66,17 @@ def count_occurrences(text: str, targets: list[str], cjk_suppress: set[str] | No
     Single-CJK-char targets are skipped (too noisy).
     """
     count = 0
-    text_lower = text.lower()
+    text_lower = text.lower().translate(_QUOTE_NORM)
+    suppress_norm = {n.lower().translate(_QUOTE_NORM) for n in (cjk_suppress or ())}
     for target in targets:
-        target = target.strip().lower()
+        target = target.strip().lower().translate(_QUOTE_NORM)
         if not target:
             continue
         if _contains_cjk(target):
             if len(target) < 2:
                 continue
             longer = [
-                n for n in (cjk_suppress or ())
+                n for n in suppress_norm
                 if len(n) > len(target) and target in n
             ]
             if not longer:
@@ -99,8 +110,8 @@ def count_occurrences(text: str, targets: list[str], cjk_suppress: set[str] | No
 
 def get_context_snippet(text: str, target: str, radius: int = 30) -> str:
     """Return a short snippet around the first occurrence of target."""
-    text_lower = text.lower()
-    target_lower = target.lower()
+    text_lower = text.lower().translate(_QUOTE_NORM)
+    target_lower = target.lower().translate(_QUOTE_NORM)
     if _contains_cjk(target):
         if len(target_lower) < 2:
             return ""
