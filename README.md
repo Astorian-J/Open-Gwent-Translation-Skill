@@ -27,21 +27,21 @@ Machine translation of Gwent content breaks in predictable ways: official card n
 
 ## How it works
 
-Five phases, each automated except the actual translation:
+A two-command deterministic pipeline — `translate.py` — wraps every automated step around the single LLM translation step, so preprocessing and the final gate cannot be skipped:
 
-| Phase | What happens | Script |
+| Step | What happens | Who runs it |
 |---|---|---|
-| A. Pre-translation | Loads references, locks card terms, injects official effects + slang hints, extracts format skeleton | `auto_pipeline.py pre` |
-| B. Translation | You or your agent translate, guided by the locked term table | — |
-| C. Self-check | Checks phrasing, residue, rhetoric, completeness | `phase_c_check.py` |
-| D. Term authority | Re-verifies all locked card data verbatim | `term_enforcer.py` |
-| E. Post + guard | Final residue / term / completeness gate | `auto_pipeline.py post`, `completeness_guard.py` |
+| 1. Prepare | Loads references, locks card terms, injects official effects + slang hints, extracts format skeleton → writes a translation pack | `translate.py prepare` (deterministic) |
+| 2. Translate | You or your agent translate, guided by the pack's locked term table | The only LLM step |
+| 3. Finish | Hard gate: residue / term-authority / Phase C / completeness all re-verified; BLOCKED = do not finalize | `translate.py finish` (deterministic) |
+
+`auto_pipeline.py`, `phase_c_check.py`, `term_enforcer.py`, and `completeness_guard.py` are now **internal steps** of `translate.py` — do not run them manually.
 
 Card data is **locked, not suggested**: if a card name or official effect appears in the source, the translation must use the official Chinese form. New community terms go through a review buffer (`pending_terms.md`) before permanent adoption.
 
 ## Lite Version (Chat Translation)
 
-For **short chat content** — group messages, Discord / QQ / Kook comments, single sentences — the full five-phase pipeline is overkill. The **lite** skill (`gwent-translation-lite`) streamlines translation to three steps:
+For **short chat content** — group messages, Discord / QQ / Kook comments, single sentences — the full pipeline is overkill. The **lite** skill (`gwent-translation-lite`) streamlines translation to three steps:
 
 1. **Look up on demand** — query card names and terms via `lookup.py` only when they appear in the source; no full term-table preload.
 2. **Translate** — same Bilibili-player / native-player tone, official card and term renderings.
@@ -58,7 +58,7 @@ Both skills install together via `install.sh`. Lite agent interface: [`lite/AGEN
 
 ## A note on token usage
 
-This skill injects a locked term table, official card effects, and slang hints to enforce accuracy. A typical full run (pre → translate → post → guard) processes roughly **30–60K tokens** depending on article length — about **3× a bare translation** (measured ~31K on a medium BC article; the term table is ~6K, the bulk is the article + reference docs). Since most of the pipeline is mechanical (term locking, residue detection, format checks), it runs well on **cheaper or free-tier models** (Claude Haiku/Sonnet, GPT-4o-mini, DeepSeek, etc.) or any agent with a free quota — you don't need the most expensive model.
+This skill injects a locked term table, official card effects, and slang hints to enforce accuracy. A typical full run (prepare → translate → finish) processes roughly **30–60K tokens** depending on article length — about **3× a bare translation** (measured ~31K on a medium BC article; the term table is ~6K, the bulk is the article + reference docs). Since most of the pipeline is mechanical (term locking, residue detection, format checks), it runs well on **cheaper or free-tier models** (Claude Haiku/Sonnet, GPT-4o-mini, DeepSeek, etc.) or any agent with a free quota — you don't need the most expensive model.
 
 *Token figure based on measuring pre-phase injection on a real BC article; actual usage varies with article length.*
 
@@ -79,16 +79,13 @@ Requires Python 3.10+. No third-party dependencies.
 ## Usage
 
 ```bash
-# 1. Pre-process the source (locks terms, injects references)
-python scripts/auto_pipeline.py pre source.md --date 2026-07 --type general
+# 1. Prepare — build the translation pack (locked terms, official effects, style rules)
+python scripts/translate.py prepare source.md --date 2026-07 --type general --direction encn
 
-# 2. Translate (you or your agent), using the locked term table
+# 2. Translate using the generated source.pack.md (the only LLM step), save to translated.txt
 
-# 3. Post-process and verify
-python scripts/auto_pipeline.py post source.md translated.txt
-
-# 4. Final gate
-python scripts/completeness_guard.py translated.txt --source source.md
+# 3. Finish — hard gate; the translation is NOT final until this PASSes
+python scripts/translate.py finish translated.txt --source source.md --direction encn
 ```
 
 Add `--json` to any command for machine-readable output. Full agent interface: [AGENTS.md](AGENTS.md).
@@ -124,7 +121,8 @@ gwent-translation-style/
 │   ├── pending_terms.md         # Terms awaiting review (runtime data)
 │   └── changelog.md             # Update history
 ├── scripts/                 # 16 Python scripts
-│   ├── auto_pipeline.py         # Single orchestration entry point
+│   ├── translate.py             # Main entry: prepare→translate→finish pipeline
+│   ├── auto_pipeline.py         # Pre/post-processing (internal to translate.py)
 │   ├── check_translation.py     # Residue + slang detection
 │   ├── completeness_guard.py    # Final gate
 │   ├── phase_c_check.py         # Self-check
@@ -137,7 +135,7 @@ gwent-translation-style/
 │   ├── backtranslate.py         # Back-translation check
 │   ├── lookup.py                # Term lookup
 │   ├── learn.py                 # Learn new terms
-│   ├── health_check.py          # Integrity check (44 PASS)
+│   ├── health_check.py          # Integrity check (56 PASS)
 │   ├── _shared.py               # Shared logic (TermAuthority)
 │   └── agent_utils.py           # JSON envelope helpers
 └── lite/                    # Lite skill — chat translation (3-step)

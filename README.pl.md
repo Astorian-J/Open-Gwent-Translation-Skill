@@ -31,21 +31,21 @@ Tłumaczenie maszynowe treści o Gwincie zawodzi w przewidywalny sposób: oficja
 
 ## Jak to działa
 
-Pięć faz, z których każda — poza samym tłumaczeniem — jest zautomatyzowana:
+Deterministyczny potok dwuetapowy — `translate.py` — otacza każdy zautomatyzowany krok wokół jednego kroku tłumaczenia LLM, więc preprocessing i ostateczna bramka nie mogą zostać pominięte:
 
-| Faza | Co się dzieje | Skrypt |
+| Krok | Co się dzieje | Kto uruchamia |
 |---|---|---|
-| A. Przetwarzanie wstępne | Ładuje referencje, blokuje terminy kart, wstrzykuje oficjalne efekty + podpowiedzi slangu, wyodrębnia szkielet formatu | `auto_pipeline.py pre` |
-| B. Tłumaczenie | Ty lub Twój agent tłumaczycie, prowadzeni zablokowaną tabelą terminów | — |
-| C. Autokontrola | Sprawdza sformułowanie, resztki, retorykę, kompletność | `phase_c_check.py` |
-| D. Autorytet terminów | Ponownie weryfikuje wszystkie zablokowane dane kart dosłownie | `term_enforcer.py` |
-| E. Przetwarzanie końcowe + bramka | Końcowa bramka resztek / terminów / kompletności | `auto_pipeline.py post`, `completeness_guard.py` |
+| 1. Prepare | Ładuje referencje, blokuje terminy kart, wstrzykuje oficjalne efekty + podpowiedzi slangu, wyodrębnia szkielet formatu → tworzy pakiet tłumaczenia | `translate.py prepare` (deterministyczne) |
+| 2. Tłumaczenie | Ty lub Twój agent tłumaczycie, prowadzeni tabelą terminów z pakietu | Jedyny krok LLM |
+| 3. Finish | Twarda bramka: resztki / autorytet terminów / Phase C / kompletność ponownie weryfikowane; BLOCKED = nie finalizuj | `translate.py finish` (deterministyczne) |
+
+`auto_pipeline.py`, `phase_c_check.py`, `term_enforcer.py` i `completeness_guard.py` są teraz **wewnętrznymi krokami** `translate.py` — nie uruchamiaj ich ręcznie.
 
 Dane kart są **zablokowane, nie sugerowane**: jeśli nazwa karty lub oficjalny efekt pojawia się w źródle, tłumaczenie musi użyć oficjalnej formy chińskiej. Nowe terminy społeczności przechodzą przez bufor weryfikacji (`pending_terms.md`) przed trwałym przyjęciem.
 
 ## Wersja Lite (tłumaczenie czatu)
 
-W przypadku **krótkich treści czatu** — wiadomości grupowych, komentarzy na Discord / QQ / Kook, pojedynczych zdań — pełny potok pięciofazowy to przesada. Umiejętność **lite** (`gwent-translation-lite`) upraszcza tłumaczenie do trzech kroków:
+W przypadku **krótkich treści czatu** — wiadomości grupowych, komentarzy na Discord / QQ / Kook, pojedynczych zdań — pełny potok to przesada. Umiejętność **lite** (`gwent-translation-lite`) upraszcza tłumaczenie do trzech kroków:
 
 1. **Wyszukiwanie na żądanie** — wyszukuje nazwy kart i terminy przez `lookup.py` tylko wtedy, gdy pojawią się w źródle; bez pełnego wstępnego ładowania tabeli terminów.
 2. **Tłumaczenie** — ten sam ton graczy Bilibili / native-player, oficjalne renderowanie kart i terminów.
@@ -62,7 +62,7 @@ Obie umiejętności instalują się razem przez `install.sh`. Interfejs agenta L
 
 ## Uwaga o zużyciu tokenów
 
-Narzędzie wstrzykuje zablokowaną tabelę terminów, oficjalne efekty kart i podpowiedzi slangu, aby zapewnić dokładność. Pełny przebieg (pre → tłumaczenie → post → guard) przetwarza około **30–60K tokenów** w zależności od długości artykułu — około **3× zwykłego tłumaczenia** (zmierzone ~31K na średnim artykule BC; sama tabela terminów to ~6K, większość to artykuł + dokumenty referencyjne). Ponieważ większość potoku jest mechaniczna (blokowanie terminów, detekcja resztek, sprawdzanie formatu), działa dobrze na **tańszych modelach lub w darmowym pakiecie** (Claude Haiku/Sonnet, GPT-4o-mini, DeepSeek itd.) lub dowolnym agencie z darmowym limitem — nie potrzebujesz najdroższego modelu.
+Narzędzie wstrzykuje zablokowaną tabelę terminów, oficjalne efekty kart i podpowiedzi slangu, aby zapewnić dokładność. Pełny przebieg (prepare → tłumaczenie → finish) przetwarza około **30–60K tokenów** w zależności od długości artykułu — około **3× zwykłego tłumaczenia** (zmierzone ~31K na średnim artykule BC; sama tabela terminów to ~6K, większość to artykuł + dokumenty referencyjne). Ponieważ większość potoku jest mechaniczna (blokowanie terminów, detekcja resztek, sprawdzanie formatu), działa dobrze na **tańszych modelach lub w darmowym pakiecie** (Claude Haiku/Sonnet, GPT-4o-mini, DeepSeek itd.) lub dowolnym agencie z darmowym limitem — nie potrzebujesz najdroższego modelu.
 
 *Liczba tokenów na podstawie pomiaru wstrzykiwania w fazie pre na rzeczywistym artykule BC; rzeczywiste użycie zależy od długości artykułu.*
 
@@ -83,16 +83,13 @@ Wymaga Python 3.10+. Brak zewnętrznych zależności.
 ## Użycie
 
 ```bash
-# 1. Przetwórz wstępnie źródło (blokuje terminy, wstrzykuje referencje)
-python scripts/auto_pipeline.py pre source.md --date 2026-07 --type general
+# 1. Prepare — zbuduj pakiet tłumaczenia (zablokowane terminy, oficjalne efekty, reguły stylu)
+python scripts/translate.py prepare source.md --date 2026-07 --type general --direction encn
 
-# 2. Przetłumacz (Ty lub Twój agent), używając zablokowanej tabeli terminów
+# 2. Przetłumacz używając wygenerowanego source.pack.md (jedyny krok LLM), zapisz do translated.txt
 
-# 3. Przetwórz i zweryfikuj
-python scripts/auto_pipeline.py post source.md translated.txt
-
-# 4. Końcowa bramka
-python scripts/completeness_guard.py translated.txt --source source.md
+# 3. Finish — twarda bramka; tłumaczenie nie jest ostateczne, dopóki to nie przejdzie (PASS)
+python scripts/translate.py finish translated.txt --source source.md --direction encn
 ```
 
 Dodaj `--json` do dowolnej komendy, aby uzyskać wyjście czytelne maszynowo. Pełny interfejs agenta: [AGENTS.md](AGENTS.md).
@@ -131,7 +128,8 @@ gwent-translation-style/
 │   ├── SKILL.md                 # Umiejętność lite (tłumaczenie czatu)
 │   └── AGENTS.md                # Interfejs niezależny od agenta
 └── scripts/                 # 16 Python scripts
-    ├── auto_pipeline.py         # Single orchestration entry point
+    ├── translate.py             # Main entry: prepare→translate→finish pipeline
+    ├── auto_pipeline.py         # Pre/post-processing (internal to translate.py)
     ├── check_translation.py     # Residue + slang detection
     ├── completeness_guard.py    # Final gate
     ├── phase_c_check.py         # Self-check
@@ -144,7 +142,7 @@ gwent-translation-style/
     ├── backtranslate.py         # Back-translation check
     ├── lookup.py                # Term lookup
     ├── learn.py                 # Learn new terms
-    ├── health_check.py          # Integrity check (44 PASS)
+    ├── health_check.py          # Integrity check (56 PASS)
     ├── _shared.py               # Shared logic (TermAuthority)
     └── agent_utils.py           # JSON envelope helpers
 ```

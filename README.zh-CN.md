@@ -27,21 +27,21 @@
 
 ## 工作原理
 
-五个阶段，除实际翻译外全部自动化：
+两段式确定性流水线——`translate.py`——把所有自动化步骤包在唯一的 LLM 翻译步骤前后，让预处理和最终门禁都无法跳过：
 
-| 阶段 | 做什么 | 脚本 |
+| 步骤 | 做什么 | 由谁跑 |
 |---|---|---|
-| A. 译前预处理 | 加载 references、锁定卡牌术语、注入官方效果 + 黑话提示、提取格式骨架 | `auto_pipeline.py pre` |
-| B. 翻译 | 你（或你的 agent）按锁定术语表翻译 | — |
-| C. 自检 | 检查措辞、残留、修辞、完整性 | `phase_c_check.py` |
-| D. 术语权威 | 逐字复核所有锁定的卡牌数据 | `term_enforcer.py` |
-| E. 后处理 + 门禁 | 最终的残留/术语/完整性闸门 | `auto_pipeline.py post`、`completeness_guard.py` |
+| 1. Prepare（备料） | 加载 references、锁定卡牌术语、注入官方效果 + 黑话提示、提取格式骨架 → 生成翻译包 | `translate.py prepare`（确定性） |
+| 2. 翻译 | 你（或你的 agent）按翻译包里的锁定术语表翻译 | 唯一的 LLM 步骤 |
+| 3. Finish（定稿门禁） | 硬门禁：残留 / 术语权威 / Phase C / 完整性全部复核；BLOCKED = 不可定稿 | `translate.py finish`（确定性） |
+
+`auto_pipeline.py`、`phase_c_check.py`、`term_enforcer.py`、`completeness_guard.py` 现在是 `translate.py` 的**内部步骤**——不要手动单独跑。
 
 卡牌数据是**锁定而非建议**：源文里出现的卡牌名或官方效果，译文必须用官方中文形式。新社区术语需经审核缓冲区（`pending_terms.md`）才能正式采纳。
 
 ## 精简版（聊天翻译）
 
-对于**短聊天内容**——群消息、Discord / QQ / Kook 评论、单句翻译——完整的五阶段流水线就太重了。**精简版** skill（`gwent-translation-lite`）把翻译精简为三步：
+对于**短聊天内容**——群消息、Discord / QQ / Kook 评论、单句翻译——完整流水线就太重了。**精简版** skill（`gwent-translation-lite`）把翻译精简为三步：
 
 1. **按需查询** —— 仅在源文出现卡牌名/术语时才通过 `lookup.py` 查询；不做全量术语表预加载。
 2. **翻译** —— 同样的 Bilibili 玩家 / 原生玩家口吻，官方卡牌和术语译法。
@@ -58,7 +58,7 @@
 
 ## 关于 token 消耗
 
-本 skill 会注入锁定术语表、官方卡牌效果、黑话提示来保证准确。一次完整流程（pre → 翻译 → post → guard）大约消耗 **3-6 万 tokens**，视文章长度而定——约为裸翻译的 **3 倍**（中等 BC 文章实测约 31K；术语表本身约 6K，大头是文章+参考文档）。因为流水线大部分是机械操作（术语锁定、残留检测、格式检查），用**便宜或免费模型**（Claude Haiku/Sonnet、GPT-4o-mini、DeepSeek 等）或任何带免费额度的 agent 就能跑得很好，不需要最贵的模型。
+本 skill 会注入锁定术语表、官方卡牌效果、黑话提示来保证准确。一次完整流程（prepare → 翻译 → finish）大约消耗 **3-6 万 tokens**，视文章长度而定——约为裸翻译的 **3 倍**（中等 BC 文章实测约 31K；术语表本身约 6K，大头是文章+参考文档）。因为流水线大部分是机械操作（术语锁定、残留检测、格式检查），用**便宜或免费模型**（Claude Haiku/Sonnet、GPT-4o-mini、DeepSeek 等）或任何带免费额度的 agent 就能跑得很好，不需要最贵的模型。
 
 *token 数值基于真实 BC 文章的 pre 阶段注入实测；实际消耗随文章长度变化。*
 
@@ -79,16 +79,13 @@ git clone --depth 1 https://github.com/Astorian-J/Open-Gwent-Translation-Skill.g
 ## 用法
 
 ```bash
-# 1. 译前预处理源文（锁定术语、注入 reference）
-python scripts/auto_pipeline.py pre source.md --date 2026-07 --type general
+# 1. Prepare — 生成翻译包（锁定术语、官方效果、风格规则）
+python scripts/translate.py prepare source.md --date 2026-07 --type general --direction encn
 
-# 2. 翻译（你或你的 agent），按锁定术语表来
+# 2. 按生成的 source.pack.md 翻译（唯一的 LLM 步骤），存成 translated.txt
 
-# 3. 后处理并校验
-python scripts/auto_pipeline.py post source.md translated.txt
-
-# 4. 最终门禁
-python scripts/completeness_guard.py translated.txt --source source.md
+# 3. Finish — 硬门禁；不 PASS 就不算定稿
+python scripts/translate.py finish translated.txt --source source.md --direction encn
 ```
 
 任意命令加 `--json` 获取机器可读输出。完整 agent 接口见 [AGENTS.md](AGENTS.md)。
@@ -124,7 +121,8 @@ gwent-translation-style/
 │   ├── pending_terms.md         # 待审核术语（运行时数据）
 │   └── changelog.md             # 更新历史
 ├── scripts/                 # 16 个 Python 脚本
-│   ├── auto_pipeline.py         # 唯一编排入口
+│   ├── translate.py             # 主入口：prepare→翻译→finish 流水线
+│   ├── auto_pipeline.py         # 译前/译后处理（translate.py 的内部步骤）
 │   ├── check_translation.py     # 残留 + 黑话检测
 │   ├── completeness_guard.py    # 最终门禁
 │   ├── phase_c_check.py         # 自检
@@ -137,7 +135,7 @@ gwent-translation-style/
 │   ├── backtranslate.py         # 回译检查
 │   ├── lookup.py                # 术语查询
 │   ├── learn.py                 # 学习新术语
-│   ├── health_check.py          # 完整性检查（44 PASS）
+│   ├── health_check.py          # 完整性检查（56 PASS）
 │   ├── _shared.py               # 共享逻辑（TermAuthority）
 │   └── agent_utils.py           # JSON 信封辅助
 └── lite/                    # 精简版 skill（聊天翻译）
