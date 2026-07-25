@@ -192,9 +192,30 @@ def _load_lock_terms(lock_path: str | None) -> list[dict]:
     return out
 
 
+def _card_db_status() -> tuple[int, bool]:
+    """Return (card_count, ready) for the build-time card database.
+
+    card_names_4lang.json is a build-time artifact (gitignored), built by
+    build_card_names_reference.py. When it is missing or far below ~1381 cards,
+    TermAuthority loads no card names and the lock is silently hollow — the agent
+    then translates card names freely with no warning. Shared by build_pack (pack
+    banner) and cmd_prepare (status line + ready flag).
+    """
+    cards_json = SCRIPTS_DIR.parent / "references" / "card_names_4lang.json"
+    count = 0
+    if cards_json.exists():
+        try:
+            count = len(json.loads(cards_json.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, OSError, ValueError):
+            count = 0
+    return count, count >= 1000
+
+
 def build_pack(source_path: Path, direction: str, date: str | None,
                article_type: str, pre_data: dict, lock_built: bool) -> str:
     """Assemble the Markdown translation pack from auto_pipeline pre's JSON output."""
+    card_db_count, cards_ready = _card_db_status()
+
     ta = pre_data.get("term_authority", {}) or {}
     locked = ta.get("locked_terms", []) or []
     ambiguous = ta.get("ambiguous_terms", []) or []
@@ -225,6 +246,14 @@ def build_pack(source_path: Path, direction: str, date: str | None,
     if not lock_built:
         L.append("> WARNING: context lock failed to build — the MANDATORY term lock")
         L.append("> table below is EMPTY. Translate cautiously and re-run prepare.")
+        L.append("")
+
+    if not cards_ready:
+        L.append("> **STOP — card database not ready**: `card_names_4lang.json` has only")
+        L.append(f"> {card_db_count} cards (expected ~1381). The lock table below is INCOMPLETE")
+        L.append("> — card names will NOT be extracted/locked, so they will be translated")
+        L.append("> freely (unverified). Build it FIRST, then re-run prepare:")
+        L.append(">   python scripts/build_card_names_reference.py   # then re-run prepare")
         L.append("")
 
     # Style rules
@@ -381,7 +410,8 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         print(f"Error: failed to write pack to {pack_path}: {e}")
         sys.exit(1)
 
-    ready = lock_built and skeleton_extracted and pre_exit_code == 0
+    card_db_count, cards_ready = _card_db_status()
+    ready = lock_built and skeleton_extracted and pre_exit_code == 0 and cards_ready
 
     data = {
         "command": "prepare",
@@ -399,6 +429,8 @@ def cmd_prepare(args: argparse.Namespace) -> None:
             "pending": pre_data.get("term_authority", {}).get("pending_count", 0),
         },
         "ready": ready,
+        "cards_ready": cards_ready,
+        "card_db_count": card_db_count,
     }
 
     if args.json:
@@ -412,6 +444,7 @@ def cmd_prepare(args: argparse.Namespace) -> None:
     print(f"Direction: {'EN->CN' if direction == 'encn' else 'CN->EN'}")
     print(f"Pack:      {pack_path}")
     print(f"Lock:      {'built' if lock_built else 'FAILED (pack written with empty lock table)'}")
+    print(f"CardDB:    {card_db_count} cards {'(READY)' if cards_ready else '(NOT READY — run build_card_names_reference.py, then re-run prepare)'}")
     print(f"Skeleton:  {'extracted' if skeleton_extracted else 'failed'}")
     print(f"Terms:     {data['term_counts']['locked']} locked, "
           f"{data['term_counts']['ambiguous']} ambiguous, "
@@ -422,8 +455,13 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         print(f"  python scripts/translate.py finish <translated> "
               f"--source {source_path.name} --direction {direction}")
     else:
-        print("[WARN] Pack written but incomplete (see above). Translate cautiously,")
-        print("       and investigate the failed pre-step before finalizing.")
+        if not cards_ready:
+            print(f"[WARN] Card database NOT ready ({card_db_count} cards). Lock table is INCOMPLETE")
+            print("       — card names will not be verified. Build it, then re-run prepare:")
+            print("           python scripts/build_card_names_reference.py")
+        else:
+            print("[WARN] Pack written but incomplete (see above). Translate cautiously,")
+            print("       and investigate the failed pre-step before finalizing.")
     sys.exit(0 if ready else 1)
 
 
