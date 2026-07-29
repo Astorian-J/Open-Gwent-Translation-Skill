@@ -1,0 +1,5508 @@
+{
+"ciri": {
+"type": "Unit",
+"is_disloyal": false
+},
+"geralt: igni": {
+"type": "Unit",
+"is_disloyal": false
+},
+"geralt of rivia": {
+"type": "Unit",
+"is_disloyal": false
+},
+"regis": {
+"type": "Unit",
+"is_disloyal": false
+},
+"regis: higher vampire": {
+"type": "Unit",
+"is_disloyal": false
+},
+"triss merigold": {
+"type": "Unit",
+"is_disloyal": false
+},
+"villentretenmerth": {
+"type": "Unit",
+"is_disloyal": false
+},
+"yennefer of vengerberg": {
+"type": "Unit",
+"is_disloyal": false
+},
+"zoltan: scoundrel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ciri: dash": {
+"type": "Unit",
+"is_disloyal": false
+},
+"geralt: aard": {
+"type": "Unit",
+"is_disloyal": false
+},
+"avallac'h: sage": {
+"type": "Unit",
+"is_disloyal": false
+},
+"yennefer: conjurer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dudu": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eskel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vesemir": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lambert": {
+"type": "Unit",
+"is_disloyal": false
+},
+"myrgtabrakke": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ocvist": {
+"type": "Unit",
+"is_disloyal": false
+},
+"olgierd von everec": {
+"type": "Unit",
+"is_disloyal": false
+},
+"operator": {
+"type": "Unit",
+"is_disloyal": false
+},
+"prize-winning cow": {
+"type": "Unit",
+"is_disloyal": false
+},
+"roach": {
+"type": "Unit",
+"is_disloyal": false
+},
+"johnny": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sarah": {
+"type": "Unit",
+"is_disloyal": false
+},
+"francis bedlam": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cyprian wiley": {
+"type": "Unit",
+"is_disloyal": false
+},
+"iris von everec": {
+"type": "Unit",
+"is_disloyal": false
+},
+"unicorn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"chironex": {
+"type": "Unit",
+"is_disloyal": false
+},
+"duda: companion": {
+"type": "Special",
+"is_disloyal": false
+},
+"duda: agitator": {
+"type": "Special",
+"is_disloyal": false
+},
+"fiend": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ragh nar roog": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"the last wish": {
+"type": "Special",
+"is_disloyal": false
+},
+"decoy": {
+"type": "Special",
+"is_disloyal": false
+},
+"merigold's hailstorm": {
+"type": "Special",
+"is_disloyal": false
+},
+"skellige storm": {
+"type": "Special",
+"is_disloyal": false
+},
+"stammelford's tremors": {
+"type": "Special",
+"is_disloyal": false
+},
+"dimeritium bomb": {
+"type": "Special",
+"is_disloyal": false
+},
+"blizzard": {
+"type": "Special",
+"is_disloyal": false
+},
+"commander's horn": {
+"type": "Special",
+"is_disloyal": false
+},
+"vaedermakar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"alzur's double-cross": {
+"type": "Special",
+"is_disloyal": false
+},
+"alzur's thunder": {
+"type": "Special",
+"is_disloyal": false
+},
+"biting frost": {
+"type": "Special",
+"is_disloyal": false
+},
+"clear skies": {
+"type": "Special",
+"is_disloyal": false
+},
+"impenetrable fog": {
+"type": "Special",
+"is_disloyal": false
+},
+"manticore venom": {
+"type": "Special",
+"is_disloyal": false
+},
+"adrenaline rush": {
+"type": "Special",
+"is_disloyal": false
+},
+"epidemic": {
+"type": "Special",
+"is_disloyal": false
+},
+"scorch": {
+"type": "Special",
+"is_disloyal": false
+},
+"swallow": {
+"type": "Special",
+"is_disloyal": false
+},
+"thunderbolt": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"torrential rain": {
+"type": "Special",
+"is_disloyal": false
+},
+"an craite warcrier": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bekker's dark mirror": {
+"type": "Special",
+"is_disloyal": false
+},
+"renew": {
+"type": "Special",
+"is_disloyal": false
+},
+"dimeritium shackles": {
+"type": "Special",
+"is_disloyal": false
+},
+"mardroeme": {
+"type": "Special",
+"is_disloyal": false
+},
+"bloody baron": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vernon roche": {
+"type": "Unit",
+"is_disloyal": true
+},
+"john natalis": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lined pockets": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"shani": {
+"type": "Unit",
+"is_disloyal": false
+},
+"triss: butterflies": {
+"type": "Unit",
+"is_disloyal": false
+},
+"keira metz": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dandelion": {
+"type": "Unit",
+"is_disloyal": false
+},
+"priscilla": {
+"type": "Unit",
+"is_disloyal": false
+},
+"thaler": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ves": {
+"type": "Unit",
+"is_disloyal": false
+},
+"síle de tansarville": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sabrina glevissig": {
+"type": "Unit",
+"is_disloyal": true
+},
+"dethmold": {
+"type": "Unit",
+"is_disloyal": false
+},
+"prince stennis": {
+"type": "Unit",
+"is_disloyal": false
+},
+"trollololo": {
+"type": "Unit",
+"is_disloyal": false
+},
+"princess pavetta": {
+"type": "Unit",
+"is_disloyal": false
+},
+"margarita laux-antille": {
+"type": "Unit",
+"is_disloyal": false
+},
+"nenneke": {
+"type": "Unit",
+"is_disloyal": false
+},
+"odrin": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kaedweni sergeant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"carlo varese": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ballista": {
+"type": "Unit",
+"is_disloyal": false
+},
+"reinforced ballista": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bombardment": {
+"type": "Special",
+"is_disloyal": false
+},
+"siege tower": {
+"type": "Unit",
+"is_disloyal": false
+},
+"redanian knight": {
+"type": "Unit",
+"is_disloyal": false
+},
+"siege support": {
+"type": "Unit",
+"is_disloyal": false
+},
+"blue stripes scout": {
+"type": "Unit",
+"is_disloyal": false
+},
+"blue stripes commando": {
+"type": "Unit",
+"is_disloyal": false
+},
+"field medic": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dun banner": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kaedweni cavalry": {
+"type": "Unit",
+"is_disloyal": false
+},
+"reinforced trebuchet": {
+"type": "Unit",
+"is_disloyal": false
+},
+"temerian infantry": {
+"type": "Unit",
+"is_disloyal": false
+},
+"redanian elite": {
+"type": "Unit",
+"is_disloyal": false
+},
+"siege master": {
+"type": "Unit",
+"is_disloyal": false
+},
+"botchling": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lubberkin": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vicovaro novice": {
+"type": "Unit",
+"is_disloyal": false
+},
+"reinforcements": {
+"type": "Special",
+"is_disloyal": false
+},
+"carapace": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"ge'els": {
+"type": "Unit",
+"is_disloyal": false
+},
+"draug": {
+"type": "Unit",
+"is_disloyal": false
+},
+"imlerith's wrath": {
+"type": "Special",
+"is_disloyal": false
+},
+"force of nature": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"caranthir ar-feiniel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"avallac'h": {
+"type": "Unit",
+"is_disloyal": false
+},
+"caretaker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kayran": {
+"type": "Unit",
+"is_disloyal": false
+},
+"miruna": {
+"type": "Unit",
+"is_disloyal": false
+},
+"arachas behemoth": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mourntart": {
+"type": "Unit",
+"is_disloyal": false
+},
+"abaya": {
+"type": "Unit",
+"is_disloyal": false
+},
+"frightener: dormant": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"morvudd": {
+"type": "Unit",
+"is_disloyal": false
+},
+"whispess": {
+"type": "Unit",
+"is_disloyal": false
+},
+"brewess": {
+"type": "Unit",
+"is_disloyal": false
+},
+"weavess": {
+"type": "Unit",
+"is_disloyal": false
+},
+"imperial manticore": {
+"type": "Unit",
+"is_disloyal": false
+},
+"colossal ifrit": {
+"type": "Unit",
+"is_disloyal": false
+},
+"nekker warrior": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ice giant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"primordial d'ao": {
+"type": "Unit",
+"is_disloyal": false
+},
+"nithral": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gaunter o'dimm": {
+"type": "Unit",
+"is_disloyal": false
+},
+"toad prince": {
+"type": "Unit",
+"is_disloyal": false
+},
+"celaeno harpy": {
+"type": "Unit",
+"is_disloyal": false
+},
+"old speartip: asleep": {
+"type": "Unit",
+"is_disloyal": false
+},
+"katakan": {
+"type": "Unit",
+"is_disloyal": false
+},
+"foglet": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ancient foglet": {
+"type": "Unit",
+"is_disloyal": false
+},
+"wyvern": {
+"type": "Unit",
+"is_disloyal": false
+},
+"drone": {
+"type": "Unit",
+"is_disloyal": false
+},
+"nekker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ghoul": {
+"type": "Unit",
+"is_disloyal": false
+},
+"griffin": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vran warrior": {
+"type": "Unit",
+"is_disloyal": false
+},
+"wild hunt warrior": {
+"type": "Unit",
+"is_disloyal": false
+},
+"wild hunt rider": {
+"type": "Unit",
+"is_disloyal": false
+},
+"predatory dive": {
+"type": "Special",
+"is_disloyal": false
+},
+"ekimmara": {
+"type": "Unit",
+"is_disloyal": false
+},
+"drowner": {
+"type": "Unit",
+"is_disloyal": false
+},
+"harpy": {
+"type": "Unit",
+"is_disloyal": false
+},
+"harpy egg": {
+"type": "Unit",
+"is_disloyal": false
+},
+"wild hunt hound": {
+"type": "Unit",
+"is_disloyal": false
+},
+"wolf pack": {
+"type": "Unit",
+"is_disloyal": false
+},
+"enraged ifrit": {
+"type": "Unit",
+"is_disloyal": false
+},
+"frenzied d'ao": {
+"type": "Unit",
+"is_disloyal": false
+},
+"maerolorn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"imperial golem": {
+"type": "Unit",
+"is_disloyal": false
+},
+"old speartip": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hideous feast": {
+"type": "Special",
+"is_disloyal": false
+},
+"wyvern scale shield": {
+"type": "Special",
+"is_disloyal": false
+},
+"arachas nest": {
+"type": "Special",
+"is_disloyal": false
+},
+"saesenthessis": {
+"type": "Unit",
+"is_disloyal": false
+},
+"isengrim faoiltiarna": {
+"type": "Unit",
+"is_disloyal": false
+},
+"iorveth": {
+"type": "Unit",
+"is_disloyal": false
+},
+"milva": {
+"type": "Unit",
+"is_disloyal": false
+},
+"zoltan chivay": {
+"type": "Unit",
+"is_disloyal": false
+},
+"aglaïs": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ithlinne aegli": {
+"type": "Unit",
+"is_disloyal": false
+},
+"schirrú": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dennis cranmer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ida emean aep sivney": {
+"type": "Unit",
+"is_disloyal": false
+},
+"yaevinn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"toruviel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vrihedd dragoon": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ciaran aep easnillen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"barclay els": {
+"type": "Unit",
+"is_disloyal": false
+},
+"morenn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"braenn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"malena": {
+"type": "Unit",
+"is_disloyal": false
+},
+"aelirenn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sheldon skaggs": {
+"type": "Unit",
+"is_disloyal": false
+},
+"yarpen zigrin": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ele'yas": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hawker healer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vrihedd brigade": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vrihedd officer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dol blathanna bomber": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dwarven skirmisher": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mahakam defender": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vrihedd sappers": {
+"type": "Unit",
+"is_disloyal": false
+},
+"waylay": {
+"type": "Special",
+"is_disloyal": false
+},
+"vrihedd vanguard": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dol blathanna archer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dwarven mercenary": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hawker support": {
+"type": "Unit",
+"is_disloyal": false
+},
+"elven wardancer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dol blathanna bowman": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hawker smuggler": {
+"type": "Unit",
+"is_disloyal": false
+},
+"blue mountain elite": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mahakam guard": {
+"type": "Unit",
+"is_disloyal": false
+},
+"scoia'tael neophyte": {
+"type": "Unit",
+"is_disloyal": false
+},
+"serpent trap": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"incinerating trap": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"hjalmar an craite": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ermion": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kambi": {
+"type": "Unit",
+"is_disloyal": false
+},
+"birna bran": {
+"type": "Unit",
+"is_disloyal": false
+},
+"madman lugos": {
+"type": "Unit",
+"is_disloyal": false
+},
+"coral": {
+"type": "Unit",
+"is_disloyal": false
+},
+"wild boar of the sea": {
+"type": "Unit",
+"is_disloyal": false
+},
+"blueboy lugos": {
+"type": "Unit",
+"is_disloyal": false
+},
+"champion's charge": {
+"type": "Special",
+"is_disloyal": false
+},
+"djenge frett": {
+"type": "Unit",
+"is_disloyal": false
+},
+"donar an hindar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"draig bon-dhu": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gremist": {
+"type": "Unit",
+"is_disloyal": false
+},
+"holger blackhand": {
+"type": "Unit",
+"is_disloyal": false
+},
+"jutta an dimun": {
+"type": "Unit",
+"is_disloyal": false
+},
+"morkvarg": {
+"type": "Unit",
+"is_disloyal": false
+},
+"savage bear": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sigrdrifa's rite": {
+"type": "Special",
+"is_disloyal": false
+},
+"svanrige tuirseach": {
+"type": "Unit",
+"is_disloyal": false
+},
+"udalryk an brokvar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"svalblod ravager": {
+"type": "Unit",
+"is_disloyal": false
+},
+"svalblod butcher": {
+"type": "Unit",
+"is_disloyal": false
+},
+"an craite warrior": {
+"type": "Unit",
+"is_disloyal": false
+},
+"brokvar hunter": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dimun pirate": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dimun pirate captain": {
+"type": "Unit",
+"is_disloyal": false
+},
+"drummond queensguard": {
+"type": "Unit",
+"is_disloyal": false
+},
+"heymaey skald": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dimun light longship": {
+"type": "Unit",
+"is_disloyal": false
+},
+"freya's blessing": {
+"type": "Special",
+"is_disloyal": false
+},
+"an craite blacksmith": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tuirseach axeman": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tuirseach skirmisher": {
+"type": "Unit",
+"is_disloyal": false
+},
+"an craite longship": {
+"type": "Unit",
+"is_disloyal": false
+},
+"brokvar archer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gutting slash": {
+"type": "Special",
+"is_disloyal": false
+},
+"an craite armorsmith": {
+"type": "Unit",
+"is_disloyal": false
+},
+"drummond shieldmaiden": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hemdall": {
+"type": "Unit",
+"is_disloyal": false
+},
+"delirium": {
+"type": "Special",
+"is_disloyal": false
+},
+"elder bear": {
+"type": "Unit",
+"is_disloyal": false
+},
+"raging bear": {
+"type": "Unit",
+"is_disloyal": false
+},
+"restore": {
+"type": "Special",
+"is_disloyal": false
+},
+"lacerate": {
+"type": "Special",
+"is_disloyal": false
+},
+"letho of gulet": {
+"type": "Unit",
+"is_disloyal": false
+},
+"menno coehoorn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vattier de rideaux": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cahir dyffryn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vilgefortz": {
+"type": "Unit",
+"is_disloyal": false
+},
+"stefan skellen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tibor eggebracht": {
+"type": "Unit",
+"is_disloyal": false
+},
+"xarthisius": {
+"type": "Unit",
+"is_disloyal": false
+},
+"albrich": {
+"type": "Unit",
+"is_disloyal": false
+},
+"assire var anahid": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cynthia": {
+"type": "Unit",
+"is_disloyal": false
+},
+"peter saar gwynleve": {
+"type": "Unit",
+"is_disloyal": false
+},
+"fringilla vigo": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sweers": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vanhemar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"auckes": {
+"type": "Unit",
+"is_disloyal": false
+},
+"serrit": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cantarella": {
+"type": "Unit",
+"is_disloyal": true
+},
+"joachim de wett": {
+"type": "Unit",
+"is_disloyal": true
+},
+"false ciri": {
+"type": "Unit",
+"is_disloyal": true
+},
+"ceallach dyffryn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"daerlan soldier": {
+"type": "Unit",
+"is_disloyal": false
+},
+"rot tosser": {
+"type": "Unit",
+"is_disloyal": false
+},
+"spotter": {
+"type": "Unit",
+"is_disloyal": false
+},
+"experimental remedy": {
+"type": "Special",
+"is_disloyal": false
+},
+"deithwen arbalest": {
+"type": "Unit",
+"is_disloyal": false
+},
+"fire scorpion": {
+"type": "Unit",
+"is_disloyal": false
+},
+"impera brigade": {
+"type": "Unit",
+"is_disloyal": false
+},
+"impera enforcers": {
+"type": "Unit",
+"is_disloyal": false
+},
+"nauzicaa sergeant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"nauzicaa brigade": {
+"type": "Unit",
+"is_disloyal": false
+},
+"alba pikeman": {
+"type": "Unit",
+"is_disloyal": false
+},
+"alba spearman": {
+"type": "Unit",
+"is_disloyal": false
+},
+"combat engineer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"emissary": {
+"type": "Unit",
+"is_disloyal": true
+},
+"imperial diplomacy": {
+"type": "Special",
+"is_disloyal": false
+},
+"alchemist": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mangonel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"nilfgaardian knight": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the guardian": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cow carcass": {
+"type": "Unit",
+"is_disloyal": true
+},
+"treason": {
+"type": "Special",
+"is_disloyal": false
+},
+"bribery": {
+"type": "Special",
+"is_disloyal": false
+},
+"petri's philter": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"korathi heatwave": {
+"type": "Special",
+"is_disloyal": false
+},
+"marching orders": {
+"type": "Special",
+"is_disloyal": false
+},
+"necromancy": {
+"type": "Special",
+"is_disloyal": false
+},
+"summoning circle": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"arachas venom": {
+"type": "Special",
+"is_disloyal": false
+},
+"wild hunt navigator": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vabjorn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"milaen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"leo bonhart": {
+"type": "Unit",
+"is_disloyal": false
+},
+"rainfarn of attre": {
+"type": "Unit",
+"is_disloyal": true
+},
+"aretuza adept": {
+"type": "Unit",
+"is_disloyal": false
+},
+"drummond warmonger": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cyclops": {
+"type": "Unit",
+"is_disloyal": false
+},
+"archespore": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dol blathanna sentry": {
+"type": "Unit",
+"is_disloyal": false
+},
+"an craite greatsword": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hefty helge": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mahakam marauder": {
+"type": "Unit",
+"is_disloyal": false
+},
+"harald houndsnout": {
+"type": "Unit",
+"is_disloyal": false
+},
+"magne division": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tuirseach veteran": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ban ard tutor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"battering ram": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vreemde": {
+"type": "Unit",
+"is_disloyal": false
+},
+"golyat": {
+"type": "Unit",
+"is_disloyal": false
+},
+"artefact compression": {
+"type": "Special",
+"is_disloyal": false
+},
+"white frost": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"aguara: true form": {
+"type": "Unit",
+"is_disloyal": false
+},
+"uma's curse": {
+"type": "Special",
+"is_disloyal": false
+},
+"aguara": {
+"type": "Unit",
+"is_disloyal": false
+},
+"shilard fitz-oesterlen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"adda: striga": {
+"type": "Unit",
+"is_disloyal": false
+},
+"trial of the grasses": {
+"type": "Special",
+"is_disloyal": false
+},
+"hanmarvyn's blue dream": {
+"type": "Special",
+"is_disloyal": false
+},
+"xavier moran": {
+"type": "Unit",
+"is_disloyal": false
+},
+"heymaey herbalist": {
+"type": "Unit",
+"is_disloyal": false
+},
+"iris' companions": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dorregaray of vole": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hubert rejk": {
+"type": "Unit",
+"is_disloyal": false
+},
+"nivellen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"stregobor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vincent meis": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hym": {
+"type": "Unit",
+"is_disloyal": false
+},
+"olaf": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ulfhedinn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dimun warship": {
+"type": "Unit",
+"is_disloyal": false
+},
+"siren": {
+"type": "Unit",
+"is_disloyal": false
+},
+"alpha werewolf": {
+"type": "Unit",
+"is_disloyal": false
+},
+"assassination": {
+"type": "Special",
+"is_disloyal": false
+},
+"infiltrator": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kingslayer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"pyrotechnician": {
+"type": "Unit",
+"is_disloyal": false
+},
+"farseer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"elven scribe": {
+"type": "Unit",
+"is_disloyal": false
+},
+"panther": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tuirseach bearmaster": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dimun corsair": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dimun smuggler": {
+"type": "Unit",
+"is_disloyal": false
+},
+"heymaey flaminica": {
+"type": "Unit",
+"is_disloyal": false
+},
+"heymaey protector": {
+"type": "Unit",
+"is_disloyal": false
+},
+"royal decree": {
+"type": "Special",
+"is_disloyal": false
+},
+"battle trance": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"onslaught": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"reckless flurry": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"imprisonment": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"imperial formation": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"tactical decision": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"nature's gift": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"precision strike": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"guerilla tactics": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"inspired zeal": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"mobilization": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"tridam infantry": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cerys an craite": {
+"type": "Unit",
+"is_disloyal": false
+},
+"saskia": {
+"type": "Unit",
+"is_disloyal": false
+},
+"skjall": {
+"type": "Unit",
+"is_disloyal": false
+},
+"jotunn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"whispess: tribute": {
+"type": "Unit",
+"is_disloyal": false
+},
+"brewess: ritual": {
+"type": "Unit",
+"is_disloyal": false
+},
+"weavess: incantation": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mandrake": {
+"type": "Special",
+"is_disloyal": false
+},
+"crow's eye": {
+"type": "Special",
+"is_disloyal": false
+},
+"vigo's muzzle": {
+"type": "Special",
+"is_disloyal": false
+},
+"wolfsbane": {
+"type": "Special",
+"is_disloyal": false
+},
+"pitfall trap": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"cockatrice": {
+"type": "Unit",
+"is_disloyal": false
+},
+"poor fucking infantry": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lambert: swordmaster": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eskel: pathfinder": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vesemir: mentor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dwarven agitator": {
+"type": "Unit",
+"is_disloyal": false
+},
+"standard bearer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"rotfiend": {
+"type": "Unit",
+"is_disloyal": false
+},
+"alba armored cavalry": {
+"type": "Unit",
+"is_disloyal": false
+},
+"temerian drummer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"whale harpooner": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the naglfar": {
+"type": "Special",
+"is_disloyal": false
+},
+"chort": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ice troll": {
+"type": "Unit",
+"is_disloyal": false
+},
+"venendal elite": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mahakam ale": {
+"type": "Special",
+"is_disloyal": false
+},
+"éibhear hattori": {
+"type": "Unit",
+"is_disloyal": false
+},
+"germain piquant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"heymaey spearmaiden": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ronvid the incessant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tainted ale": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"ale of the ancestors": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"she-troll of vergen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"elven swordmaster": {
+"type": "Unit",
+"is_disloyal": false
+},
+"slyzard": {
+"type": "Unit",
+"is_disloyal": false
+},
+"aedirnian mauler": {
+"type": "Unit",
+"is_disloyal": false
+},
+"geralt: yrden": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mahakam volunteers": {
+"type": "Unit",
+"is_disloyal": false
+},
+"harald's pal": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cow": {
+"type": "Unit",
+"is_disloyal": false
+},
+"an craite marauder": {
+"type": "Unit",
+"is_disloyal": false
+},
+"phoenix": {
+"type": "Unit",
+"is_disloyal": false
+},
+"toussaintois hospitality": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"stribog runestone": {
+"type": "Special",
+"is_disloyal": false
+},
+"zoria runestone": {
+"type": "Special",
+"is_disloyal": false
+},
+"dazhbog runestone": {
+"type": "Special",
+"is_disloyal": false
+},
+"devana runestone": {
+"type": "Special",
+"is_disloyal": false
+},
+"morana runestone": {
+"type": "Special",
+"is_disloyal": false
+},
+"whispering hillock": {
+"type": "Special",
+"is_disloyal": false
+},
+"invigorate": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"shieldwall": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"rage of the sea": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"bone talisman": {
+"type": "Special",
+"is_disloyal": false
+},
+"werecat": {
+"type": "Unit",
+"is_disloyal": false
+},
+"werewolf": {
+"type": "Unit",
+"is_disloyal": false
+},
+"yennefer's invocation": {
+"type": "Special",
+"is_disloyal": false
+},
+"letho: kingslayer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"forktail": {
+"type": "Unit",
+"is_disloyal": false
+},
+"slave hunter": {
+"type": "Unit",
+"is_disloyal": false
+},
+"slave infantry": {
+"type": "Unit",
+"is_disloyal": false
+},
+"iorveth's gambit": {
+"type": "Special",
+"is_disloyal": false
+},
+"slave driver": {
+"type": "Unit",
+"is_disloyal": false
+},
+"saesenthessis: blaze": {
+"type": "Unit",
+"is_disloyal": false
+},
+"isengrim's council": {
+"type": "Special",
+"is_disloyal": false
+},
+"master of disguise": {
+"type": "Unit",
+"is_disloyal": false
+},
+"recruit": {
+"type": "Unit",
+"is_disloyal": false
+},
+"seltkirk of gulet": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ointment": {
+"type": "Special",
+"is_disloyal": false
+},
+"vandergrift": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mad kiyan": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kaedweni knight": {
+"type": "Unit",
+"is_disloyal": false
+},
+"giant boar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kaedweni revenant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cursed knight": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ciri: nova": {
+"type": "Unit",
+"is_disloyal": false
+},
+"shupe's day off": {
+"type": "Special",
+"is_disloyal": false
+},
+"forbidden magic": {
+"type": "Special",
+"is_disloyal": false
+},
+"damned sorceress": {
+"type": "Unit",
+"is_disloyal": false
+},
+"doppler": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sihil": {
+"type": "Special",
+"is_disloyal": false
+},
+"bloody flail": {
+"type": "Special",
+"is_disloyal": false
+},
+"bekker's rockslide": {
+"type": "Special",
+"is_disloyal": false
+},
+"glorious hunt": {
+"type": "Special",
+"is_disloyal": false
+},
+"half-elf hunter": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dragon's dream": {
+"type": "Special",
+"is_disloyal": false
+},
+"elven scout": {
+"type": "Unit",
+"is_disloyal": false
+},
+"garrison": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"yoana": {
+"type": "Unit",
+"is_disloyal": false
+},
+"crushing trap": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"derran": {
+"type": "Unit",
+"is_disloyal": false
+},
+"rock barrage": {
+"type": "Special",
+"is_disloyal": false
+},
+"vandergrift's blade": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"sabrina's inferno": {
+"type": "Special",
+"is_disloyal": false
+},
+"mahakam horn": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"mastercrafted spear": {
+"type": "Special",
+"is_disloyal": false
+},
+"parasite": {
+"type": "Special",
+"is_disloyal": false
+},
+"winch": {
+"type": "Special",
+"is_disloyal": false
+},
+"ruehin": {
+"type": "Unit",
+"is_disloyal": false
+},
+"watchman": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cadaverine": {
+"type": "Special",
+"is_disloyal": false
+},
+"vrygheff": {
+"type": "Unit",
+"is_disloyal": false
+},
+"pavko gale": {
+"type": "Unit",
+"is_disloyal": false
+},
+"paulie dahlberg": {
+"type": "Unit",
+"is_disloyal": false
+},
+"black blood": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"ozzrel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bridge troll": {
+"type": "Unit",
+"is_disloyal": false
+},
+"barbegazi": {
+"type": "Unit",
+"is_disloyal": false
+},
+"scout": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gigascorpion decoction: condense": {
+"type": "Special",
+"is_disloyal": false
+},
+"gigascorpion decoction: spread": {
+"type": "Special",
+"is_disloyal": false
+},
+"shupe: mage": {
+"type": "Unit",
+"is_disloyal": false
+},
+"shupe: hunter": {
+"type": "Unit",
+"is_disloyal": false
+},
+"shupe: knight": {
+"type": "Unit",
+"is_disloyal": false
+},
+"arachas swarm": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"spores": {
+"type": "Special",
+"is_disloyal": false
+},
+"foltest's pride": {
+"type": "Unit",
+"is_disloyal": false
+},
+"golden froth": {
+"type": "Special",
+"is_disloyal": false
+},
+"peasant militia": {
+"type": "Unit",
+"is_disloyal": false
+},
+"geralt: professional": {
+"type": "Unit",
+"is_disloyal": false
+},
+"triss: telekinesis": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dandelion: vainglory": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dandelion: poet": {
+"type": "Unit",
+"is_disloyal": false
+},
+"roche: merciless": {
+"type": "Unit",
+"is_disloyal": false
+},
+"call of the forest": {
+"type": "Special",
+"is_disloyal": false
+},
+"yennefer: divination": {
+"type": "Unit",
+"is_disloyal": false
+},
+"imlerith": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ihuarraquax": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gimpy gerwin": {
+"type": "Unit",
+"is_disloyal": false
+},
+"elf and onion soup": {
+"type": "Special",
+"is_disloyal": false
+},
+"ivo of belhaven": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eyck of denesle": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gascon": {
+"type": "Unit",
+"is_disloyal": false
+},
+"prince villem": {
+"type": "Unit",
+"is_disloyal": true
+},
+"count caldwell": {
+"type": "Unit",
+"is_disloyal": false
+},
+"xavier lemmens": {
+"type": "Unit",
+"is_disloyal": false
+},
+"keltullis": {
+"type": "Unit",
+"is_disloyal": false
+},
+"frightener: awakened": {
+"type": "Unit",
+"is_disloyal": false
+},
+"glustyworp": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gabor zigrin": {
+"type": "Unit",
+"is_disloyal": false
+},
+"barnabas beckenbauer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"isbel of hagge": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lippy gudmund": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dagur two blades": {
+"type": "Unit",
+"is_disloyal": false
+},
+"traheaern var vdyffir": {
+"type": "Unit",
+"is_disloyal": false
+},
+"reynard odo": {
+"type": "Unit",
+"is_disloyal": false
+},
+"black rayla": {
+"type": "Unit",
+"is_disloyal": false
+},
+"phoenix hatchling": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"deadeye ambush": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"royal inspiration": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"fruits of ysgith": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"enslave": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"patricidal fury": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"strays of spalla": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bomb heaver": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tactical advantage": {
+"type": "Stratagem",
+"is_disloyal": false
+},
+"stockpile": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"angoulême": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vysogota of corvo": {
+"type": "Unit",
+"is_disloyal": false
+},
+"falibor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"anna strenger": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lyrian cavalry": {
+"type": "Unit",
+"is_disloyal": false
+},
+"rivian pikeman": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lyrian arbalest": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lyrian landsknecht": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lyrian scytheman": {
+"type": "Unit",
+"is_disloyal": false
+},
+"deafening siren": {
+"type": "Unit",
+"is_disloyal": false
+},
+"arnjolf the patricide": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gernichora's fruit": {
+"type": "Unit",
+"is_disloyal": false
+},
+"elven deadeye": {
+"type": "Unit",
+"is_disloyal": false
+},
+"blood scent": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"double cross": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"pincer maneuver": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"call of harmony": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"ursine ritual": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"crimson curse": {
+"type": "Special",
+"is_disloyal": false
+},
+"tesham mutna sword": {
+"type": "Special",
+"is_disloyal": false
+},
+"hen gaidth sword": {
+"type": "Special",
+"is_disloyal": false
+},
+"land of a thousand fables": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"syanna": {
+"type": "Unit",
+"is_disloyal": false
+},
+"regis: bloodlust": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lady of the lake": {
+"type": "Unit",
+"is_disloyal": false
+},
+"fisher king": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vivienne: oriole": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gregoire de gorgon": {
+"type": "Unit",
+"is_disloyal": false
+},
+"musicians of blaviken": {
+"type": "Unit",
+"is_disloyal": false
+},
+"portal": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"sangreal": {
+"type": "Special",
+"is_disloyal": false
+},
+"tempest": {
+"type": "Special",
+"is_disloyal": false
+},
+"curse of corruption": {
+"type": "Special",
+"is_disloyal": false
+},
+"sandstorm": {
+"type": "Special",
+"is_disloyal": false
+},
+"dancing star": {
+"type": "Special",
+"is_disloyal": false
+},
+"devil's puffball": {
+"type": "Special",
+"is_disloyal": false
+},
+"northern wind": {
+"type": "Special",
+"is_disloyal": false
+},
+"moon dust": {
+"type": "Special",
+"is_disloyal": false
+},
+"samum": {
+"type": "Special",
+"is_disloyal": false
+},
+"red haze": {
+"type": "Special",
+"is_disloyal": false
+},
+"inspirational ballad": {
+"type": "Special",
+"is_disloyal": false
+},
+"thaw": {
+"type": "Special",
+"is_disloyal": false
+},
+"traveling merchant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"pellar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cutthroat": {
+"type": "Unit",
+"is_disloyal": false
+},
+"oxenfurt scholar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"spring equinox": {
+"type": "Special",
+"is_disloyal": false
+},
+"scepter of storms": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"queen of the night": {
+"type": "Unit",
+"is_disloyal": false
+},
+"orianna": {
+"type": "Unit",
+"is_disloyal": false
+},
+"protofleder": {
+"type": "Unit",
+"is_disloyal": false
+},
+"garkain": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gael": {
+"type": "Unit",
+"is_disloyal": false
+},
+"undying thirst": {
+"type": "Special",
+"is_disloyal": false
+},
+"feast of blood": {
+"type": "Special",
+"is_disloyal": false
+},
+"fleder": {
+"type": "Unit",
+"is_disloyal": false
+},
+"alp": {
+"type": "Unit",
+"is_disloyal": false
+},
+"plumard": {
+"type": "Unit",
+"is_disloyal": false
+},
+"nekurat": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bruxa": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vivienne de tabris": {
+"type": "Unit",
+"is_disloyal": false
+},
+"damien de la tour": {
+"type": "Unit",
+"is_disloyal": false
+},
+"palmerin de launfal": {
+"type": "Unit",
+"is_disloyal": false
+},
+"milton de peyrac-peyran": {
+"type": "Unit",
+"is_disloyal": false
+},
+"artorius vigo": {
+"type": "Unit",
+"is_disloyal": false
+},
+"roderick of dun tynne": {
+"type": "Unit",
+"is_disloyal": true
+},
+"tourney shaelmaar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tourney joust": {
+"type": "Special",
+"is_disloyal": false
+},
+"toussaintois knight-errant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ducal guard": {
+"type": "Unit",
+"is_disloyal": false
+},
+"menagerie keeper": {
+"type": "Unit",
+"is_disloyal": false
+},
+"imperial diviner": {
+"type": "Unit",
+"is_disloyal": false
+},
+"fangs of the empire": {
+"type": "Unit",
+"is_disloyal": false
+},
+"duchess' informant": {
+"type": "Unit",
+"is_disloyal": true
+},
+"king roegner": {
+"type": "Unit",
+"is_disloyal": false
+},
+"queen adalia": {
+"type": "Unit",
+"is_disloyal": false
+},
+"prince anséis": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vissegerd": {
+"type": "Unit",
+"is_disloyal": false
+},
+"coodcoodak": {
+"type": "Unit",
+"is_disloyal": false
+},
+"windhalm of attre": {
+"type": "Unit",
+"is_disloyal": false
+},
+"runeword": {
+"type": "Special",
+"is_disloyal": false
+},
+"cintrian spellweaver": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cintrian enchantress": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cintrian artificer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cintrian knight": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cintrian royal guard": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cintrian envoy": {
+"type": "Unit",
+"is_disloyal": false
+},
+"knighthood": {
+"type": "Special",
+"is_disloyal": false
+},
+"fauve": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the great oak": {
+"type": "Unit",
+"is_disloyal": false
+},
+"weeping willow": {
+"type": "Unit",
+"is_disloyal": false
+},
+"water of brokilon": {
+"type": "Special",
+"is_disloyal": false
+},
+"sirssa": {
+"type": "Unit",
+"is_disloyal": false
+},
+"treant boar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dryad's caress": {
+"type": "Special",
+"is_disloyal": false
+},
+"dryad grovekeeper": {
+"type": "Unit",
+"is_disloyal": false
+},
+"treant mantis: stalk": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"forest whisperer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"brokilon sentinel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dryad ranger": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dryad matron": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dryad fledgling": {
+"type": "Unit",
+"is_disloyal": false
+},
+"knut the callous": {
+"type": "Unit",
+"is_disloyal": false
+},
+"svalblod totem": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"artis": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vildkaarl": {
+"type": "Unit",
+"is_disloyal": false
+},
+"arnvald": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sigvald": {
+"type": "Unit",
+"is_disloyal": false
+},
+"corrupted flaminica": {
+"type": "Unit",
+"is_disloyal": false
+},
+"svalblod priest": {
+"type": "Unit",
+"is_disloyal": false
+},
+"svalblod cultist": {
+"type": "Unit",
+"is_disloyal": false
+},
+"svalblod fanatic": {
+"type": "Unit",
+"is_disloyal": false
+},
+"primal savagery": {
+"type": "Special",
+"is_disloyal": false
+},
+"disgraced brawler": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bear abomination": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dettlaff: higher vampire": {
+"type": "Unit",
+"is_disloyal": false
+},
+"champion of svalblod": {
+"type": "Unit",
+"is_disloyal": false
+},
+"treant mantis: strike": {
+"type": "Unit",
+"is_disloyal": false
+},
+"courier": {
+"type": "Unit",
+"is_disloyal": false
+},
+"renegade mage": {
+"type": "Unit",
+"is_disloyal": false
+},
+"caleb menge": {
+"type": "Unit",
+"is_disloyal": false
+},
+"beggar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"philippa eilhart": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sigi reuven": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vivaldi bank": {
+"type": "Special",
+"is_disloyal": false
+},
+"eavesdrop": {
+"type": "Special",
+"is_disloyal": false
+},
+"graden": {
+"type": "Unit",
+"is_disloyal": false
+},
+"blood money": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"kurt": {
+"type": "Unit",
+"is_disloyal": false
+},
+"moreelse": {
+"type": "Unit",
+"is_disloyal": false
+},
+"blindeye apothecary": {
+"type": "Unit",
+"is_disloyal": false
+},
+"horst borsodi": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sly seductress": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ewald borsodi": {
+"type": "Unit",
+"is_disloyal": false
+},
+"pickpocket": {
+"type": "Special",
+"is_disloyal": false
+},
+"tamara strenger": {
+"type": "Unit",
+"is_disloyal": false
+},
+"whoreson senior": {
+"type": "Unit",
+"is_disloyal": false
+},
+"adriano the mink": {
+"type": "Unit",
+"is_disloyal": false
+},
+"back-alley chemist": {
+"type": "Unit",
+"is_disloyal": false
+},
+"adalbertus kalkstein": {
+"type": "Unit",
+"is_disloyal": false
+},
+"oxenfurt naturalist": {
+"type": "Unit",
+"is_disloyal": false
+},
+"rico meiersdorf": {
+"type": "Unit",
+"is_disloyal": false
+},
+"witch hunter executioner": {
+"type": "Unit",
+"is_disloyal": false
+},
+"slander": {
+"type": "Special",
+"is_disloyal": false
+},
+"witch hunter": {
+"type": "Unit",
+"is_disloyal": false
+},
+"madame luiza": {
+"type": "Unit",
+"is_disloyal": false
+},
+"fisstech": {
+"type": "Special",
+"is_disloyal": false
+},
+"igor the hook": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tinboy": {
+"type": "Unit",
+"is_disloyal": false
+},
+"doadrick leumaerts": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tatterwing": {
+"type": "Unit",
+"is_disloyal": false
+},
+"off the books": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"dip in the pontar": {
+"type": "Special",
+"is_disloyal": false
+},
+"payday": {
+"type": "Special",
+"is_disloyal": false
+},
+"tidecloak hideaway": {
+"type": "Unit",
+"is_disloyal": false
+},
+"pugo boom-breaker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"boris": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sewer raiders": {
+"type": "Unit",
+"is_disloyal": false
+},
+"wretched addict": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eventide plunder": {
+"type": "Special",
+"is_disloyal": false
+},
+"whoreson's freak show": {
+"type": "Unit",
+"is_disloyal": false
+},
+"townsfolk": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tidecloak ransackers": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tax collector": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sea jackal": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kikimore warrior": {
+"type": "Unit",
+"is_disloyal": false
+},
+"line of credit": {
+"type": "Special",
+"is_disloyal": false
+},
+"fence": {
+"type": "Unit",
+"is_disloyal": false
+},
+"fisstech trafficker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hvitr and aelydia": {
+"type": "Unit",
+"is_disloyal": false
+},
+"congregate": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"prophet lebioda": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sacred flame": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"grand inquisitor helveed": {
+"type": "Unit",
+"is_disloyal": false
+},
+"arena endrega": {
+"type": "Unit",
+"is_disloyal": false
+},
+"damnation": {
+"type": "Special",
+"is_disloyal": false
+},
+"nathaniel pastodi": {
+"type": "Unit",
+"is_disloyal": false
+},
+"procession of penance": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sukrus": {
+"type": "Unit",
+"is_disloyal": false
+},
+"excommunication": {
+"type": "Special",
+"is_disloyal": false
+},
+"arena ghoul": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tavern brawl": {
+"type": "Special",
+"is_disloyal": false
+},
+"firesworn zealot": {
+"type": "Unit",
+"is_disloyal": false
+},
+"wheel of fortune": {
+"type": "Special",
+"is_disloyal": false
+},
+"bincy blumerholdt": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eternal fire priest": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cutup lackey": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hammond": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eternal fire inquisitor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eternal fire disciple": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the flying redanian": {
+"type": "Unit",
+"is_disloyal": false
+},
+"casino bouncers": {
+"type": "Unit",
+"is_disloyal": false
+},
+"keeper of the flame": {
+"type": "Unit",
+"is_disloyal": false
+},
+"imke": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bloody good fun": {
+"type": "Special",
+"is_disloyal": false
+},
+"temple guard": {
+"type": "Unit",
+"is_disloyal": false
+},
+"jackpot": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"congregation": {
+"type": "Special",
+"is_disloyal": false
+},
+"halfling safecracker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"firesworn scribe": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bare-knuckle brawler": {
+"type": "Unit",
+"is_disloyal": false
+},
+"shakedown": {
+"type": "Special",
+"is_disloyal": false
+},
+"coerced blacksmith": {
+"type": "Unit",
+"is_disloyal": false
+},
+"swindle": {
+"type": "Special",
+"is_disloyal": false
+},
+"cleaver's muscle": {
+"type": "Unit",
+"is_disloyal": false
+},
+"crownsplitter thug": {
+"type": "Unit",
+"is_disloyal": false
+},
+"harald gord": {
+"type": "Unit",
+"is_disloyal": false
+},
+"novigradian justice": {
+"type": "Special",
+"is_disloyal": false
+},
+"sir skewertooth": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tunnel drill": {
+"type": "Unit",
+"is_disloyal": false
+},
+"caesar bilzen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the sausage maker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ferko the sculptor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"pirate's cove": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"walter veritas": {
+"type": "Unit",
+"is_disloyal": false
+},
+"geralt: axii": {
+"type": "Unit",
+"is_disloyal": false
+},
+"knickers": {
+"type": "Unit",
+"is_disloyal": false
+},
+"olgierd: immortal": {
+"type": "Unit",
+"is_disloyal": false
+},
+"iris: shade": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gascon: iron falcon": {
+"type": "Unit",
+"is_disloyal": false
+},
+"one-eyed betsy": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vlodimir von everec": {
+"type": "Unit",
+"is_disloyal": false
+},
+"free company": {
+"type": "Unit",
+"is_disloyal": false
+},
+"living armor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"armory": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"surrender": {
+"type": "Special",
+"is_disloyal": false
+},
+"wagenburg": {
+"type": "Unit",
+"is_disloyal": false
+},
+"iron falcon knife juggler": {
+"type": "Unit",
+"is_disloyal": false
+},
+"iron falcon infantry": {
+"type": "Unit",
+"is_disloyal": false
+},
+"iron falcon troubadour": {
+"type": "Unit",
+"is_disloyal": false
+},
+"piercing missile": {
+"type": "Special",
+"is_disloyal": false
+},
+"wagon": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mantlet": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sapper": {
+"type": "Unit",
+"is_disloyal": false
+},
+"highwaymen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"armorer's workshop": {
+"type": "Special",
+"is_disloyal": false
+},
+"philippa: blind fury": {
+"type": "Unit",
+"is_disloyal": false
+},
+"donimir of troy": {
+"type": "Unit",
+"is_disloyal": false
+},
+"voymir": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mad charge": {
+"type": "Special",
+"is_disloyal": false
+},
+"radovid's royal guards": {
+"type": "Unit",
+"is_disloyal": false
+},
+"redanian archer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"azar javed": {
+"type": "Unit",
+"is_disloyal": false
+},
+"professor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"savolla": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dire mutated hound": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mutated hounds": {
+"type": "Unit",
+"is_disloyal": false
+},
+"assault": {
+"type": "Special",
+"is_disloyal": false
+},
+"salamandra assassin": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mutant killer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mutant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kikimore queen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cave troll": {
+"type": "Unit",
+"is_disloyal": false
+},
+"yghern": {
+"type": "Unit",
+"is_disloyal": false
+},
+"endrega queen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"armored arachas": {
+"type": "Unit",
+"is_disloyal": false
+},
+"endrega larva": {
+"type": "Unit",
+"is_disloyal": false
+},
+"endrega warrior": {
+"type": "Unit",
+"is_disloyal": false
+},
+"natural selection": {
+"type": "Special",
+"is_disloyal": false
+},
+"kikimore worker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"endrega eggs": {
+"type": "Unit",
+"is_disloyal": false
+},
+"affan hillergrand": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ramon tyrconnel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"war council": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"ffion var gaernel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"glynnis aep loernach": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ard feainn crossbowman": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ard feainn tortoise": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ard feainn light cavalry": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ard feainn heavy cavalry": {
+"type": "Unit",
+"is_disloyal": false
+},
+"battle preparation": {
+"type": "Special",
+"is_disloyal": false
+},
+"dracoturtle": {
+"type": "Unit",
+"is_disloyal": false
+},
+"covenant of steel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"morkvarg: heart of terror": {
+"type": "Unit",
+"is_disloyal": false
+},
+"raiding fleet": {
+"type": "Special",
+"is_disloyal": false
+},
+"terror of the seas": {
+"type": "Unit",
+"is_disloyal": false
+},
+"armored drakkar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"terror crew plunderer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"boatbuilders": {
+"type": "Unit",
+"is_disloyal": false
+},
+"terror crew axe-wielder": {
+"type": "Unit",
+"is_disloyal": false
+},
+"stunning blow": {
+"type": "Special",
+"is_disloyal": false
+},
+"zoltan: warrior": {
+"type": "Unit",
+"is_disloyal": false
+},
+"percival schuttenbach": {
+"type": "Unit",
+"is_disloyal": false
+},
+"munro bruys": {
+"type": "Unit",
+"is_disloyal": false
+},
+"figgis merluzzo": {
+"type": "Unit",
+"is_disloyal": false
+},
+"zoltan's company": {
+"type": "Special",
+"is_disloyal": false
+},
+"dwarven chariot": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tempering": {
+"type": "Special",
+"is_disloyal": false
+},
+"miner": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dryad enchantress": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dwarf berserker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"rowdy dwarf": {
+"type": "Unit",
+"is_disloyal": false
+},
+"radeyah": {
+"type": "Unit",
+"is_disloyal": false
+},
+"maraal": {
+"type": "Unit",
+"is_disloyal": false
+},
+"matta hu'uri": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dulla kh'amanni": {
+"type": "Unit",
+"is_disloyal": false
+},
+"runewright": {
+"type": "Unit",
+"is_disloyal": false
+},
+"saer qu'an": {
+"type": "Unit",
+"is_disloyal": false
+},
+"caravan vanguard": {
+"type": "Unit",
+"is_disloyal": false
+},
+"caravan guard": {
+"type": "Unit",
+"is_disloyal": false
+},
+"king cobra": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ofiri merchant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"basilisk venom": {
+"type": "Stratagem",
+"is_disloyal": false
+},
+"crystal skull": {
+"type": "Stratagem",
+"is_disloyal": false
+},
+"enchanted armor": {
+"type": "Stratagem",
+"is_disloyal": false
+},
+"cursed scroll": {
+"type": "Stratagem",
+"is_disloyal": false
+},
+"ceremonial dagger": {
+"type": "Stratagem",
+"is_disloyal": false
+},
+"magic lamp": {
+"type": "Stratagem",
+"is_disloyal": false
+},
+"engineering solution": {
+"type": "Stratagem",
+"is_disloyal": false
+},
+"war elephant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"siege": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"war chariot": {
+"type": "Unit",
+"is_disloyal": false
+},
+"immortals": {
+"type": "Unit",
+"is_disloyal": false
+},
+"siege ladder": {
+"type": "Unit",
+"is_disloyal": false
+},
+"immortal cavalry": {
+"type": "Unit",
+"is_disloyal": false
+},
+"carroballista": {
+"type": "Unit",
+"is_disloyal": false
+},
+"boiling oil": {
+"type": "Special",
+"is_disloyal": false
+},
+"mask of uroboros": {
+"type": "Stratagem",
+"is_disloyal": false
+},
+"in gedyneith's shadow": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"crowmother": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gigascorpion decoction": {
+"type": "Special",
+"is_disloyal": false
+},
+"axel three-eyes": {
+"type": "Unit",
+"is_disloyal": false
+},
+"crow clan druid": {
+"type": "Unit",
+"is_disloyal": false
+},
+"crow clan preacher": {
+"type": "Unit",
+"is_disloyal": false
+},
+"crow's-eye rhizome": {
+"type": "Special",
+"is_disloyal": false
+},
+"crow messenger": {
+"type": "Unit",
+"is_disloyal": false
+},
+"urn of shadows": {
+"type": "Stratagem",
+"is_disloyal": false
+},
+"plague maiden": {
+"type": "Unit",
+"is_disloyal": false
+},
+"penitent": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the beast": {
+"type": "Unit",
+"is_disloyal": false
+},
+"haunt": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"barghest": {
+"type": "Unit",
+"is_disloyal": false
+},
+"desert banshee": {
+"type": "Unit",
+"is_disloyal": false
+},
+"noonwraith": {
+"type": "Unit",
+"is_disloyal": false
+},
+"nightwraith": {
+"type": "Unit",
+"is_disloyal": false
+},
+"aen seidhe saber": {
+"type": "Stratagem",
+"is_disloyal": false
+},
+"etriel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"muirlega": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vernossiel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"feign death": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"vernossiel's commando": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vrihedd saboteur": {
+"type": "Unit",
+"is_disloyal": false
+},
+"nature's rebuke": {
+"type": "Special",
+"is_disloyal": false
+},
+"trained hawk": {
+"type": "Unit",
+"is_disloyal": false
+},
+"collar": {
+"type": "Stratagem",
+"is_disloyal": false
+},
+"vincent van moorlehem": {
+"type": "Unit",
+"is_disloyal": false
+},
+"masquerade ball": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"philippe van moorlehem": {
+"type": "Unit",
+"is_disloyal": false
+},
+"van moorlehem's cupbearer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"van moorlehem hunter": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hunting pack": {
+"type": "Unit",
+"is_disloyal": false
+},
+"van moorlehem servant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"thirsty dame": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tiger's eye": {
+"type": "Stratagem",
+"is_disloyal": false
+},
+"collusion": {
+"type": "Special",
+"is_disloyal": false
+},
+"one night at the passiflora": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"saul de navarette": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ludovicus brunenbaum": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bloody good friends": {
+"type": "Unit",
+"is_disloyal": false
+},
+"street urchins": {
+"type": "Unit",
+"is_disloyal": false
+},
+"payroll specialist": {
+"type": "Unit",
+"is_disloyal": false
+},
+"passiflora peaches": {
+"type": "Unit",
+"is_disloyal": false
+},
+"scarab": {
+"type": "Unit",
+"is_disloyal": false
+},
+"savolla's frightener": {
+"type": "Unit",
+"is_disloyal": false
+},
+"greater brothers": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lamp djinn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"rat": {
+"type": "Unit",
+"is_disloyal": false
+},
+"crow": {
+"type": "Unit",
+"is_disloyal": false
+},
+"desert treasure": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"overwhelming hunger": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"imposter": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"uprising": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"mahakam forge": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"blaze of glory": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"hidden cache": {
+"type": "Leader",
+"is_disloyal": false,
+"is_leader": true
+},
+"master mirror": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ethereal": {
+"type": "Unit",
+"is_disloyal": false
+},
+"oneiromancy": {
+"type": "Special",
+"is_disloyal": false
+},
+"siegfried of denesle": {
+"type": "Unit",
+"is_disloyal": false
+},
+"allgod": {
+"type": "Unit",
+"is_disloyal": false
+},
+"marlene de trastamara": {
+"type": "Unit",
+"is_disloyal": false
+},
+"pact": {
+"type": "Special",
+"is_disloyal": false
+},
+"will o' the wisp": {
+"type": "Special",
+"is_disloyal": false
+},
+"squirrel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"offering": {
+"type": "Special",
+"is_disloyal": false
+},
+"fortune teller": {
+"type": "Unit",
+"is_disloyal": false
+},
+"auberon: king": {
+"type": "Unit",
+"is_disloyal": false
+},
+"auberon: invader": {
+"type": "Unit",
+"is_disloyal": false
+},
+"auberon: conqueror": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eredin bréacc glas": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ard gaeth": {
+"type": "Special",
+"is_disloyal": false
+},
+"winter queen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the apiarian phantom": {
+"type": "Unit",
+"is_disloyal": false
+},
+"red riders": {
+"type": "Special",
+"is_disloyal": false
+},
+"wild hunt bruiser": {
+"type": "Unit",
+"is_disloyal": false
+},
+"naglfar crew": {
+"type": "Unit",
+"is_disloyal": false
+},
+"naglfar taskmaster": {
+"type": "Unit",
+"is_disloyal": false
+},
+"aen elle conqueror": {
+"type": "Unit",
+"is_disloyal": false
+},
+"harald an craite": {
+"type": "Unit",
+"is_disloyal": false
+},
+"harald: warmonger": {
+"type": "Unit",
+"is_disloyal": false
+},
+"harald the cripple": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tyrggvi tuirseach": {
+"type": "Unit",
+"is_disloyal": false
+},
+"blood eagle": {
+"type": "Special",
+"is_disloyal": false
+},
+"skjordal drummond": {
+"type": "Unit",
+"is_disloyal": false
+},
+"herkja drummond": {
+"type": "Unit",
+"is_disloyal": false
+},
+"war of clans": {
+"type": "Special",
+"is_disloyal": false
+},
+"tuirseach invader": {
+"type": "Unit",
+"is_disloyal": false
+},
+"an craite raiders": {
+"type": "Unit",
+"is_disloyal": false
+},
+"drummond villager": {
+"type": "Unit",
+"is_disloyal": false
+},
+"drummond berserker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"jacques: miracle child": {
+"type": "Unit",
+"is_disloyal": false
+},
+"jacques de aldersberg": {
+"type": "Unit",
+"is_disloyal": false
+},
+"jacques: grand master": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ulrich": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dies irae": {
+"type": "Special",
+"is_disloyal": false
+},
+"roderick de wett": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lieutenant von herst": {
+"type": "Unit",
+"is_disloyal": false
+},
+"smuggle": {
+"type": "Special",
+"is_disloyal": false
+},
+"cleric of the flaming rose": {
+"type": "Unit",
+"is_disloyal": false
+},
+"fallen knight": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lonely champion": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mutants maker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"flaming rose footman": {
+"type": "Unit",
+"is_disloyal": false
+},
+"viraxas: prince": {
+"type": "Unit",
+"is_disloyal": false
+},
+"viraxas: outcast": {
+"type": "Unit",
+"is_disloyal": false
+},
+"viraxas: king": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ildiko": {
+"type": "Unit",
+"is_disloyal": false
+},
+"amphibious assault": {
+"type": "Special",
+"is_disloyal": false
+},
+"king belohun": {
+"type": "Unit",
+"is_disloyal": false
+},
+"egmund": {
+"type": "Unit",
+"is_disloyal": false
+},
+"smoke them out!": {
+"type": "Special",
+"is_disloyal": false
+},
+"kerack frigate": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kerack city guard": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kerack marine": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kerack cutthroat": {
+"type": "Unit",
+"is_disloyal": false
+},
+"volunteer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"usurper: officer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"usurper: general": {
+"type": "Unit",
+"is_disloyal": false
+},
+"usurper: emperor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"braathens": {
+"type": "Unit",
+"is_disloyal": true
+},
+"coup de grâce": {
+"type": "Special",
+"is_disloyal": false
+},
+"fergus var emreis": {
+"type": "Unit",
+"is_disloyal": false
+},
+"urcheon of erlenwald": {
+"type": "Unit",
+"is_disloyal": false
+},
+"duny": {
+"type": "Unit",
+"is_disloyal": false
+},
+"amnesty": {
+"type": "Special",
+"is_disloyal": false
+},
+"mage torturer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"seditious aristocrats": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mage infiltrator": {
+"type": "Unit",
+"is_disloyal": true
+},
+"angry mob": {
+"type": "Unit",
+"is_disloyal": false
+},
+"operative": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eithné: young queen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eithné: mother": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eithné: wrath of brokilon": {
+"type": "Unit",
+"is_disloyal": false
+},
+"forest protector": {
+"type": "Unit",
+"is_disloyal": false
+},
+"shaping nature": {
+"type": "Special",
+"is_disloyal": false
+},
+"freixenet": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dunca": {
+"type": "Unit",
+"is_disloyal": false
+},
+"circle of life": {
+"type": "Special",
+"is_disloyal": false
+},
+"hamadryad": {
+"type": "Unit",
+"is_disloyal": false
+},
+"duén canell guardian": {
+"type": "Unit",
+"is_disloyal": false
+},
+"oakcritters": {
+"type": "Unit",
+"is_disloyal": false
+},
+"abandoned girl": {
+"type": "Unit",
+"is_disloyal": false
+},
+"young dryad": {
+"type": "Unit",
+"is_disloyal": false
+},
+"wandering treant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"shaping nature: veil": {
+"type": "Special",
+"is_disloyal": false
+},
+"shaping nature: boost": {
+"type": "Special",
+"is_disloyal": false
+},
+"shaping nature: vitality": {
+"type": "Special",
+"is_disloyal": false
+},
+"red riders: precision": {
+"type": "Special",
+"is_disloyal": false
+},
+"red riders: spread": {
+"type": "Special",
+"is_disloyal": false
+},
+"dana méadbh": {
+"type": "Unit",
+"is_disloyal": false
+},
+"woodland spirit": {
+"type": "Unit",
+"is_disloyal": false
+},
+"morvran voorhis": {
+"type": "Unit",
+"is_disloyal": false
+},
+"alzur": {
+"type": "Unit",
+"is_disloyal": false
+},
+"snowdrop": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cosimo malaspina": {
+"type": "Unit",
+"is_disloyal": false
+},
+"idarran of ulivo": {
+"type": "Unit",
+"is_disloyal": false
+},
+"geralt: quen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"selective mutation": {
+"type": "Special",
+"is_disloyal": false
+},
+"triangle within a triangle": {
+"type": "Special",
+"is_disloyal": false
+},
+"berengar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"leo": {
+"type": "Unit",
+"is_disloyal": false
+},
+"maxii van dekkar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"witcher student": {
+"type": "Unit",
+"is_disloyal": false
+},
+"red mutagen": {
+"type": "Special",
+"is_disloyal": false
+},
+"blue mutagen": {
+"type": "Special",
+"is_disloyal": false
+},
+"green mutagen": {
+"type": "Special",
+"is_disloyal": false
+},
+"ivar evil-eye": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vypper": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gorthur gvaed": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"kolgrim": {
+"type": "Unit",
+"is_disloyal": false
+},
+"warritt the all-seeing": {
+"type": "Unit",
+"is_disloyal": false
+},
+"viper witcher": {
+"type": "Unit",
+"is_disloyal": false
+},
+"viper witcher mentor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"viper witcher alchemist": {
+"type": "Unit",
+"is_disloyal": false
+},
+"viper witcher adept": {
+"type": "Unit",
+"is_disloyal": false
+},
+"coated weapons": {
+"type": "Special",
+"is_disloyal": false
+},
+"gezras of leyda": {
+"type": "Unit",
+"is_disloyal": false
+},
+"saber-tooth tiger": {
+"type": "Unit",
+"is_disloyal": false
+},
+"stygga castle": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"brehen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gaetan": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cat witcher": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cat witcher mentor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cat witcher saboteur": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cat witcher adept": {
+"type": "Unit",
+"is_disloyal": false
+},
+"making a bomb": {
+"type": "Special",
+"is_disloyal": false
+},
+"arnaghad": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dire bear": {
+"type": "Unit",
+"is_disloyal": false
+},
+"haern caduch": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"gerd": {
+"type": "Unit",
+"is_disloyal": false
+},
+"junod of belhaven": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bear witcher": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bear witcher mentor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bear witcher quartermaster": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bear witcher adept": {
+"type": "Unit",
+"is_disloyal": false
+},
+"armor up": {
+"type": "Special",
+"is_disloyal": false
+},
+"erland of larvik": {
+"type": "Unit",
+"is_disloyal": false
+},
+"archgriffin": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kaer seren": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"coën": {
+"type": "Unit",
+"is_disloyal": false
+},
+"keldar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"griffin witcher": {
+"type": "Unit",
+"is_disloyal": false
+},
+"griffin witcher mentor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"griffin witcher ranger": {
+"type": "Unit",
+"is_disloyal": false
+},
+"griffin witcher adept": {
+"type": "Unit",
+"is_disloyal": false
+},
+"target practice": {
+"type": "Special",
+"is_disloyal": false
+},
+"viy": {
+"type": "Unit",
+"is_disloyal": false
+},
+"koshchey": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dol dhu lokke": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"idr": {
+"type": "Unit",
+"is_disloyal": false
+},
+"wererat": {
+"type": "Unit",
+"is_disloyal": false
+},
+"succubus": {
+"type": "Unit",
+"is_disloyal": false
+},
+"phooca": {
+"type": "Unit",
+"is_disloyal": false
+},
+"chimera": {
+"type": "Unit",
+"is_disloyal": false
+},
+"spontaneous evolution": {
+"type": "Special",
+"is_disloyal": false
+},
+"fallen rayla": {
+"type": "Unit",
+"is_disloyal": false
+},
+"salamander": {
+"type": "Unit",
+"is_disloyal": false
+},
+"salamandra hideout": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"roland bleinheim": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gellert bleinheim": {
+"type": "Unit",
+"is_disloyal": false
+},
+"salamandra lackey": {
+"type": "Unit",
+"is_disloyal": false
+},
+"salamandra abomination": {
+"type": "Unit",
+"is_disloyal": false
+},
+"salamandra mage": {
+"type": "Unit",
+"is_disloyal": false
+},
+"failed experiment": {
+"type": "Unit",
+"is_disloyal": false
+},
+"stolen mutagens": {
+"type": "Special",
+"is_disloyal": false
+},
+"hybrid": {
+"type": "Unit",
+"is_disloyal": false
+},
+"saber-tooth tiger: stealth": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"madoc": {
+"type": "Unit",
+"is_disloyal": false
+},
+"anna henrietta": {
+"type": "Unit",
+"is_disloyal": false
+},
+"emhyr var emreis": {
+"type": "Unit",
+"is_disloyal": false
+},
+"crach an craite": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eist tuirseach": {
+"type": "Unit",
+"is_disloyal": false
+},
+"brouver hoog": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eldain": {
+"type": "Unit",
+"is_disloyal": false
+},
+"king foltest": {
+"type": "Unit",
+"is_disloyal": false
+},
+"queen meve": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dettlaff van der eretein": {
+"type": "Unit",
+"is_disloyal": false
+},
+"unseen elder": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cleaver": {
+"type": "Unit",
+"is_disloyal": false
+},
+"whoreson junior": {
+"type": "Unit",
+"is_disloyal": false
+},
+"rience": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dead man's tongue": {
+"type": "Special",
+"is_disloyal": false
+},
+"blightmaker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mage assassin": {
+"type": "Unit",
+"is_disloyal": false
+},
+"fulmar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bride of the sea": {
+"type": "Unit",
+"is_disloyal": false
+},
+"melusine cultist": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tears of siren": {
+"type": "Special",
+"is_disloyal": false
+},
+"francesca findabair": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vanadáin": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sorceress of dol blathanna": {
+"type": "Unit",
+"is_disloyal": false
+},
+"whisperer of dol blathanna": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gerhart of aelle": {
+"type": "Unit",
+"is_disloyal": false
+},
+"istredd": {
+"type": "Unit",
+"is_disloyal": false
+},
+"casting contest": {
+"type": "Special",
+"is_disloyal": false
+},
+"ban ard student": {
+"type": "Unit",
+"is_disloyal": false
+},
+"she who knows": {
+"type": "Unit",
+"is_disloyal": false
+},
+"rat catcheress": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gan ceann": {
+"type": "Unit",
+"is_disloyal": false
+},
+"witch apprentice": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the witchfinder": {
+"type": "Unit",
+"is_disloyal": false
+},
+"syndicate crown": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"fabian hale": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hysteria": {
+"type": "Special",
+"is_disloyal": false
+},
+"vigilantes": {
+"type": "Unit",
+"is_disloyal": false
+},
+"teleportation": {
+"type": "Special",
+"is_disloyal": false
+},
+"megascope": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"left fucking flank": {
+"type": "Unit",
+"is_disloyal": false
+},
+"right fucking flank": {
+"type": "Unit",
+"is_disloyal": false
+},
+"artaud terranova": {
+"type": "Unit",
+"is_disloyal": true
+},
+"sunset wanderers": {
+"type": "Unit",
+"is_disloyal": false
+},
+"fercart": {
+"type": "Unit",
+"is_disloyal": false
+},
+"master of puppets": {
+"type": "Unit",
+"is_disloyal": false
+},
+"thanedd turncoat": {
+"type": "Unit",
+"is_disloyal": false
+},
+"melusine": {
+"type": "Unit",
+"is_disloyal": false
+},
+"offering to the sea": {
+"type": "Special",
+"is_disloyal": false
+},
+"havfrue singer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hermit": {
+"type": "Unit",
+"is_disloyal": false
+},
+"simlas finn aep dabairr": {
+"type": "Unit",
+"is_disloyal": false
+},
+"saov ainmhi'dh": {
+"type": "Special",
+"is_disloyal": false
+},
+"orb of insight": {
+"type": "Special",
+"is_disloyal": false
+},
+"elven seer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tissaia de vries": {
+"type": "Unit",
+"is_disloyal": false
+},
+"leticia charbonneau": {
+"type": "Unit",
+"is_disloyal": false
+},
+"practice makes perfect": {
+"type": "Special",
+"is_disloyal": false
+},
+"aretuza student": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bloody mistress": {
+"type": "Unit",
+"is_disloyal": false
+},
+"gernichora": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mammuna": {
+"type": "Unit",
+"is_disloyal": false
+},
+"selfeater": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bleeding effigy": {
+"type": "Special",
+"is_disloyal": false
+},
+"the scoundrel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ignatius hale": {
+"type": "Unit",
+"is_disloyal": false
+},
+"confession extractor": {
+"type": "Special",
+"is_disloyal": false
+},
+"scapegoat": {
+"type": "Unit",
+"is_disloyal": true
+},
+"bearification": {
+"type": "Special",
+"is_disloyal": false
+},
+"dwimveandra": {
+"type": "Unit",
+"is_disloyal": false
+},
+"saov ainmhi'dh: unity": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vilgefortz: renegade": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lydia van bredevoort": {
+"type": "Unit",
+"is_disloyal": false
+},
+"imperial practitioner": {
+"type": "Unit",
+"is_disloyal": false
+},
+"illusionist": {
+"type": "Unit",
+"is_disloyal": false
+},
+"fucusya": {
+"type": "Unit",
+"is_disloyal": false
+},
+"rioghan the undying": {
+"type": "Unit",
+"is_disloyal": false
+},
+"messenger of the sea": {
+"type": "Unit",
+"is_disloyal": false
+},
+"little havfrue": {
+"type": "Unit",
+"is_disloyal": false
+},
+"filavandrel aén fidháil": {
+"type": "Unit",
+"is_disloyal": false
+},
+"torque": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bountiful harvest": {
+"type": "Special",
+"is_disloyal": false
+},
+"watcher of the valley": {
+"type": "Unit",
+"is_disloyal": false
+},
+"chapter of wizards": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"raffard’s vengeance": {
+"type": "Unit",
+"is_disloyal": false
+},
+"alumni": {
+"type": "Unit",
+"is_disloyal": false
+},
+"meditating mage": {
+"type": "Unit",
+"is_disloyal": false
+},
+"yaga": {
+"type": "Unit",
+"is_disloyal": false
+},
+"witches' sabbath": {
+"type": "Special",
+"is_disloyal": false
+},
+"incubus": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lesser witch": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the brute": {
+"type": "Unit",
+"is_disloyal": false
+},
+"octavia hale": {
+"type": "Unit",
+"is_disloyal": false
+},
+"purge": {
+"type": "Special",
+"is_disloyal": false
+},
+"savvy huckster": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the mushy truffle": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"alissa henson": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the eternal eclipse": {
+"type": "Artifact",
+"is_disloyal": true
+},
+"master of ceremonies": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eternal eclipse deacon": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eternal eclipse initiate": {
+"type": "Unit",
+"is_disloyal": false
+},
+"endless voyage": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"bjorn stormursson": {
+"type": "Unit",
+"is_disloyal": false
+},
+"deranged corsair": {
+"type": "Unit",
+"is_disloyal": false
+},
+"seagull": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mysteries of loc feainn": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"lake guardian: dusk aspect": {
+"type": "Unit",
+"is_disloyal": false
+},
+"antherion": {
+"type": "Unit",
+"is_disloyal": false
+},
+"chameleon": {
+"type": "Unit",
+"is_disloyal": false
+},
+"damsel in distress": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"the maiden's shield": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bronwen the bold": {
+"type": "Unit",
+"is_disloyal": false
+},
+"knight-errant": {
+"type": "Unit",
+"is_disloyal": false
+},
+"squire": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the manor’s dark secret": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"sir scratch-a-lot": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cursed damsel": {
+"type": "Unit",
+"is_disloyal": false
+},
+"orchard mantrap": {
+"type": "Unit",
+"is_disloyal": false
+},
+"in search of forgotten treasures": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"flyndr's crew": {
+"type": "Unit",
+"is_disloyal": false
+},
+"treasure huntress": {
+"type": "Unit",
+"is_disloyal": false
+},
+"pearl diver": {
+"type": "Unit",
+"is_disloyal": false
+},
+"renfri": {
+"type": "Unit",
+"is_disloyal": false
+},
+"renfri's gang": {
+"type": "Unit",
+"is_disloyal": false
+},
+"saskia: commander": {
+"type": "Unit",
+"is_disloyal": false
+},
+"king radovid v": {
+"type": "Unit",
+"is_disloyal": false
+},
+"jan calveit": {
+"type": "Unit",
+"is_disloyal": false
+},
+"arachas queen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ardal aep dahy": {
+"type": "Unit",
+"is_disloyal": false
+},
+"king bran": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cerys: fearless": {
+"type": "Unit",
+"is_disloyal": false
+},
+"milva: sharpshooter": {
+"type": "Unit",
+"is_disloyal": false
+},
+"king henselt": {
+"type": "Unit",
+"is_disloyal": false
+},
+"regis: reborn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"king of beggars": {
+"type": "Unit",
+"is_disloyal": false
+},
+"cyrus engelkind hemmelfart": {
+"type": "Unit",
+"is_disloyal": false
+},
+"aerondight": {
+"type": "Special",
+"is_disloyal": false
+},
+"arcane tome": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"mysterious puzzle box": {
+"type": "Artifact",
+"is_disloyal": true
+},
+"vial of forbidden knowledge": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"ring of favor": {
+"type": "Special",
+"is_disloyal": false
+},
+"ornate censer": {
+"type": "Special",
+"is_disloyal": false
+},
+"troll porter": {
+"type": "Unit",
+"is_disloyal": false
+},
+"runemage": {
+"type": "Unit",
+"is_disloyal": false
+},
+"obsidian mirror": {
+"type": "Special",
+"is_disloyal": false
+},
+"prophet": {
+"type": "Unit",
+"is_disloyal": false
+},
+"magic compass": {
+"type": "Special",
+"is_disloyal": false
+},
+"highland warlord": {
+"type": "Unit",
+"is_disloyal": false
+},
+"prism pendant": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"giantslayer": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mutagenerator": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"traveling priestess": {
+"type": "Unit",
+"is_disloyal": false
+},
+"necromancer's tome": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"giant toad": {
+"type": "Unit",
+"is_disloyal": false
+},
+"conjurer's candle": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"shady vendor": {
+"type": "Unit",
+"is_disloyal": false
+},
+"vial of forbidden knowledge: unsealed": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"golden nekker": {
+"type": "Special",
+"is_disloyal": false
+},
+"thing from the box": {
+"type": "Unit",
+"is_disloyal": false
+},
+"red riders: charge": {
+"type": "Special",
+"is_disloyal": false
+},
+"bjorn's drakkar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lake guardian: dawn aspect": {
+"type": "Unit",
+"is_disloyal": false
+},
+"beauclair": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"guillaume de launfal": {
+"type": "Unit",
+"is_disloyal": false
+},
+"buhurt": {
+"type": "Special",
+"is_disloyal": false
+},
+"knight challenger": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sove": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ulula": {
+"type": "Unit",
+"is_disloyal": false
+},
+"feral bond": {
+"type": "Special",
+"is_disloyal": false
+},
+"brokvar warrior": {
+"type": "Unit",
+"is_disloyal": false
+},
+"aucwenn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"frog mating season": {
+"type": "Special",
+"is_disloyal": false
+},
+"naiad pondkeeper": {
+"type": "Unit",
+"is_disloyal": false
+},
+"naiad fledgling": {
+"type": "Unit",
+"is_disloyal": false
+},
+"frog": {
+"type": "Unit",
+"is_disloyal": false
+},
+"boholt": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kennet and gar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"reaver hunters": {
+"type": "Unit",
+"is_disloyal": false
+},
+"reaver scout": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tir ná lia": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"caranthir: golden child": {
+"type": "Unit",
+"is_disloyal": false
+},
+"aen elle aristocrat": {
+"type": "Unit",
+"is_disloyal": false
+},
+"aen elle slave trader": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sigi reuven: mastermind": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bart": {
+"type": "Unit",
+"is_disloyal": false
+},
+"little bird": {
+"type": "Unit",
+"is_disloyal": false
+},
+"pulling the strings": {
+"type": "Special",
+"is_disloyal": false
+},
+"yennefer: illusionist": {
+"type": "Unit",
+"is_disloyal": false
+},
+"yennefer's illusion": {
+"type": "Unit",
+"is_disloyal": false
+},
+"triss: meteor shower": {
+"type": "Unit",
+"is_disloyal": false
+},
+"loc feainn: convergence": {
+"type": "Special",
+"is_disloyal": false
+},
+"gudrun bjornsdottir": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eltibald": {
+"type": "Unit",
+"is_disloyal": false
+},
+"curse of lust": {
+"type": "Ability",
+"is_disloyal": false
+},
+"curse of gluttony": {
+"type": "Ability",
+"is_disloyal": false
+},
+"curse of greed": {
+"type": "Ability",
+"is_disloyal": false
+},
+"curse of sloth": {
+"type": "Ability",
+"is_disloyal": false
+},
+"curse of envy": {
+"type": "Ability",
+"is_disloyal": false
+},
+"curse of wrath": {
+"type": "Ability",
+"is_disloyal": false
+},
+"curse of pride": {
+"type": "Ability",
+"is_disloyal": false
+},
+"blessing of chastity": {
+"type": "Special",
+"is_disloyal": false
+},
+"blessing of temperance": {
+"type": "Special",
+"is_disloyal": false
+},
+"blessing of charity": {
+"type": "Special",
+"is_disloyal": false
+},
+"blessing of diligence": {
+"type": "Special",
+"is_disloyal": false
+},
+"blessing of kindness": {
+"type": "Special",
+"is_disloyal": false
+},
+"blessing of patience": {
+"type": "Special",
+"is_disloyal": false
+},
+"blessing of humility": {
+"type": "Special",
+"is_disloyal": false
+},
+"skellige wolves": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ace up the sleeve": {
+"type": "Special",
+"is_disloyal": false
+},
+"ard feainn": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"torres var emreis: founder": {
+"type": "Unit",
+"is_disloyal": false
+},
+"svalblod": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tyr: slayer of yngvar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dana méadbh: provider": {
+"type": "Unit",
+"is_disloyal": false
+},
+"quarixis": {
+"type": "Unit",
+"is_disloyal": false
+},
+"melitele": {
+"type": "Unit",
+"is_disloyal": false
+},
+"temple of melitele: congregation": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"dagon: promised": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lilit's omen": {
+"type": "Special",
+"is_disloyal": false
+},
+"saint gregory: justicar": {
+"type": "Unit",
+"is_disloyal": false
+},
+"count reuven's treasure": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"masterful sihil": {
+"type": "Special",
+"is_disloyal": false
+},
+"torres var emreis: highest priest": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tyr: master of an skellig": {
+"type": "Unit",
+"is_disloyal": false
+},
+"dana méadbh: caretaker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"temple of melitele: pilgrimage": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"dagon: risen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"saint gregory: martyr": {
+"type": "Unit",
+"is_disloyal": false
+},
+"abduction": {
+"type": "Special",
+"is_disloyal": false
+},
+"sandor de baccalà": {
+"type": "Unit",
+"is_disloyal": false
+},
+"contaminator": {
+"type": "Unit",
+"is_disloyal": false
+},
+"toxicologist": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kraken": {
+"type": "Unit",
+"is_disloyal": true
+},
+"kelpie": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sea serpent": {
+"type": "Unit",
+"is_disloyal": false
+},
+"anglerfish": {
+"type": "Unit",
+"is_disloyal": false
+},
+"telianyn aep collen": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the heist": {
+"type": "Special",
+"is_disloyal": false
+},
+"backup plan": {
+"type": "Special",
+"is_disloyal": false
+},
+"trickster": {
+"type": "Unit",
+"is_disloyal": false
+},
+"sigismund dijkstra": {
+"type": "Unit",
+"is_disloyal": false
+},
+"drakenborg": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"redanian secret service": {
+"type": "Unit",
+"is_disloyal": false
+},
+"redanian agent": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hive mind": {
+"type": "Special",
+"is_disloyal": false
+},
+"acid spit": {
+"type": "Special",
+"is_disloyal": false
+},
+"kikimore stalker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kikimore hatchling": {
+"type": "Unit",
+"is_disloyal": false
+},
+"casimir bassi": {
+"type": "Unit",
+"is_disloyal": false
+},
+"eveline gallo": {
+"type": "Unit",
+"is_disloyal": false
+},
+"open, sesame!": {
+"type": "Special",
+"is_disloyal": false
+},
+"oxenfurt guard": {
+"type": "Unit",
+"is_disloyal": false
+},
+"call of the depths": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"cargo": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"explosives": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"baccalà": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"admiral rompally": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the catriona": {
+"type": "Unit",
+"is_disloyal": false
+},
+"battle stations!": {
+"type": "Special",
+"is_disloyal": false
+},
+"imperial fleet": {
+"type": "Unit",
+"is_disloyal": false
+},
+"imperial marine": {
+"type": "Unit",
+"is_disloyal": false
+},
+"hjalmar: seawolf": {
+"type": "Unit",
+"is_disloyal": false
+},
+"kaer trolde": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"yustianna an craite": {
+"type": "Unit",
+"is_disloyal": false
+},
+"naval supremacy": {
+"type": "Special",
+"is_disloyal": false
+},
+"abordage": {
+"type": "Special",
+"is_disloyal": false
+},
+"funeral boat": {
+"type": "Unit",
+"is_disloyal": false
+},
+"angus bri cri": {
+"type": "Unit",
+"is_disloyal": false
+},
+"riordain": {
+"type": "Unit",
+"is_disloyal": false
+},
+"deception": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"sticky situation": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"hostage taker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"trapmaker": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ravanen kimbolt": {
+"type": "Unit",
+"is_disloyal": false
+},
+"king demavend iii": {
+"type": "Unit",
+"is_disloyal": false
+},
+"bernard loredo": {
+"type": "Unit",
+"is_disloyal": false
+},
+"flotsam": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"ship ballista": {
+"type": "Unit",
+"is_disloyal": false
+},
+"onager": {
+"type": "Unit",
+"is_disloyal": false
+},
+"king chrum": {
+"type": "Unit",
+"is_disloyal": false
+},
+"tugo the elder": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lord riptide": {
+"type": "Unit",
+"is_disloyal": false
+},
+"girdle of giant strength": {
+"type": "Special",
+"is_disloyal": false
+},
+"ogre warrior": {
+"type": "Unit",
+"is_disloyal": false
+},
+"enraged cyclops": {
+"type": "Unit",
+"is_disloyal": false
+},
+"the acherontia": {
+"type": "Unit",
+"is_disloyal": false
+},
+"captain yago": {
+"type": "Unit",
+"is_disloyal": false
+},
+"ixora": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mercenary contract": {
+"type": "Special",
+"is_disloyal": false
+},
+"magpie": {
+"type": "Unit",
+"is_disloyal": false
+},
+"acherontia deckhand": {
+"type": "Unit",
+"is_disloyal": false
+},
+"henry var attre": {
+"type": "Unit",
+"is_disloyal": false
+},
+"rosa and edna var attre": {
+"type": "Unit",
+"is_disloyal": false
+},
+"otkell": {
+"type": "Unit",
+"is_disloyal": false
+},
+"heulyn": {
+"type": "Unit",
+"is_disloyal": false
+},
+"mahakam pass": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"eudora breckenriggs": {
+"type": "Unit",
+"is_disloyal": false
+},
+"princess adda": {
+"type": "Unit",
+"is_disloyal": false
+},
+"radovid: judgment": {
+"type": "Unit",
+"is_disloyal": false
+},
+"lara dorren": {
+"type": "Unit",
+"is_disloyal": true
+},
+"vereena": {
+"type": "Unit",
+"is_disloyal": false
+},
+"novigrad": {
+"type": "Artifact",
+"is_disloyal": false
+},
+"madam marquise serenity": {
+"type": "Unit",
+"is_disloyal": false
+}
+}

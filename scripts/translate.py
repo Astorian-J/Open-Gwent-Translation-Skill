@@ -98,6 +98,41 @@ CHECKLIST_CN = [
     "Tone: casual but not broken English. Reads like a native player wrote it",
 ]
 
+# Balance change direction guidance — injected into the pack so the agent sees
+# the buff/nerf direction rules inline (Gwent-specific: power/provision may be
+# reversed for disloyal units and leaders). Mirrors style_reference.md.
+PACK_BALANCE_GUIDE = [
+    "## Balance Change Direction（平衡调整增强削弱判断）",
+    "",
+    "翻译平衡调整（patch/buff/nerf）时必须准确判断增强/削弱方向。昆特牌设计特殊，方向不一定按数值直觉。",
+    "",
+    "**方向词：** `buff/buffed` = 增强；`nerf/nerfed` = 削弱；`change/adjust/tweak/rework` = 中性改动（别硬补方向）。",
+    "",
+    "**判断规则：**",
+    "- 一般单位：战力+1=增强，战力−1=削弱；人口−1=增强，人口+1=削弱。",
+    "- 间谍单位（Disloyal/不忠）：战力方向反 —— 战力−1=增强，战力+1=削弱（间谍战力算对方的，减战力对自己有利）。",
+    "- 领袖卡（Leader，无战力只改人口）：人口方向反 —— 人口+1=增强，人口−1=削弱（人口高=能带更多牌）。",
+    "",
+    "**原则：** 原文明确 buff/nerf → 照原文方向译；只给数值 → 按规则判断方向**不要翻反**；无法判断 → 照翻事实不硬补。",
+    "",
+    "下方「官方效果」已按卡牌类型标注：[领袖·人口反向]/[间谍单位·战力反向]/[单位]，据此应用上述规则。",
+    "",
+]
+
+# Markdown format preservation guidance — injected into the pack so the agent
+# keeps the source's markdown structure 1:1. Mirrors style_reference.md.
+PACK_FORMAT_GUIDE = [
+    "## Markdown Format Preservation（Markdown 格式保留）",
+    "",
+    "原文是 Markdown 时，译文必须 1:1 保留结构与标记，**只译文字不动标记**：",
+    "- **逐行对应**：原文每行对应译文一行，不增减行、不合并/拆分、不改换行与空行。",
+    "- **标题**：`#` 数量一致，不改层级（`##` 还是 `##`）。",
+    "- **列表**：`-`/`*`/`+` 标记与缩进一致，项数一致。",
+    "- **表格**：`|` 列数一致，表头分隔行（`|---|`）原样保留，只译单元格文字。",
+    "- **粗体/斜体**：`**xxx**`/`*xxx*` 标记保留在对应文字上。",
+    "- **引用/代码/链接**：`>` 保留；`` `xxx` `` 与 ` ``` ` 围栏保留且代码内容不译；`[文字](url)` 只译文字，`---` 分隔线保留。",
+    "",
+]
 
 def _parse_json_envelope(stdout: str) -> dict | None:
     """Parse a JSON envelope from a script's stdout, tolerating leading non-JSON text.
@@ -212,6 +247,54 @@ def _card_db_status() -> tuple[int, bool]:
     return count, count >= 1000
 
 
+_CARD_META_CACHE: dict | None = None
+
+
+def _load_card_meta() -> dict:
+    """Load references/card_meta.json (card type / leader / disloyal flags).
+
+    Used to annotate injected official-effect entries with a direction-relevant
+    type tag (leader=provision-reversed, disloyal=power-reversed, unit=normal),
+    so the agent applies the Balance Change Direction rule correctly. Cached at
+    module level after the first load. Gracefully degrades to an empty dict if the
+    file is missing or unreadable — the pack still builds, just without type tags.
+    """
+    global _CARD_META_CACHE
+    if _CARD_META_CACHE is not None:
+        return _CARD_META_CACHE
+    meta_json = SCRIPTS_DIR.parent / "references" / "card_meta.json"
+    try:
+        if meta_json.exists():
+            _CARD_META_CACHE = json.loads(meta_json.read_text(encoding="utf-8"))
+        else:
+            _CARD_META_CACHE = {}
+    except (json.JSONDecodeError, OSError, ValueError):
+        _CARD_META_CACHE = {}
+    return _CARD_META_CACHE
+
+
+def _card_type_tag(english_name: str) -> str:
+    """Return a balance-direction type tag for a card name, or '' if unknown.
+
+    Precedence: leader (provision-reversed) > disloyal unit (power-reversed) >
+    plain unit. The tag hints which Balance Change Direction sub-rule applies to
+    this card's effect, matching the guidance injected into the pack.
+    """
+    meta = _load_card_meta()
+    if not meta or not english_name:
+        return ""
+    entry = meta.get(english_name.lower().strip())
+    if not entry:
+        return ""
+    if entry.get("is_leader"):
+        return "[领袖·人口反向]"
+    if entry.get("is_disloyal"):
+        return "[间谍单位·战力反向]"
+    if entry.get("type") == "Unit":
+        return "[单位]"
+    return ""
+
+
 def _ensure_card_db() -> tuple[int, bool]:
     """Ensure card_names_4lang.json is built; auto-build on first run if missing.
 
@@ -310,6 +393,9 @@ def build_pack(source_path: Path, direction: str, date: str | None,
         L.append(f"| {dim} | {rule} |")
     L.append("")
 
+    L.extend(PACK_BALANCE_GUIDE)
+    L.extend(PACK_FORMAT_GUIDE)
+
     # Mandatory term lock table — show the SAME complete lock set that finish's
     # term_authority enforces. pre's JSON `locked_terms` is a token-trimmed subset;
     # the lock FILE has the full set. Fall back to the JSON subset only if the file
@@ -365,12 +451,19 @@ def build_pack(source_path: Path, direction: str, date: str | None,
             L.append(f"| {c.get('english', '')} | {c.get('chinese', '')} |")
         L.append("")
 
-    # Official effect text
+    # Official effect text. Each entry is annotated with a card type tag
+    # ([领袖·人口反向]/[间谍单位·战力反向]/[单位]) so the agent applies the
+    # Balance Change Direction rule correctly when translating effect text.
     if effects:
         L.append("## Official Effect Text (官方效果 — 逐字照抄，勿改写)")
         L.append("")
         for e in effects:
-            L.append(f"### {e.get('english', '')} -> {e.get('chinese', '')}")
+            en = e.get("english", "")
+            tag = _card_type_tag(en)
+            header = f"### {en} -> {e.get('chinese', '')}"
+            if tag:
+                header += f" {tag}"
+            L.append(header)
             L.append("")
             L.append(e.get("official_ability", "") or "")
             L.append("")

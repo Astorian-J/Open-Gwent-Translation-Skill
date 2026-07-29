@@ -301,3 +301,44 @@
 - `Patricidal Fury Warriors` → 鸣镝动怒 + 战士 + 岛 = **鸣镝动怒战士岛**（社区叫"鸣镝动怒征战"）
 
 **注意**：此规则仅作为无社区别称时的fallback。若用户提供了社区叫法，以社区叫法为准。
+## 领袖名录 (Leader abilities, 人口反向规则: 加人口=增强)
+
+| English | 中文 | 缩写 | 备注 |
+|---------|------|------|------|
+| Carapace | 坚硬甲壳 | | MO leader |
+| Force of Nature | 自然之力 | | MO leader |
+| White Frost | 白霜降临 | | MO leader |
+| Battle Trance | 战斗狂热 | | SK leader |
+| Onslaught | 野猪冲锋 | | SK leader |
+| Reckless Flurry | 鲁莽乱舞 | | SK leader |
+| Imperial Formation | 帝国列阵 | | NG leader |
+| Tactical Decision | 战术决策 | | NG leader |
+| Nature's Gift | 自然馈赠 | | Scoiatael leader |
+| Precision Strike | 精准之击 | | Scoiatael leader |
+| Guerilla Tactics | 游击战术 | | Scoiatael leader |
+| Inspired Zeal | 灼心狂热 | | NR leader |
+| Mobilization | 战场动员 | | NR leader |
+| Toussaintois Hospitality | 陶森特式好客 | | NG leader |
+| Invigorate | 活力回春 | | Scoiatael leader |
+| Shieldwall | 钢铁盾墙 | | NR leader |
+| Rage of the Sea | 怒海汹涛 | | SK leader |
+| Arachas Swarm | 不息虫群 | | MO leader |
+| Deadeye Ambush | 十面埋伏 | | Scoiatael leader |
+| Royal Inspiration | 皇家激励 | | NR leader |
+| Fruits of Ysgith | 沼泽果实 | | MO leader |
+| Enslave | 奴役蛮夷 | | NG leader |
+| Patricidal Fury | 鸣镝动怒 | | SK leader |
+| Stockpile | 军需储备 | | NR leader |
+| Blood Scent | 腥膻之味 | | MO leader |
+| Double Cross | 怀柔兼济 | | NG leader |
+| Pincer Maneuver | 四面夹击 | | NR leader |
+| Call of Harmony | 和谐之唤 | | Scoiatael leader |
+| Ursine Ritual | 巨熊仪式 | | SK leader |
+| Blood Money | 街头赏金 | | SY leader |
+| Pirate's Cove | 水手海湾 | | SY leader |
+| Overwhelming Hunger | 无尽渴望 | | MO leader |
+| Imposter | 偷梁换柱 | | NG leader |
+| Uprising | 揭竿而起 | | NR leader |
+| Mahakam Forge | 百炼精刚 | | Scoiatael leader |
+| Blaze of Glory | 荣耀圣焰 | | SK leader |
+| Hidden Cache | 军备宝箱 | | SY leader |
