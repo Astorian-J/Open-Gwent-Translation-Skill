@@ -37,6 +37,7 @@
 | Imprisonment | 牢狱之灾 | | NG leader |
 | Leader | 领袖 | | Deck leader ability |
 | Nilfgaard | 尼弗迦德 | NG | Faction name |
+| Golden Nekker | 黄金孽鬼像 | GN | 中立特殊卡 (GN=Golden Nekker, 别和 NG=Nilfgaard 搞混!) |
 | Syndicate | 辛迪加 | SY | Faction name |
 
 ## Competitive/Tournament Terms (补充)
@@ -226,6 +227,7 @@
 | Constructs Tactical Decision | 帝国构造体（战术决策领袖） | lerio2 article |
 | Devotion Knights | 赤诚骑士北 | lerio2 article |
 | Viraxas Zeal | 大金北 | lerio2 article |
+| GN deck | 黄金孽鬼像卡组 | Golden Nekker 卡组 |
 | GN Movement | 孽鬼跳松 | lerio2 article |
 | Eist Warriors | 埃斯特征战 | lerio2 article |
 | Selfwound Armor Nekker | 孽鬼自残 | lerio2 article |
