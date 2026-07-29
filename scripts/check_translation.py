@@ -373,13 +373,23 @@ def check_translation(
     """
     direction = direction or detect_direction(text)
 
+    issues = []
+    # 格式门禁: 分割线 --- 数量必须与原文一致 (双向都要; AI 易丢末尾 --- 当元数据扔掉)
+    if source_text:
+        hr_src = sum(1 for l in source_text.split("\n") if l.strip() == "---")
+        hr_txt = sum(1 for l in text.split("\n") if l.strip() == "---")
+        if hr_txt < hr_src:
+            issues.append(
+                f"format: 分割线 --- 数量不一致 (原文 {hr_src} vs 译文 {hr_txt}), "
+                f"必须按原文数量原样补回所有 --- 分割线, 不能删"
+            )
+
     # CN->EN output: the only term-level residue is Chinese card names that
     # were not translated to English. The EN->CN checks below all assume a
     # Chinese output and would false-positive on English text.
     if direction == "cnen":
-        return check_chinese_residue(text), []
+        return check_chinese_residue(text) + issues, []
 
-    issues = []
     forbidden_terms = load_forbidden_terms()
     card_corrections = load_card_corrections()
     abbreviations = load_abbreviations()
