@@ -696,6 +696,12 @@ class TermAuthority:
         # extractors — without this the EN->CN lock drops them, an asymmetry vs the
         # CN->EN dictionary lookup (which already catches them via _cn_to_ens).
         self._game_terms: dict[str, str] = {}
+        # Lazily-built list of (en_lower, canonical_en) for multi-word reference
+        # terms whose FIRST token is a SKIP_WORDS_MINIMAL entry (e.g. "The Great
+        # Oak", "The Guardian"). The capitalized-phrase extractors drop these at
+        # extraction time (their first-word skip filter rejects "The"), so they
+        # are scanned directly in get_all_for_text. Built once per instance.
+        self._skip_first_terms: list[tuple[str, str]] | None = None
 
         self._loaded = False
         self._load_all()
@@ -1427,6 +1433,24 @@ class TermAuthority:
         for gt_lower, canonical_en in self._game_terms.items():
             if re.search(rf"\b{re.escape(gt_lower)}\b", text_lower):
                 candidates.add(canonical_en)
+
+        # Multi-word reference terms whose FIRST token is a skip word (e.g.
+        # "The Great Oak", "The Guardian") are dropped by the capitalized-phrase
+        # extractors' first-word filter (SKIP_WORDS_MINIMAL includes "The"). Scan
+        # the text directly for every such name, mirroring the
+        # ambiguous/category/faction/game-term scans above. A word-boundary phrase
+        # match is a strict membership test against the reference table, so
+        # generic prose like "The player" or "The meta" can never lock here.
+        if self._skip_first_terms is None:
+            skip_lower = {w.lower() for w in SKIP_WORDS_MINIMAL}
+            self._skip_first_terms = [
+                (en_lower, e["canonical_en"])
+                for en_lower, e in self._entries.items()
+                if " " in en_lower and en_lower.split(" ", 1)[0] in skip_lower
+            ]
+        for en_lower, display_en in self._skip_first_terms:
+            if re.search(rf"\b{re.escape(en_lower)}\b", text_lower):
+                candidates.add(display_en)
 
         # Sort by length descending so full names are resolved before abbreviations.
         candidates = sorted(candidates, key=lambda x: (-len(x), x.lower()))
