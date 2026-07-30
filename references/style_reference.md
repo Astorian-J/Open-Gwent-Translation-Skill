@@ -141,3 +141,14 @@ into sincerity — that is the most common way these translations go bland.
 - `| Card | Power |` → `| 卡牌 | 战力 |`（列数、`|`、`---` 全保留）
 - `- **Geralt**: strong` → `- **杰洛特**：很强`（`-` 和 `**` 保留，文字翻译）
 - `## Tier List` → `## 梯队表`（`##` 保留）
+
+## Term Variants (术语变体识别)
+
+原文卡名/术语常有变体, 一律按 Term Lock Table 的规范译名翻译, 别脑补别字面直译:
+- 标点变体: Geralt Aard / Geralt:Aard = Geralt: Aard
+- 拼写/typo: Kaedweni Cavalary = Kaedweni Cavalry
+- 重音变体: Schirru = Schirrú
+- 简称/缩写: GN = 黄金孽鬼像 (别和 NG=尼弗迦德 搞混)
+- 别称: 鸟岛 = Shupe deck
+
+Term Lock Table 的 Aliases/Abbrevs 列是已知变体, 照此对译名. 遇到不认识的卡名词, 优先匹配表中相近条目, 不要自创新译名.
