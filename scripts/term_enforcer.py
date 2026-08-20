@@ -165,20 +165,32 @@ def _locked_phrase_disambiguates(
     return any(base in phrase and phrase in translation for phrase in locked_phrases)
 
 
-def _build_cjk_suppress(lock: dict) -> set[str]:
+def _build_cjk_suppress(lock: dict) -> tuple[set[str], list[str]]:
     """Set of lowercased known CJK names for count_occurrences absorption.
 
     Draws from the full TermAuthority CN index (so 希里 is absorbed by ANY known
     longer name like 冒牌希里, even one absent from this article's lock) plus this
     lock's own CN / variant phrases. Stops a short official CN from falsely
     matching inside a different, longer known name (false positive -> false pass).
+
+    Returns ``(suppress, degraded)``: ``degraded`` lists human-readable warnings
+    when the suppress set could not be built completely (TermAuthority load
+    failure). Degradation can flip a BLOCKED into a false PASS, so callers must
+    surface it as an issue, not a hint.
     """
     suppress: set[str] = set()
+    degraded: list[str] = []
     try:
         ta = get_term_authority()
-        suppress.update(cn.lower() for cn in ta._cn_entries)
-    except Exception:
-        pass
+        suppress.update(cn.lower() for cn in ta.cn_entries)
+    except Exception as e:
+        # A failed TermAuthority load leaves the suppress set incomplete, so a
+        # short official CN may be falsely counted inside a longer known name
+        # (false positive -> false pass) — surface it instead of hiding it.
+        msg = (f"TermAuthority failed to load ({e}); CJK suppress list "
+               f"incomplete — results may contain false positives.")
+        degraded.append(msg)
+        print(f"[WARN] {msg}", file=sys.stderr)
     for info in lock.get("terms", {}).values():
         cn = info.get("cn", "")
         if cn:
@@ -190,7 +202,7 @@ def _build_cjk_suppress(lock: dict) -> set[str]:
             vcn = var.get("cn", "")
             if vcn:
                 suppress.add(vcn.lower())
-    return suppress
+    return suppress, degraded
 
 
 def enforce_terms(translated_path: Path, lock: dict) -> dict:
@@ -209,7 +221,9 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
     build_lock) and falls back to detect_direction on the translation.
 
     Returns:
-        dict with violation_count, violations, pass_count, locked_terms_checked.
+        dict with violation_count, violations, pass_count, locked_terms_checked,
+        warnings (degradation notices, e.g. CJK suppress built incompletely —
+        these can flip a BLOCKED into a false PASS and must block finalization).
     """
     translation = translated_path.read_text(encoding="utf-8")
     direction = lock.get("direction") or detect_direction(translation)
@@ -223,7 +237,7 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
     # translation (see _locked_phrase_disambiguates).
     locked_cn_phrases = extract_cn_variants(lock)
     # Known CJK names used to absorb false-positive substring matches.
-    suppress = _build_cjk_suppress(lock)
+    suppress, degraded_warnings = _build_cjk_suppress(lock)
 
     for term, info in lock.get("terms", {}).items():
         status = info.get("status", "pending")
@@ -372,6 +386,7 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
         "pass_count": passed,
         "locked_terms_checked": checked,
         "direction": direction,
+        "warnings": degraded_warnings,
     }
 
 
@@ -410,8 +425,13 @@ def main():
     lock = load_lock(lock_file)
     result = enforce_terms(translated_path, lock)
 
+    # Degradation (e.g. CJK suppress built incompletely) can flip a BLOCKED
+    # into a false PASS, so it counts as an issue everywhere: JSON exit code,
+    # the plain "Issues:" total (the guard parses it), and the final verdict.
+    issue_total = result["violation_count"] + len(result["warnings"])
+
     if args.json:
-        json_output(result, exit_code=1 if result["violation_count"] > 0 else 0)
+        json_output(result, exit_code=1 if issue_total > 0 else 0)
 
     print("=" * 60)
     print("TERM AUTHORITY ENFORCEMENT")
@@ -419,7 +439,7 @@ def main():
     print()
     print(f"Checked: {result['locked_terms_checked']} locked terms")
     print(f"Passed:  {result['pass_count']}")
-    print(f"Issues:  {result['violation_count']}")
+    print(f"Issues:  {issue_total}")
     print()
 
     if result["violations"]:
@@ -434,6 +454,15 @@ def main():
             if v.get("context"):
                 print(f"  Context:  ...{v['context']}...")
             print()
+
+    if result["warnings"]:
+        print("DEGRADED")
+        print("-" * 60)
+        for w in result["warnings"]:
+            print(f"- {w}")
+        print()
+
+    if issue_total > 0:
         print("[BLOCKED] Term authority violations must be resolved before finalizing.")
         sys.exit(1)
 

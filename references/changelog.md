@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-08-20 — 触发词收窄 + 检查器 fail-closed（H1/H2/M5/M9）
+
+审查报告 6 项修复，核心是消除"假 PASS"与 skill 触发劫持：
+
+- **H3 触发词收窄**：主版 `SKILL.md` frontmatter 的「英文翻译」改为「昆特牌英文翻译」；
+  lite 版 7 个无限定触发词（聊天翻译 / 群消息翻译 / 短句翻译 / chat translation /
+  quick translate / 翻一下这句 / 这段说什么）逐个加昆特限定或删除，普通翻译请求
+  不再被劫持成昆特翻译。已安装副本（~/.claude/skills/gwent-translation-lite）同步。
+- **H1 term_enforcer 崩溃 fail-closed**：`check_translation.py` 与 `phase_c_check.py`
+  中 term_enforcer 非零退出且 stdout 无合法 JSON envelope（或缺 `data` 键）时，不再
+  静默返回空违规列表，改为产出 `[checker error] term_enforcer crashed (exit N)` issue，
+  进入报告并影响退出码。
+- **H2 `--fix` 保留 TA 违规**：`check_translation.py --fix` 重跑后整体重赋值 issues 导致
+  term authority 违规丢失；现 TA 违规单独收集、重跑后并回，修复后仍在输出与退出码中。
+- **M5 CJK suppress 裸吞异常**：`term_enforcer.py` 的 `_build_cjk_suppress` 加载
+  TermAuthority 失败时向 stderr 打 WARN（suppress 不完整、可能假阳性），不再静默 pass；
+  `ta._cn_entries` 私有访问改为 `_shared.py` 新增的公开 `cn_entries` property。
+- **M9 guard lock 构建失败 fail-closed**：`completeness_guard.py` 提供了 `--source` 但
+  lock 构建失败时，term_authority 检查判不通过（status=error），整体 BLOCKED；未提供
+  source 的 `skipped` 语义不变。lock 构建失败的 `[WARN]` 诊断改打 stderr，保持 stdout
+  纯 JSON。
+
+### 返工（终审 ⚠️ Needs fixes：2 条 Important + 回归测试）
+
+- **R1 守卫判值不判键**：`json_output` 的错误 envelope 恒含 `"data": null`（键存在、值
+  为 null），旧守卫 `"data" not in parsed` 放行后在 `None.get` 上 AttributeError。
+  `check_translation.py` 与 `phase_c_check.py` 两处守卫改为
+  `not isinstance(parsed, dict) or not isinstance(parsed.get("data"), dict)`，
+  消息优先拼 envelope `errors` 字段（比 stderr 尾巴可读），否则取 stderr 末尾。
+- **R2 M5 降级信号进数据面**：stderr WARN 在管线里被 `capture_output=True` 丢弃，损坏
+  references 会把 BLOCKED 翻成假 PASS。现 `_build_cjk_suppress` 返回
+  `(suppress, degraded)`，`enforce_terms` 结果带 `warnings` 进 JSON envelope；
+  降级计入 term_enforcer 自身退出码与 plain 输出 `Issues:` 总数；三个调用方
+  （check_translation / phase_c_check / completeness_guard）读到 `data.warnings`
+  一律转成 `[checker warning] term_enforcer degraded: ...` 计issue、卡退出码。
+  端到端语义：references 损坏时管线必 FAIL/带降级 issue，不得干净 PASS。
+- **R3 回归用例**：`test_rebuild.py` 新增 4 条（H1 守卫含 null-envelope 分支 / H2
+  `--fix` 保留 TA / M9 lock 构建失败 / M5 降级传播），总数 7→11，health_check 自动纳入。
+
 ## 2026-07-23 — CDPR 版权文本清理（effect_text.json 改 fetch-at-build + NOTICE）
 
 公开仓库原 git 跟踪 references/effect_text.json（1366 张卡的 CDPR 官方能力文本），

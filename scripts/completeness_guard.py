@@ -162,8 +162,21 @@ def run_term_authority_check(file_path: Path, lock_path: Path | None, direction:
 
     if json_mode:
         ok, parsed, _ = run_script_json("term_enforcer.py", [str(file_path), "--lock", str(lock_path)])
-        if parsed and "data" in parsed:
-            return ok, parsed["data"].get("violation_count", 0), "ran", parsed["data"].get("violations", [])
+        if parsed and isinstance(parsed.get("data"), dict):
+            data = parsed["data"]
+            # Degradation can flip a BLOCKED into a false PASS — surface each
+            # notice as a counted violation-like entry so it blocks the gate.
+            degraded = data.get("warnings", [])
+            violations = data.get("violations", [])
+            for w in degraded:
+                violations.append({
+                    "term": "[checker warning]",
+                    "expected_official": "term_enforcer degraded",
+                    "severity": "error",
+                    "offending_quote": w,
+                })
+            count = data.get("violation_count", 0) + len(degraded)
+            return ok and not degraded, count, "ran", violations
         return ok, 0, "ran", []
 
     result = subprocess.run(
@@ -217,11 +230,14 @@ def main() -> None:
     # Build the context lock once and reuse it for every downstream check,
     # instead of letting each sub-script rebuild it from the source.
     lock_path: Path | None = None
+    lock_build_error: str | None = None
     if source_path:
         try:
             lock_path = build_lock_from_source(source_path)
         except Exception as e:
-            print(f"[WARN] context lock build failed; term authority checks skipped: {e}")
+            lock_build_error = str(e)
+            # Diagnostic, not report data — stderr keeps stdout pure JSON.
+            print(f"[WARN] context lock build failed: {e}", file=sys.stderr)
 
     checks = []
 
@@ -255,17 +271,23 @@ def main() -> None:
         checks.append({"name": "phase_c", "passed": False, "issue_count": 0, "message": f"Phase C check failed: {e}"})
 
     # Check 5: Term authority enforcement (both directions)
-    try:
-        passed, count, status, ta_violations = run_term_authority_check(file_path, lock_path, direction, args.json)
-        if status == "not_applicable":
-            msg = "Term authority: not applicable (CN->EN)"
-        elif status == "skipped":
-            msg = "Term authority: skipped (no lock file)"
-        else:
-            msg = "Term authority checks passed" if passed else f"Term authority: {count} violation(s)"
-        checks.append({"name": "term_authority", "passed": passed, "issue_count": count, "status": status, "violations": terms_summary(ta_violations, args.verbose_terms), "message": msg})
-    except Exception as e:
-        checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "status": "error", "violations": [], "message": f"Term authority check failed: {e}"})
+    if lock_build_error is not None:
+        # --source was given but the lock could not be built: the TA check
+        # should have run and could not — fail closed, never a fake PASS.
+        # (No --source at all stays "skipped" -> passed, by design.)
+        checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "status": "error", "violations": [], "message": f"Term authority: context lock build failed ({lock_build_error}); check could not run"})
+    else:
+        try:
+            passed, count, status, ta_violations = run_term_authority_check(file_path, lock_path, direction, args.json)
+            if status == "not_applicable":
+                msg = "Term authority: not applicable (CN->EN)"
+            elif status == "skipped":
+                msg = "Term authority: skipped (no lock file)"
+            else:
+                msg = "Term authority checks passed" if passed else f"Term authority: {count} violation(s)"
+            checks.append({"name": "term_authority", "passed": passed, "issue_count": count, "status": status, "violations": terms_summary(ta_violations, args.verbose_terms), "message": msg})
+        except Exception as e:
+            checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "status": "error", "violations": [], "message": f"Term authority check failed: {e}"})
 
     if lock_path:
         lock_path.unlink(missing_ok=True)

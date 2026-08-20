@@ -765,10 +765,24 @@ def check_term_authority_violations(
     try:
         parsed = json.loads(result.stdout)
     except (json.JSONDecodeError, ValueError):
-        return []
+        parsed = None
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("data"), dict):
+        # Fail-closed: a crashed term_enforcer must NOT read as "no violations".
+        # Judge by VALUE, not key — json_output's error envelopes carry
+        # "data": null (key present, value null), e.g. --source on a missing
+        # file; a key-existence check would pass those and crash on None.get.
+        errors = parsed.get("errors") if isinstance(parsed, dict) else None
+        if errors:
+            detail = "; ".join(str(e) for e in errors)
+        else:
+            detail = (result.stderr or "").strip()[-200:]
+        return [f"[checker error] term_enforcer crashed (exit {result.returncode}): {detail}"]
 
-    data = parsed.get("data", {})
+    data = parsed["data"]
     issues: list[str] = []
+    # Degradation can flip a BLOCKED into a false PASS — count it as an issue.
+    for w in data.get("warnings", []):
+        issues.append(f"[checker warning] term_enforcer degraded: {w}")
     for v in data.get("violations", []):
         msg = f"term authority: 「{v['term']}」expected 「{v['expected_cn']}」"
         if v.get("found_in_translation"):
@@ -846,19 +860,23 @@ def main():
     # official Chinese translation -- an EN->CN concern only. For CN->EN the
     # output is English, so the lock model does not apply and the check is
     # skipped to avoid flagging the target language.
+    # Collected separately so a --fix re-check (which reassigns `issues`
+    # wholesale) cannot drop TA violations from the report; auto_fix only
+    # rewrites provision phrasing (费→人口), so it cannot add/remove TA hits.
+    ta_issues: list[str] = []
     if direction == "encn":
         if args.lock:
             lock_path = Path(args.lock)
             if lock_path.exists():
-                issues.extend(check_term_authority_violations(path, lock_path=lock_path))
+                ta_issues.extend(check_term_authority_violations(path, lock_path=lock_path))
             else:
-                issues.append(f"term authority: lock file not found: {args.lock}")
+                ta_issues.append(f"term authority: lock file not found: {args.lock}")
         elif args.source:
             source_path = Path(args.source)
             if source_path.exists():
-                issues.extend(check_term_authority_violations(path, source_path=source_path))
+                ta_issues.extend(check_term_authority_violations(path, source_path=source_path))
             else:
-                issues.append(f"term authority: source file not found: {args.source}")
+                ta_issues.append(f"term authority: source file not found: {args.source}")
 
     # Apply auto-fix before emitting any output so JSON reports accurate counts.
     auto_fixed_count = 0
@@ -874,6 +892,8 @@ def main():
             if fix_count > 0:
                 path.write_text(fixed_text, encoding="utf-8")
                 issues, warnings = check_translation(fixed_text, locked_phrases, direction, source_text=source_text)
+
+    issues.extend(ta_issues)
 
     if args.json:
         structured = [categorize_issue(i) for i in issues]

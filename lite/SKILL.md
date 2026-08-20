@@ -4,7 +4,7 @@ description: |
   Gwent (昆特牌) lightweight translation for short chat content — group messages,
   Discord/QQ comments, single sentences, brief remarks. Streamlined 3-step flow,
   no heavy validation pipeline.
-  Triggered by: 聊天翻译, 群消息翻译, 短句翻译, chat translation, quick translate, 翻一下这句, 这段说什么.
+  Triggered by: 昆特聊天翻译, 昆特群消息翻译, 昆特短句翻译, Gwent chat translation, quick Gwent translate.
   For full articles (meta reports, BC proposals, card analysis), use gwent-translation-style instead.
 agent_created: true
 ---

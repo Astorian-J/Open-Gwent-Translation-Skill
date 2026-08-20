@@ -144,10 +144,24 @@ def check_context_lock_terms(
     try:
         parsed = json.loads(result.stdout)
     except (json.JSONDecodeError, ValueError):
-        return []
+        parsed = None
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("data"), dict):
+        # Fail-closed: a crashed term_enforcer must NOT read as "no violations".
+        # Judge by VALUE, not key — json_output's error envelopes carry
+        # "data": null (key present, value null), e.g. --source on a missing
+        # file; a key-existence check would pass those and crash on None.get.
+        errors = parsed.get("errors") if isinstance(parsed, dict) else None
+        if errors:
+            detail = "; ".join(str(e) for e in errors)
+        else:
+            detail = (result.stderr or "").strip()[-200:]
+        return [f"[checker error] term_enforcer crashed (exit {result.returncode}): {detail}"]
 
-    data = parsed.get("data", {})
+    data = parsed["data"]
     issues: list[str] = []
+    # Degradation can flip a BLOCKED into a false PASS — count it as an issue.
+    for w in data.get("warnings", []):
+        issues.append(f"[checker warning] term_enforcer degraded: {w}")
     for v in data.get("violations", []):
         msg = f"{v['issue_type']}: 「{v['term']}」expected 「{v['expected_cn']}」"
         if v.get("found_in_translation"):

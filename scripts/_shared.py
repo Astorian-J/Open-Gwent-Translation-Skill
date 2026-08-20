@@ -1194,6 +1194,11 @@ class TermAuthority:
 
     # -- public API --
 
+    @property
+    def cn_entries(self) -> dict[str, dict]:
+        """Read access to the CN index (official CN name -> entry, first wins)."""
+        return self._cn_entries
+
     def resolve(self, term: str) -> dict | None:
         """Resolve any term (EN, CN, alias, abbreviation) to canonical info.
 

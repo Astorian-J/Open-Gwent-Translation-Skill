@@ -2,7 +2,7 @@
 name: gwent-translation-style
 description: |
   Gwent (昆特牌) bidirectional article translation (EN↔CN) with community slang and Bilibili player tone.
-  Triggered by: Gwent translation, 昆特牌翻译, 平衡委员会, meta report translation, 英文翻译.
+  Triggered by: Gwent translation, 昆特牌翻译, 平衡委员会, meta report translation, 昆特牌英文翻译.
   Enforces: short sentences, community slang, active voice, strict terminology.
 agent_created: true
 ---

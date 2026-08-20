@@ -16,10 +16,16 @@ Categories:
   4. Check block (both)   — missing/wrong -> BLOCKED; correct -> PASS
   5. CJK absorb           — 希里 inside 冒牌希里 -> NOT present
   6. True unknown         — out-of-dict fabricated words -> not falsely locked
+  7. Gate integrity       — H1 fail-closed guard, H2 --fix keeps TA, M9 lock
+                            build failure, M5 degradation signal propagation
 """
 
 import argparse
+import contextlib
+import io
 import json
+import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -27,7 +33,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _shared import TermAuthority, build_lock_from_source  # noqa: E402
+from check_translation import check_term_authority_violations  # noqa: E402
 from term_enforcer import enforce_terms, count_occurrences, _build_cjk_suppress  # noqa: E402
+
+SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 def _lock_from(source_text: str) -> dict:
@@ -126,7 +135,9 @@ def _t_block_cnen() -> tuple[str, str]:
 
 
 def _t_cjk_absorb() -> tuple[str, str]:
-    sup = _build_cjk_suppress({})
+    sup, degraded = _build_cjk_suppress({})
+    if degraded:
+        return ("FAIL", f"healthy references flagged degraded: {degraded}")
     bare = count_occurrences("玩家用了冒牌希里解场", ["希里"])
     fixed = count_occurrences("玩家用了冒牌希里解场", ["希里"], cjk_suppress=sup)
     real = count_occurrences("我用希里解场", ["希里"], cjk_suppress=sup)
@@ -148,6 +159,95 @@ def _t_true_unknown() -> tuple[str, str]:
     return ("PASS", "True unknown: fabricated out-of-dict words not falsely locked")
 
 
+def _t_h1_guard_fail_closed() -> tuple[str, str]:
+    """Corrupted lock AND null-envelope (data:null) both -> [checker error]."""
+    tp = Path(tempfile.mktemp(suffix=".txt"))
+    tp.write_text("这张卡很强。", encoding="utf-8")
+    bad = Path(tempfile.mktemp(suffix=".json"))
+    bad.write_text("{broken json", encoding="utf-8")
+    try:
+        crashed = check_term_authority_violations(tp, lock_path=bad)
+        # --source on a missing file: term_enforcer exits 1 with a
+        # "data": null error envelope (key present, value null).
+        null_env = check_term_authority_violations(
+            tp, source_path=Path("/tmp/definitely-not-exist-src.md"))
+    finally:
+        tp.unlink()
+        bad.unlink()
+    if not any("[checker error]" in i for i in crashed):
+        return ("FAIL", f"corrupted lock not fail-closed: {crashed}")
+    if not any("[checker error]" in i for i in null_env):
+        return ("FAIL", f"null-envelope not fail-closed: {null_env}")
+    return ("PASS", "H1 fail-closed: corrupted lock + null-envelope -> [checker error]")
+
+
+def _t_h2_fix_keeps_ta() -> tuple[str, str]:
+    """--fix rewrites 费->人口 AND term authority violations survive the re-check."""
+    src = Path(tempfile.mktemp(suffix=".md"))
+    src.write_text("Ciri is a strong gold card.\n", encoding="utf-8")
+    trans = Path(tempfile.mktemp(suffix=".txt"))
+    trans.write_text("这张12费换8战力的卡很多人带。\n", encoding="utf-8")
+    try:
+        r = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "check_translation.py"),
+             str(trans), "--source", str(src), "--fix", "--direction", "encn"],
+            capture_output=True, text=True, timeout=60)
+    finally:
+        src.unlink()
+        trans.unlink()
+    if "Auto-fixed" not in r.stdout:
+        return ("FAIL", f"--fix did not apply: {r.stdout[:200]}")
+    if "term authority" not in r.stdout or r.returncode != 1:
+        return ("FAIL", f"TA violation lost after --fix (exit {r.returncode}): {r.stdout[:300]}")
+    return ("PASS", "H2: --fix applies 费→人口 AND keeps TA violations + exit 1")
+
+
+def _t_m9_guard_lock_build_fail() -> tuple[str, str]:
+    """Guard with --source whose lock build fails -> TA status=error, BLOCKED."""
+    trans = Path(tempfile.mktemp(suffix=".txt"))
+    trans.write_text("这张卡很强。\n", encoding="utf-8")
+    bad_source = tempfile.mkdtemp()  # a directory: lock build must fail
+    try:
+        r = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "completeness_guard.py"),
+             str(trans), "--source", bad_source, "--direction", "encn", "--json"],
+            capture_output=True, text=True, timeout=120)
+        data = json.loads(r.stdout)["data"]
+    except (json.JSONDecodeError, KeyError) as e:
+        return ("FAIL", f"guard stdout not clean JSON: {e}: {r.stdout[:200]}")
+    finally:
+        trans.unlink()
+        shutil.rmtree(bad_source, ignore_errors=True)
+    checks = {c["name"]: c for c in data.get("checks", [])}
+    ta = checks.get("term_authority", {})
+    if (data.get("all_passed") is not False or ta.get("passed") is not False
+            or ta.get("status") != "error" or r.returncode != 1):
+        return ("FAIL", f"lock build failure not fail-closed: ta={ta} exit={r.returncode}")
+    return ("PASS", "M9: --source lock build failure -> TA status=error, BLOCKED")
+
+
+def _t_m5_degradation_signal() -> tuple[str, str]:
+    """TermAuthority load failure -> degraded list + enforce_terms data.warnings."""
+    import term_enforcer
+    orig = term_enforcer.get_term_authority
+
+    def _boom():
+        raise RuntimeError("simulated load failure")
+
+    term_enforcer.get_term_authority = _boom
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            _sup, degraded = _build_cjk_suppress({})
+            res = _enforce("Ciri is strong.", "希里很强。")
+    finally:
+        term_enforcer.get_term_authority = orig
+    if not degraded:
+        return ("FAIL", "TA load failure produced no degradation warning")
+    if not res.get("warnings"):
+        return ("FAIL", "enforce_terms result missing warnings (degradation not in data)")
+    return ("PASS", "M5: TA load failure -> degraded list + enforce_terms data.warnings")
+
+
 _TESTS = [
     _t_en_extraction,
     _t_cn_extraction,
@@ -156,6 +256,10 @@ _TESTS = [
     _t_block_cnen,
     _t_cjk_absorb,
     _t_true_unknown,
+    _t_h1_guard_fail_closed,
+    _t_h2_fix_keeps_ta,
+    _t_m9_guard_lock_build_fail,
+    _t_m5_degradation_signal,
 ]
 
 
