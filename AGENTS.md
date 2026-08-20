@@ -80,7 +80,7 @@ re-translate loop on BLOCKED.
 }
 ```
 
-- **Translation direction**: `post`, `scan`, `phase_c_check`, `check_translation`,
+- **Translation direction**: `scan`, `phase_c_check`, `check_translation`,
   and `completeness_guard` all accept `--direction {encn,cnen}`. Direction is
   auto-detected from the translated text when omitted, but the detection is a
   character-ratio heuristic that fails on poorly-translated or mixed text (e.g.
@@ -88,13 +88,21 @@ re-translate loop on BLOCKED.
   Since the translation workflow always knows the real direction, pass
   `--direction` explicitly in automated pipelines rather than relying on the
   fallback. The detected/used direction is reported in each command's JSON
-  output.
+  output. In addition, `translate.py prepare` (source-based detection),
+  `check_translation`, `completeness_guard`,
+  `auto_pipeline scan`, `phase_c_check`, and `term_enforcer` report a
+  `direction_auto_detected` boolean in their JSON output: `true` when the
+  direction came from the auto-detection fallback described above, `false`
+  when it was given explicitly via `--direction`. (`term_enforcer` has no
+  `--direction` flag — it takes the direction from the lock's `direction`
+  field, so for it `true` means the lock carried no direction and the
+  heuristic fallback ran.)
 
 ## Script Reference
 
 ### `auto_pipeline.py`
 
-Orchestrates pre-processing, post-processing, and residue scanning.
+Orchestrates pre-processing and residue scanning.
 
 #### `pre`
 
@@ -165,32 +173,6 @@ The `term_authority` block is the **mandatory translation reference** for this
 article. Agents must use the provided `chinese` values for all `locked_terms`
 and must disambiguate all `ambiguous_terms` with a full subtitle variant.
 
-#### `post`
-
-Runs terminology check, learns new terms, and a skill health check on the
-translated file. Direction-aware: direction is auto-detected from the
-translated file or set with `--direction`, and forwarded to the terminology
-checker.
-
-```bash
-python scripts/auto_pipeline.py post source.md translated.txt --json
-python scripts/auto_pipeline.py post source.md translated.txt --direction cnen --json
-```
-
-JSON data:
-
-```json
-{
-  "command": "post",
-  "source": "source.md",
-  "translated": "translated.txt",
-  "direction": "encn",
-  "terminology_issue_count": 3,
-  "new_terms_learned": 2,
-  "health_check_passed": true
-}
-```
-
 #### `scan`
 
 Direction-aware residue scan: reports English card names left in an EN->CN
@@ -209,6 +191,7 @@ JSON data:
   "command": "scan",
   "translated": "translated.txt",
   "direction": "encn",
+  "direction_auto_detected": false,
   "residue_count": 0,
   "residues": []
 }
@@ -233,6 +216,7 @@ JSON data:
 ```json
 {
   "direction": "encn",
+  "direction_auto_detected": false,
   "issue_count": 5,
   "warning_count": 1,
   "auto_fixable_count": 2,
@@ -279,6 +263,7 @@ JSON data:
 ```json
 {
   "direction": "encn",
+  "direction_auto_detected": false,
   "automated_failed": 2,
   "automated_issues": [
     {"rule_id": "encn-01", "message": "forbidden provision term: ..."}
@@ -316,6 +301,7 @@ JSON data:
 ```json
 {
   "direction": "encn",
+  "direction_auto_detected": false,
   "all_passed": false,
   "blocked": true,
   "checks": [
@@ -331,7 +317,8 @@ JSON data:
 ### `term_enforcer.py`
 
 Term authority enforcement. Validates that locked terms from the pre-translation
-phase are correctly used in the translation.
+phase are correctly used in the translation. The JSON output also reports
+`direction_auto_detected` (see Global Conventions above).
 
 ```bash
 python scripts/term_enforcer.py translated.txt --lock lock.json --json
@@ -355,7 +342,8 @@ JSON data:
     }
   ],
   "pass_count": 43,
-  "locked_terms_checked": 45
+  "locked_terms_checked": 45,
+  "direction_auto_detected": false
 }
 ```
 
@@ -395,7 +383,7 @@ The following scripts also support `--json` and can be used independently:
 - `scripts/term_enforcer.py` — Enforce locked terms in a translation.
 - `scripts/format_skeleton.py` — Extract/restore Markdown structure.
 - `scripts/diff_review.py` — Compare source and translation.
-- `scripts/learn.py` — Discover new terms from source+translation pairs.
+- `scripts/learn.py` — Discover new terms from the source text.
 - `scripts/backtranslate.py` — Heuristic back-translation validation.
 
 ## Reference Files
@@ -420,7 +408,8 @@ All translation rules and data live in `references/`:
   mandatory translation reference; never translate those terms literally.
 - `phase_c_check.py` returns `ready: true` when automated checks pass, but
   manual warnings may still require review.
-- `auto_pipeline.py post` may add new terms to `references/pending_terms.md`.
+- After a PASS, `translate.py finish` runs `learn.py --auto`, which may append
+  new terms to `references/pending_terms.md`.
   These are intended for verification and should not be silently committed.
 - The default (non-JSON) output is formatted for readability in terminals and
   logs; use `--json` when building deterministic tool pipelines.

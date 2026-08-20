@@ -126,9 +126,9 @@ gwent-translation-style/
 │   ├── translation_workflow.md  # Workflow reference
 │   ├── pending_terms.md         # Terms awaiting review (runtime data)
 │   └── changelog.md             # Update history
-├── scripts/                 # 16 Python scripts
+├── scripts/                 # 15 Python scripts
 │   ├── translate.py             # Main entry: prepare→translate→finish pipeline
-│   ├── auto_pipeline.py         # Pre/post-processing (internal to translate.py)
+│   ├── auto_pipeline.py         # Pre-processing + residue scan (internal to translate.py)
 │   ├── check_translation.py     # Residue + slang detection
 │   ├── completeness_guard.py    # Final gate
 │   ├── phase_c_check.py         # Self-check
@@ -141,9 +141,8 @@ gwent-translation-style/
 │   ├── backtranslate.py         # Back-translation check
 │   ├── lookup.py                # Term lookup
 │   ├── learn.py                 # Learn new terms
-│   ├── health_check.py          # Integrity check (56 PASS)
-│   ├── _shared.py               # Shared logic (TermAuthority)
-│   └── agent_utils.py           # JSON envelope helpers
+│   ├── health_check.py          # Integrity check (63 PASS)
+│   └── _shared.py               # Shared logic (TermAuthority)
 └── lite/                    # Облегчённый навык (перевод чата, 3 шага)
     ├── SKILL.md                 # Определение навыка lite (перевод чата)
     └── AGENTS.md                # Агент-независимый интерфейс lite

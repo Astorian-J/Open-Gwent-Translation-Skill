@@ -126,7 +126,9 @@ def check_context_lock_terms(
 
     script = Path(__file__).parent / "term_enforcer.py"
     if not script.exists():
-        return []
+        # Fail-closed, same semantics as the crash guard below: a missing
+        # sibling checker must NOT read as "no violations".
+        return ["[checker error] scripts/term_enforcer.py missing — term authority check cannot run"]
 
     if lock_path:
         flag, ref = "--lock", str(lock_path)
@@ -301,6 +303,7 @@ def main() -> None:
     if args.json:
         data = {
             "direction": direction,
+            "direction_auto_detected": args.direction is None,
             "automated_failed": len(automated_issues),
             "automated_issues": [parse_issue(i) for i in automated_issues],
             "manual_warning_count": len(manual_warnings),

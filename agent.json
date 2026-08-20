@@ -50,7 +50,6 @@
     ],
     "internal_steps": [
       "auto_pipeline pre (inside prepare)",
-      "auto_pipeline post",
       "phase_c_check",
       "term_enforcer",
       "completeness_guard",
@@ -104,6 +103,7 @@
         "command",
         "source",
         "direction",
+        "direction_auto_detected",
         "date",
         "type",
         "pack_path",
@@ -207,45 +207,6 @@
       ]
     },
     {
-      "name": "auto_pipeline post",
-      "script": "scripts/auto_pipeline.py",
-      "subcommand": "post",
-      "args": [
-        {
-          "name": "source",
-          "required": true,
-          "type": "file_path"
-        },
-        {
-          "name": "translated",
-          "required": true,
-          "type": "file_path"
-        },
-        {
-          "name": "--direction",
-          "required": false,
-          "choices": [
-            "encn",
-            "cnen"
-          ]
-        },
-        {
-          "name": "--json",
-          "required": false,
-          "type": "flag"
-        }
-      ],
-      "json_output": [
-        "command",
-        "source",
-        "translated",
-        "direction",
-        "terminology_issue_count",
-        "new_terms_learned",
-        "health_check_passed"
-      ]
-    },
-    {
       "name": "auto_pipeline scan",
       "script": "scripts/auto_pipeline.py",
       "subcommand": "scan",
@@ -273,6 +234,7 @@
         "command",
         "translated",
         "direction",
+        "direction_auto_detected",
         "residue_count",
         "residues"
       ]
@@ -312,6 +274,7 @@
       ],
       "json_output": [
         "direction",
+        "direction_auto_detected",
         "issue_count",
         "warning_count",
         "auto_fixable_count",
@@ -350,6 +313,7 @@
       ],
       "json_output": [
         "direction",
+        "direction_auto_detected",
         "automated_failed",
         "automated_issues",
         "manual_warning_count",
@@ -388,6 +352,7 @@
       ],
       "json_output": [
         "direction",
+        "direction_auto_detected",
         "all_passed",
         "blocked",
         "checks"
@@ -604,7 +569,8 @@
         "skeleton",
         "translated",
         "output",
-        "block_count"
+        "block_count",
+        "fallback_count"
       ]
     },
     {
@@ -647,11 +613,6 @@
       "args": [
         {
           "name": "source",
-          "required": true,
-          "type": "file_path"
-        },
-        {
-          "name": "translated",
           "required": true,
           "type": "file_path"
         },
@@ -735,7 +696,8 @@
         "violation_count",
         "violations",
         "pass_count",
-        "locked_terms_checked"
+        "locked_terms_checked",
+        "direction_auto_detected"
       ]
     }
   ]

@@ -126,7 +126,7 @@ Exceptions:
 Present the final translation. If user provided their own translation,
 first output analysis, then the corrected version.
 
-Save the final translation to a file (e.g., `translated.txt`) before proceeding to post-processing.
+Save the final translation to a file (e.g., `translated.txt`) before running `translate.py finish`.
 
 ## Step 9: Learn (Self-Evolution)
 
@@ -156,10 +156,10 @@ our reference database:
 Always use pending_terms.md as the buffer. Only move to confirmed files
 after human verification against server data or official sources.
 
-**Learning is done automatically by `auto_pipeline.py post`.**
+**Learning is done automatically by `translate.py finish` (runs `learn.py --auto` after a PASS).**
 Only run the learning script manually if the pipeline was skipped:
 ```bash
-python scripts/learn.py source.txt translated.txt --auto
+python scripts/learn.py source.txt --auto
 ```
 
 ## Special Modes

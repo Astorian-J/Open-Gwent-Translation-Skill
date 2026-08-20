@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
 Gwent translation learning script.
-Analyzes source + translated text to discover new terms not in references.
+Analyzes the source text to discover new terms not in references.
 Outputs suggested additions to pending_terms.md for verification.
 
 Usage:
-    python learn.py <source_file> <translated_file> [--auto] [--json]
+    python learn.py <source_file> [--auto] [--json]
 
     source_file:      English source text
-    translated_file:  Chinese translation
     --auto:           Write directly to pending_terms.md (default: preview only)
     --json:           Output structured JSON for agent consumption
 """
@@ -17,6 +16,7 @@ import argparse
 import json
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 from collections import Counter
 
@@ -142,7 +142,7 @@ def extract_candidate_terms(source_text: str) -> list[tuple[str, str]]:
 
 
 
-def find_unknown_terms(source_text: str, translated_text: str) -> list[dict]:
+def find_unknown_terms(source_text: str) -> list[dict]:
     """Find terms in source that are not in our reference database."""
     known = load_all_terms()
     candidates = extract_candidate_terms(source_text)
@@ -189,14 +189,9 @@ def find_unknown_terms(source_text: str, translated_text: str) -> list[dict]:
         if key in pending_keys:
             continue
 
-        # Try to find Chinese translation in the translated text
-        # Simple heuristic: look for Chinese text near where this term might be
-        cn_translation = ""
-
         unknown.append({
             "type": term_type,
             "source": term_text,
-            "translation": cn_translation,
             "confidence": "low"  # Requires human verification
         })
 
@@ -212,18 +207,18 @@ def format_pending_entry(term: dict) -> str:
     lines = [
         f"### {term['source']}",
         f"- Type: {term['type']}",
-        f"- Suggested: {term['translation'] or '(translate and verify)'}",
+        f"- Suggested: (translate and verify)",
         f"- Confidence: {term['confidence']}",
-        f"- Discovered: {__import__('datetime').datetime.now().strftime('%Y-%m-%d')}",
+        f"- Discovered: {datetime.now().strftime('%Y-%m-%d')}",
         "- Status: pending review",
         ""
     ]
     return "\n".join(lines)
 
 
-def preview_new_terms(source_text: str, translated_text: str, silent: bool = False) -> list[dict]:
+def preview_new_terms(source_text: str, silent: bool = False) -> list[dict]:
     """Preview new terms without writing to file."""
-    unknown = find_unknown_terms(source_text, translated_text)
+    unknown = find_unknown_terms(source_text)
 
     if not silent and not unknown:
         print("No new terms discovered.")
@@ -233,8 +228,6 @@ def preview_new_terms(source_text: str, translated_text: str, silent: bool = Fal
         print(f"Discovered {len(unknown)} potential new term(s):\n")
         for term in unknown:
             print(f"  [{term['type']}] {term['source']}")
-            if term['translation']:
-                print(f"           → {term['translation']}")
             print()
 
     return unknown
@@ -295,29 +288,21 @@ def add_to_pending(terms: list[dict]) -> int:
 def main():
     parser = argparse.ArgumentParser(description="Gwent translation learning script")
     parser.add_argument("source", help="English source file")
-    parser.add_argument("translated", help="Chinese translated file")
     parser.add_argument("--auto", action="store_true", help="Write directly to pending_terms.md")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     args = parser.parse_args()
 
     source_path = Path(args.source)
-    translated_path = Path(args.translated)
 
     if not source_path.exists():
         if args.json:
             json_output(None, errors=[f"source file not found: {args.source}"], exit_code=1)
         print(f"Error: source file not found: {args.source}")
         sys.exit(1)
-    if not translated_path.exists():
-        if args.json:
-            json_output(None, errors=[f"translated file not found: {args.translated}"], exit_code=1)
-        print(f"Error: translated file not found: {args.translated}")
-        sys.exit(1)
 
     source_text = source_path.read_text(encoding="utf-8")
-    translated_text = translated_path.read_text(encoding="utf-8")
 
-    unknown = preview_new_terms(source_text, translated_text, silent=args.json)
+    unknown = preview_new_terms(source_text, silent=args.json)
 
     added = 0
     if unknown and args.auto:

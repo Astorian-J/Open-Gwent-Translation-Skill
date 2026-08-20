@@ -33,6 +33,10 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parent))
 from _shared import json_output
 
+# --output defaults anchor to the script directory, not the caller's cwd, so
+# running from elsewhere never drops skeleton.json/result.md into a random folder.
+_DEFAULT_DIR = Path(__file__).resolve().parent
+
 
 def extract_skeleton(text: str) -> dict:
     """Extract format skeleton from Markdown text."""
@@ -153,10 +157,18 @@ def extract_skeleton(text: str) -> dict:
     return {"blocks": blocks}
 
 
-def restore_skeleton(skeleton: dict, translated_blocks: list[str]) -> str:
-    """Restore Markdown from skeleton with translated content."""
+def restore_skeleton(skeleton: dict, translated_blocks: list[str]) -> tuple[str, int]:
+    """Restore Markdown from skeleton with translated content.
+
+    Returns (markdown, fallback_count). fallback_count counts blocks where the
+    UNTRANSLATED original text had to be substituted — translated chunks ran
+    out, or a table row's cell count did not match the skeleton. Any non-zero
+    count means the output silently contains source-language text; callers
+    must treat that as a failure, not ship the result.
+    """
     lines = []
     t_idx = 0
+    fallbacks = 0
 
     def next_chunk() -> str | None:
         """Return the next translated chunk, or None if exhausted."""
@@ -180,11 +192,13 @@ def restore_skeleton(skeleton: dict, translated_blocks: list[str]) -> str:
                 row_text = next_chunk()
                 if row_text is None:
                     cells = original_row
+                    fallbacks += 1
                 else:
                     cells = [c.strip() for c in row_text.split(" ||| ")]
                     # If the translator produced the wrong number of cells, fall back to original.
                     if len(cells) != len(original_row):
                         cells = original_row
+                        fallbacks += 1
                 lines.append("| " + " | ".join(cells) + " |")
                 if idx == 0:
                     sep = block.get("separator")
@@ -195,6 +209,7 @@ def restore_skeleton(skeleton: dict, translated_blocks: list[str]) -> str:
         content = next_chunk()
         if content is None:
             content = block.get("content", "")
+            fallbacks += 1
 
         if btype == "heading":
             prefix = "#" * block["level"]
@@ -219,7 +234,7 @@ def restore_skeleton(skeleton: dict, translated_blocks: list[str]) -> str:
         elif btype == "raw":
             lines.append(content)
 
-    return "\n".join(lines)
+    return "\n".join(lines), fallbacks
 
 
 def split_into_chunks(skeleton: dict) -> list[str]:
@@ -246,13 +261,13 @@ def main():
 
     extract = subparsers.add_parser("extract", help="Extract skeleton from Markdown")
     extract.add_argument("input", help="Input Markdown file")
-    extract.add_argument("--output", default="skeleton.json", help="Output skeleton file")
+    extract.add_argument("--output", default=str(_DEFAULT_DIR / "skeleton.json"), help="Output skeleton file")
     extract.add_argument("--json", action="store_true", help="Output structured JSON")
 
     restore = subparsers.add_parser("restore", help="Restore Markdown from skeleton")
     restore.add_argument("skeleton", help="Skeleton JSON file")
     restore.add_argument("translated", help="Translated chunks file")
-    restore.add_argument("--output", default="result.md", help="Output Markdown file")
+    restore.add_argument("--output", default=str(_DEFAULT_DIR / "result.md"), help="Output Markdown file")
     restore.add_argument("--json", action="store_true", help="Output structured JSON")
 
     args = parser.parse_args()
@@ -293,8 +308,14 @@ def main():
             sys.exit(1)
         skeleton = json.loads(skeleton_path.read_text(encoding="utf-8"))
         translated_lines = translated_path.read_text(encoding="utf-8").strip().split("\n---CHUNK---\n")
-        result = restore_skeleton(skeleton, translated_lines)
+        result, fallbacks = restore_skeleton(skeleton, translated_lines)
         Path(args.output).write_text(result, encoding="utf-8")
+        if fallbacks > 0:
+            # The output silently contains UNTRANSLATED original text — the
+            # most dangerous failure shape for a translation tool. Fail loudly.
+            print(f"[WARN] restore fell back to UNTRANSLATED original text for "
+                  f"{fallbacks} block(s) — output is INCOMPLETE, do not ship it.",
+                  file=sys.stderr)
         if args.json:
             json_output({
                 "command": "restore",
@@ -302,8 +323,13 @@ def main():
                 "translated": str(args.translated),
                 "output": str(args.output),
                 "block_count": len(skeleton["blocks"]),
-            }, exit_code=0)
+                "fallback_count": fallbacks,
+            }, exit_code=1 if fallbacks > 0 else 0)
         print(f"Restored to {args.output}")
+        if fallbacks > 0:
+            print(f"[WARN] {fallbacks} block(s) fell back to untranslated original "
+                  f"text (see stderr) — output is INCOMPLETE.")
+            sys.exit(1)
 
 
 if __name__ == "__main__":

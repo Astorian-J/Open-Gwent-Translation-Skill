@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import detect_direction, json_output
+from _shared import detect_direction, json_output, source_is_chinese
 
 SCRIPTS_DIR = Path(__file__).parent
 
@@ -515,7 +515,23 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         print(f"Error: source file not found: {args.source}")
         sys.exit(1)
 
-    direction = args.direction or "encn"  # EN->CN is the common case; banner + style table
+    # Direction: explicit --direction wins; otherwise auto-detect from the SOURCE
+    # (a Chinese source means CN->EN). The old hard default "encn" silently built
+    # EN->CN packs for Chinese sources. pre is direction-independent (context_lock
+    # build auto-detects with the same source_is_chinese heuristic), so there is
+    # no --direction to forward — the two cannot disagree by construction.
+    direction_auto = args.direction is None
+    if direction_auto:
+        try:
+            source_text = source_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            if args.json:
+                json_output(None, errors=[f"failed to read source file: {e}"], exit_code=1)
+            print(f"Error: failed to read source file {source_path}: {e}")
+            sys.exit(1)
+        direction = "cnen" if source_is_chinese(source_text) else "encn"
+    else:
+        direction = args.direction
     article_type = args.type
 
     # Ensure the card DB BEFORE pre (pre loads it via TermAuthority; a missing DB
@@ -564,6 +580,7 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         "command": "prepare",
         "source": str(source_path),
         "direction": direction,
+        "direction_auto_detected": direction_auto,
         "date": args.date or "auto",
         "type": article_type,
         "pack_path": str(pack_path),
@@ -588,7 +605,8 @@ def cmd_prepare(args: argparse.Namespace) -> None:
     print("TRANSLATE — PREPARE")
     print("=" * 60)
     print(f"\nSource:    {source_path}")
-    print(f"Direction: {'EN->CN' if direction == 'encn' else 'CN->EN'}")
+    print(f"Direction: {'EN->CN' if direction == 'encn' else 'CN->EN'}"
+          f"{' (auto-detected from source)' if direction_auto else ''}")
     print(f"Pack:      {pack_path}")
     print(f"Lock:      {'built' if lock_built else 'FAILED (pack written with empty lock table)'}")
     print(f"CardDB:    {card_db_count} cards {'(READY)' if cards_ready else '(NOT READY — run build_card_names_reference.py, then re-run prepare)'}")
@@ -714,7 +732,7 @@ def cmd_finish(args: argparse.Namespace) -> None:
     learn_result = None
     if not blocked:
         _lok, lparsed, _lraw = run_script_json(
-            "learn.py", [str(source_path), str(translated_path), "--auto"], LEARN_TIMEOUT
+            "learn.py", [str(source_path), "--auto"], LEARN_TIMEOUT
         )
         if lparsed and "data" in lparsed:
             learn_result = lparsed["data"]

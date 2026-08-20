@@ -34,16 +34,15 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
-    extract_abbreviations,
-    extract_capitalized_phrases,
-    extract_card_names,
-    extract_card_names_no_colon,
-    extract_terms_from_markdown,
     json_output,
     source_is_chinese,
     TermAuthority,
 )
-from term_enforcer import count_occurrences
+from term_enforcer import enforce_terms
+
+# --output/--lock defaults anchor to the script directory, not the caller's
+# cwd, so running from elsewhere never drops lock.json into a random folder.
+_DEFAULT_LOCK = str(Path(__file__).resolve().parent / "lock.json")
 
 
 def load_lock(lock_file: str) -> dict:
@@ -57,33 +56,6 @@ def load_lock(lock_file: str) -> dict:
 def save_lock(lock: dict, lock_file: str) -> None:
     """Save lock table to file."""
     Path(lock_file).write_text(json.dumps(lock, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def extract_terms_from_source(source_text: str) -> dict[str, str]:
-    """Extract candidate terms from English source that need locking."""
-    terms = {}
-
-    # Card names with colons (e.g., "Geralt: Igni")
-    for name in extract_card_names(source_text):
-        terms[name] = ""
-
-    # Card names without colons (e.g., "Paulie Dahlberg", "Horst Borsodi")
-    for name in extract_card_names_no_colon(source_text, max_words=5, min_length=4):
-        terms[name] = ""
-
-    # Terms from Markdown headers and bold text (often missed by paragraph scanners)
-    for name in extract_terms_from_markdown(source_text):
-        terms[name] = ""
-
-    # Capitalized phrases (potential card names / abilities)
-    for name in extract_capitalized_phrases(source_text, max_words=3, min_length=4):
-        terms[name] = ""
-
-    # Abbreviations
-    for abbrev in extract_abbreviations(source_text):
-        terms[abbrev] = ""
-
-    return terms
 
 
 def build_lock(source_file: str, lock_file: str) -> dict:
@@ -148,62 +120,38 @@ def build_lock(source_file: str, lock_file: str) -> dict:
 
 
 def check_translation(translation_file: str, lock_file: str) -> dict:
-    """Check translation against lock table for consistency violations."""
+    """Check translation against lock table for consistency violations.
+
+    Delegates to term_enforcer.enforce_terms so word-boundary matching, the
+    CJK suppress guard (希里 inside 冒牌希里), and direction handling live in
+    exactly one place; this function only maps the result onto this command's
+    report shape (term/expected/issue per violation).
+    """
     lock = load_lock(lock_file)
-    translation = Path(translation_file).read_text(encoding="utf-8")
+    enforced = enforce_terms(Path(translation_file), lock)
+    is_cnen = enforced.get("direction") == "cnen"
 
-    violations = []
-    confirmed = []
-
-    for en_term, info in lock["terms"].items():
-        cn_term = info.get("cn", "")
-        status = info.get("status", "pending")
-        variants = info.get("variants", [])
-
-        if status == "ambiguous" and variants:
-            variant_cns = [v["cn"] for v in variants if v.get("cn")]
-            found = any(vcn in translation for vcn in variant_cns)
-            if found:
-                confirmed.append(en_term)
-            else:
-                expected = " / ".join(variant_cns)
-                violations.append({
-                    "term": en_term,
-                    "expected": expected,
-                    "issue": "Ambiguous name not disambiguated in translation"
-                })
-            continue
-
-        if status not in ("confirmed", "auto_locked") or not cn_term:
-            continue
-
-        # Check if any variant of the Chinese term appears in the translation.
-        cn_variants = [v.strip() for v in cn_term.split("/")]
-        found_cn = any(v in translation for v in cn_variants)
-        # 词边界匹配（与 term_enforcer.count_occurrences 对齐）：原裸子串会让短缩写
-        # （CA/UP/p）命中普通英文词内部（because/setup/cup），造成假"已找到"或假违规。
-        found_en = count_occurrences(translation, [en_term]) > 0
-        if not found_en:
-            found_en = count_occurrences(translation, info.get("abbrevs", [])) > 0
-        if not found_en:
-            found_en = count_occurrences(translation, info.get("aliases", [])) > 0
-
-        if found_cn:
-            confirmed.append(en_term)
-        elif found_en:
-            # English term still present — likely untranslated.
-            violations.append({
-                "term": en_term,
-                "expected": cn_term,
-                "issue": "English term left untranslated"
-            })
-        else:
-            # Neither English nor Chinese variant present — term may be omitted.
-            violations.append({
-                "term": en_term,
-                "expected": cn_term,
-                "issue": "Locked term missing from translation"
-            })
+    # issue_type -> the human-readable message this command prints.
+    issue_labels = {
+        "term_left_untranslated": (
+            "Chinese term left untranslated" if is_cnen
+            else "English term left untranslated"
+        ),
+        "term_missing_or_literal": "Locked term missing from translation",
+        "ambiguous_not_disambiguated": "Ambiguous name not disambiguated in translation",
+    }
+    violations = [
+        {
+            "term": v["term"],
+            "expected": v.get("expected_official") or v.get("expected_en") or v.get("expected_cn", ""),
+            "issue": issue_labels.get(v["issue_type"], v["issue_type"]),
+        }
+        for v in enforced["violations"]
+    ]
+    # Degradation notices (e.g. CJK suppress built incompletely) can flip a
+    # BLOCKED into a false PASS — surface them as violations, not hints.
+    for warning in enforced.get("warnings", []):
+        violations.append({"term": "(checker)", "expected": "", "issue": warning})
 
     confirmed_count = len([
         t for t in lock['terms'].values()
@@ -217,7 +165,9 @@ def check_translation(translation_file: str, lock_file: str) -> dict:
     return {
         "lock_file": lock_file,
         "confirmed_count": confirmed_count,
-        "found_in_translation": len(confirmed),
+        # pass_count 也计入已正确消歧的 ambiguous 项；旧实现只数 auto_locked/
+        # confirmed，此处口径略宽但更如实（消歧成功=译文中确实用了锁定译名）。
+        "found_in_translation": enforced["pass_count"],
         "violation_count": len(violations),
         "violations": violations,
         "pending_count": len(pending),
@@ -245,18 +195,18 @@ def main():
 
     build = subparsers.add_parser("build", help="Build lock table from source text")
     build.add_argument("source", help="Source file")
-    build.add_argument("--output", default="lock.json", help="Output lock file")
+    build.add_argument("--output", default=_DEFAULT_LOCK, help="Output lock file")
     build.add_argument("--json", action="store_true", help="Output structured JSON")
 
     check = subparsers.add_parser("check", help="Check translation against lock table")
     check.add_argument("translation", help="Translated file")
-    check.add_argument("--lock", default="lock.json", help="Lock file")
+    check.add_argument("--lock", default=_DEFAULT_LOCK, help="Lock file")
     check.add_argument("--json", action="store_true", help="Output structured JSON")
 
     add = subparsers.add_parser("add", help="Add a term to the lock table")
     add.add_argument("en_term", help="English term")
     add.add_argument("cn_term", help="Chinese translation")
-    add.add_argument("--lock", default="lock.json", help="Lock file")
+    add.add_argument("--lock", default=_DEFAULT_LOCK, help="Lock file")
     add.add_argument("--json", action="store_true", help="Output structured JSON")
 
     args = parser.parse_args()

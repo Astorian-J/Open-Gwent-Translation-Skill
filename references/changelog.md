@@ -1,5 +1,68 @@
 # Changelog
 
+## 2026-08-20 — 批A：代码行为类修复（13 组，A1-A13）
+
+第二轮审查（/tmp/gwent-review-round1.md）的代码行为类问题一次性修复，详见
+`fix-report-batch-a.md`：
+
+- **A1/M1 删 `auto_pipeline post` 僵尸路径**：post 子命令全代码库无调用方，物理删除
+  （函数本体 + argparse 注册 + main 分支）；docstring 与 pre/scan/guard 的出口文案
+  统一指向 `translate.py finish`；AGENTS.md / README 四语种 / agent.json /
+  SIMPLE-MCP-PLAN.md / translation_workflow.md / lite 两文件同步清零 post 引用。
+- **A2/L1 死代码物理删除**：`scripts/agent_utils.py` 整文件（纯 re-export 垫片）；
+  `_shared.TermAuthority.get_canonical/get_cn`；`context_lock.extract_terms_from_source`；
+  `diff_review` 未用的 SequenceMatcher import 与死计算；`lookup.py` 双分支相同去重；
+  `learn.py` 未使用的 `translated` 参数。
+- **A3/M7 解析器收敛（按 2026-07-01 先例逐个实证判断）**：`lookup.py` 的
+  `parse_markdown_table` 收敛到 `_shared` 版（处理反引号内 `\|` 转义）；
+  `check_translation.py` 4 个手写解析器经实证对比**全部保留**（key 形态/消费方/
+  门禁语义均有真实差异，收敛会改校验语义，先例禁止）。
+- **A4/M8 `context_lock check` 委托 `term_enforcer.enforce_terms`**：删裸子串匹配
+  重复实现，继承 cjk_suppress/词边界/方向感知，"希里 inside 冒牌希里"假阳性在此
+  路径修复；M5 降级 warnings 也计 violation。
+- **A5/M10 `diff_review` full-checker 恒空修复**：改走 check_translation `--json`
+  envelope 解析（不再按行首 `-` 解析人类输出），崩溃/脚本缺失 fail-closed。
+- **A6/H4 `format_skeleton restore` 回退报警**：chunk 耗尽/表格列数不符时统计回退
+  次数，>0 则 stderr 警告 + JSON `fallback_count` + 非零退出，不再静默填未翻译原文。
+- **A7/M4 4lang 解析失败补 stderr WARN**：与 `_load_effect_text` 对齐，卡名锁定
+  静默失效（hollow lock）不再无提示。
+- **A8/M6 prepare 方向自动检测**：`translate.py prepare` 省略 `--direction` 时用
+  `source_is_chinese` 从源文判断（旧硬默认 encn 会把中文源的 pack 做成 EN→CN）；
+  JSON/人类输出标注 auto-detected。pre 方向无关（context_lock build 用同一启发式），
+  无参数可传。
+- **A9/M12 CN 提取去正则化**：`get_all_for_text_cn` 的 `re.finditer(re.escape(...))`
+  改 `str.find` 循环（语义逐位等价）。基准（54,942 字符中文文本，median of 3）：
+  修前 1.149s → 修后 1.146s——性能中性，前提"re 512 编译缓存颠簸"在 Python 3.14
+  上不复现（重编译仅 ~30ms，耗时在 step3 编辑距离模糊匹配）；改动价值是去不必要正则。
+- **A10/M11 方向自动检测可见化**：check_translation / phase_c_check /
+  completeness_guard / term_enforcer / auto_pipeline scan 的 JSON 输出统一加
+  `direction_auto_detected` 布尔字段（term_enforcer 无 --direction 旗标，lock 缺
+  direction 字段时为 true）；AGENTS.md/agent.json schema 文档同轮同步。
+- **A11/M15 `card_meta.json` 构建脚本入库**：新增 `scripts/build_card_meta.py`
+  （`--src` 本地 gwent-card-db 离线 + `--fetch` card-api 双模式、原子写、shape
+  校验）；两模式产物均与已提交 card_meta.json 字节级一致。
+- **A12 终审残留 3 项**：姊妹脚本缺失 fail-open → fail-closed（check_translation /
+  phase_c_check 产 `[checker error]`，completeness_guard 产 status=error）；
+  test_rebuild 补 phase_c H1 守卫用例与 M5 消费端传播用例（11→13）。
+- **A13 杂项 L3-L8**：test_rebuild `tempfile.mktemp` 清零（TemporaryDirectory +
+  try/finally）；health_check 死检查 "### Phase" 改为校验 SKILL.md 现存 Step 1/2/3
+  标题、文案脆弱断言改 JSON envelope 断言；diff_review 退出码统一（有 issue 即非零）；
+  `--output` 默认值锚定脚本目录（内部调用方经查证全部显式传参）；term_enforcer
+  `--source` 临时锁文件 finally 清理、_shared/auto_pipeline NamedTemporaryFile 句柄
+  关闭；learn.py 行内 `__import__('datetime')` 提顶部、check_translation 函数内重复
+  import 提模块级、auto_pipeline "[1/3]…[3/3]" 改为 [1/6]…[6/6]。
+
+验证：health_check 63 PASS / 0 FAIL；test_rebuild 13/13；上轮修复行为
+（H1/H2/M5/M9）回归用例全过。
+
+批A终审返工（2 Important + 4 Minor，kimi 完成 I-1/I-2/M-1 主体后撞 API
+配额中断，剩余由 Claude 接手）：`completeness_guard` 非 JSON 模式补姊妹脚本
+缺失守卫（residue scan 不再假 PASS）；agent.json 补 prepare 的
+`direction_auto_detected` 与 restore 的 `fallback_count`；learn 的
+`translated` 参数删到 CLI 层（translate.py 调用/agent.json/文档同步）；
+`_t_m5_consumer_propagation` 改临时目录副本（不再瞬时污染 tracked 文件）；
+build_card_meta 离线解析失败改友好错误；README 四语种 56→63 PASS。
+
 ## 2026-08-20 — 触发词收窄 + 检查器 fail-closed（H1/H2/M5/M9）
 
 审查报告 6 项修复，核心是消除"假 PASS"与 skill 触发劫持：

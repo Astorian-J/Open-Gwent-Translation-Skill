@@ -81,13 +81,18 @@ def run_check_translation(file_path: Path, lock_path: Path | None, direction: st
 
 def run_residue_scan(file_path: Path, direction: str, json_mode: bool) -> tuple[bool, int]:
     """Run auto_pipeline.py scan and return (pass, issue_count)."""
+    script = Path(__file__).parent / "auto_pipeline.py"
+    if not script.exists():
+        # Fail-closed: a missing sibling checker surfaces through the caller's
+        # except guard as passed=False (same semantics as the M9 lock guard).
+        raise FileNotFoundError(f"scripts/auto_pipeline.py missing — check cannot run")
+
     if json_mode:
         ok, parsed, _ = run_script_json("auto_pipeline.py", ["scan", str(file_path), "--direction", direction])
         if parsed and "data" in parsed:
             return ok, parsed["data"].get("residue_count", 0)
         return ok, 0
 
-    script = Path(__file__).parent / "auto_pipeline.py"
     result = subprocess.run(
         [sys.executable, str(script), "scan", str(file_path), "--direction", direction],
         capture_output=True,
@@ -100,14 +105,16 @@ def run_residue_scan(file_path: Path, direction: str, json_mode: bool) -> tuple[
         1 for line in output.split("\n")
         if "English residue:" in line or "Chinese residue:" in line
     )
-    return issue_count == 0, issue_count
+    return issue_count == 0 and result.returncode == 0, issue_count
 
 
 def run_phase_c_check(file_path: Path, lock_path: Path | None, direction: str, json_mode: bool) -> tuple[bool, int]:
     """Run phase_c_check.py and return (pass, issue_count)."""
     script = Path(__file__).parent / "phase_c_check.py"
     if not script.exists():
-        return True, 0
+        # Fail-closed: a missing sibling checker surfaces through the caller's
+        # except guard as passed=False (same semantics as the M9 lock guard).
+        raise FileNotFoundError(f"scripts/phase_c_check.py missing — check cannot run")
 
     args = [str(file_path), "--direction", direction]
     if lock_path:
@@ -140,7 +147,7 @@ def run_term_authority_check(file_path: Path, lock_path: Path | None, direction:
 
     status is one of:
       "not_applicable" — reserved (no longer used; CN->EN now enforces too)
-      "skipped"        — no lock file (or term_enforcer.py missing); not run
+      "skipped"        — no lock file provided; not run
       "ran"            — actually executed; pass/count are meaningful
       "error"          — the check itself raised (set by the caller's except guard)
 
@@ -158,7 +165,9 @@ def run_term_authority_check(file_path: Path, lock_path: Path | None, direction:
 
     script = Path(__file__).parent / "term_enforcer.py"
     if not script.exists():
-        return True, 0, "skipped", []
+        # Fail-closed: surfaces through the caller's except guard as
+        # status="error" + passed=False (same semantics as the M9 lock guard).
+        raise FileNotFoundError(f"scripts/term_enforcer.py missing — check cannot run")
 
     if json_mode:
         ok, parsed, _ = run_script_json("term_enforcer.py", [str(file_path), "--lock", str(lock_path)])
@@ -297,6 +306,7 @@ def main() -> None:
     if args.json:
         data = {
             "direction": direction,
+            "direction_auto_detected": args.direction is None,
             "all_passed": all_pass,
             "blocked": not all_pass,
             "checks": checks,
@@ -344,8 +354,8 @@ def main() -> None:
             if not check["passed"]:
                 print(f"  • {check['message']}")
         print("")
-        print("Fix all issues above, then re-run:")
-        print(f"  python scripts/completeness_guard.py {file_path}")
+        print("Fix all issues above, then re-run the gate via translate.py:")
+        print(f"  python scripts/translate.py finish {file_path} --source <source.md> --direction {direction}")
         print("")
         print("[BLOCKED] Do not finalize the translation while BLOCKED.")
         sys.exit(1)

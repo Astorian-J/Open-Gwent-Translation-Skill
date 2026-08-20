@@ -122,9 +122,9 @@ gwent-translation-style/
 │   ├── translation_workflow.md  # 工作流参考
 │   ├── pending_terms.md         # 待审核术语（运行时数据）
 │   └── changelog.md             # 更新历史
-├── scripts/                 # 16 个 Python 脚本
+├── scripts/                 # 15 个 Python 脚本
 │   ├── translate.py             # 主入口：prepare→翻译→finish 流水线
-│   ├── auto_pipeline.py         # 译前/译后处理（translate.py 的内部步骤）
+│   ├── auto_pipeline.py         # 译前处理 + 残留扫描（translate.py 的内部步骤）
 │   ├── check_translation.py     # 残留 + 黑话检测
 │   ├── completeness_guard.py    # 最终门禁
 │   ├── phase_c_check.py         # 自检
@@ -137,9 +137,8 @@ gwent-translation-style/
 │   ├── backtranslate.py         # 回译检查
 │   ├── lookup.py                # 术语查询
 │   ├── learn.py                 # 学习新术语
-│   ├── health_check.py          # 完整性检查（56 PASS）
-│   ├── _shared.py               # 共享逻辑（TermAuthority）
-│   └── agent_utils.py           # JSON 信封辅助
+│   ├── health_check.py          # 完整性检查（63 PASS）
+│   └── _shared.py               # 共享逻辑（TermAuthority）
 └── lite/                    # 精简版 skill（聊天翻译）
     ├── SKILL.md                 # 精简版 skill 工作流（聊天翻译）
     └── AGENTS.md                # Agent 无关接口

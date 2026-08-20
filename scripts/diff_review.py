@@ -13,7 +13,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from difflib import SequenceMatcher
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
@@ -70,10 +69,6 @@ def check_numerics(source: str, translation: str) -> list[dict]:
     """Check if numbers are preserved and not reversed."""
     issues = []
 
-    # Extract numbers from source
-    source_nums = re.findall(r'\b(\d+)\s*(?:for|power|provision|p|P)\b', source, re.IGNORECASE)
-    source_plain_nums = re.findall(r'\b\d+\b', source)
-
     # Check provision/power format
     for match in re.finditer(r'(\d+)\s*人口\s*(\d+)\s*战力', translation):
         pop, pwr = int(match.group(1)), int(match.group(2))
@@ -122,47 +117,62 @@ def check_completeness(source: str, translation: str) -> list[dict]:
     return issues
 
 
-def run_full_checker(translation_file: str, json_mode: bool = False) -> list[dict]:
-    """Run the standalone terminology checker and return structured issues."""
-    issues = []
+def run_full_checker(translation_file: str) -> list[dict]:
+    """Run the standalone terminology checker and return structured issues.
+
+    Always parses check_translation's --json envelope (success/exit_code/
+    data/issues) — the plain-text output format is not a stable contract.
+    Exit code 1 from found issues is the normal path, not a crash. A missing
+    or malformed envelope means the checker itself failed; that is reported
+    as a high-severity checker_error issue (fail-closed) instead of silently
+    returning an empty list.
+    """
     script = Path(__file__).parent / "check_translation.py"
     if not script.exists():
-        return issues
+        return [{
+            "severity": "high",
+            "type": "checker_error",
+            "detail": "[checker error] scripts/check_translation.py missing",
+            "suggestion": "Restore scripts/check_translation.py and re-run",
+        }]
 
-    cmd = [sys.executable, str(script), translation_file]
-    if json_mode:
-        cmd.append("--json")
-
+    cmd = [sys.executable, str(script), translation_file, "--json"]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
 
-    if json_mode:
-        try:
-            parsed = json.loads(result.stdout)
-            for issue in parsed.get("data", {}).get("issues", []):
-                issues.append({
-                    "severity": issue.get("severity", "medium"),
-                    "type": issue.get("category", "terminology_checker"),
-                    "detail": issue.get("message", ""),
-                    "suggestion": "See check_translation.py output for details",
-                })
-        except (json.JSONDecodeError, ValueError):
-            pass
-        return issues
+    try:
+        parsed = json.loads(result.stdout)
+        if not isinstance(parsed, dict) or "success" not in parsed:
+            raise ValueError("not a JSON envelope")
+        raw_issues = parsed["data"]["issues"]
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return [{
+            "severity": "high",
+            "type": "checker_error",
+            "detail": (f"[checker error] check_translation.py produced no valid "
+                       f"JSON envelope (exit {result.returncode})"),
+            "suggestion": "Run check_translation.py directly to see the underlying error",
+        }]
 
-    for line in result.stdout.split("\n"):
-        if line.strip().startswith("-"):
-            # Heuristic: treat any checker output line as a medium-severity issue.
-            issues.append({
-                "severity": "medium",
-                "type": "terminology_checker",
-                "detail": line.strip()[2:].strip(),
-                "suggestion": "See check_translation.py output for details",
-            })
-    return issues
+    # check_translation severities are error/warning; map onto this report's
+    # high/medium/low scale so the issues actually surface in the human report.
+    severity_map = {"error": "high", "warning": "medium"}
+    return [
+        {
+            "severity": severity_map.get(issue.get("severity", ""), "medium"),
+            "type": issue.get("category", "terminology_checker"),
+            "detail": issue.get("message", ""),
+            "suggestion": "See check_translation.py output for details",
+        }
+        for issue in raw_issues
+    ]
 
 
-def generate_report(source: str, translation: str, translation_file: str | None = None, json_mode: bool = False) -> str | dict:
-    """Generate a comprehensive diff review report."""
+def generate_report(source: str, translation: str, translation_file: str | None = None, json_mode: bool = False) -> tuple[str | dict, int]:
+    """Generate a comprehensive diff review report.
+
+    Returns (report, issue_count); the caller decides the exit code from
+    issue_count so JSON and human modes share the same semantics.
+    """
     terminology_issues = check_terminology(source, translation)
     numeric_issues = check_numerics(source, translation)
     completeness_issues = check_completeness(source, translation)
@@ -170,7 +180,7 @@ def generate_report(source: str, translation: str, translation_file: str | None 
     all_issues = terminology_issues + numeric_issues + completeness_issues
 
     if translation_file:
-        all_issues.extend(run_full_checker(translation_file, json_mode=json_mode))
+        all_issues.extend(run_full_checker(translation_file))
 
     # Sort by severity
     all_issues.sort(key=lambda x: _SEVERITY_ORDER.get(x["severity"], 3))
@@ -186,7 +196,7 @@ def generate_report(source: str, translation: str, translation_file: str | None 
             "translation_sentences": translation_sentences,
             "issue_count": len(all_issues),
             "issues": all_issues,
-        }
+        }, len(all_issues)
 
     lines = [
         "# Diff Review Report (审校差异报告)",
@@ -230,7 +240,7 @@ def generate_report(source: str, translation: str, translation_file: str | None 
         "",
     ])
 
-    return "\n".join(lines)
+    return "\n".join(lines), len(all_issues)
 
 
 def main():
@@ -258,16 +268,19 @@ def main():
     source = source_path.read_text(encoding="utf-8")
     translation = translation_path.read_text(encoding="utf-8")
 
-    report = generate_report(source, translation, translation_file=args.translation, json_mode=args.json)
+    report, issue_count = generate_report(source, translation, translation_file=args.translation, json_mode=args.json)
 
     if args.json:
-        json_output(report, exit_code=1 if report["issue_count"] > 0 else 0)
+        json_output(report, exit_code=1 if issue_count > 0 else 0)
 
     if args.output:
         Path(args.output).write_text(report, encoding="utf-8")
         print(f"Report written to {args.output}")
     else:
         print(report)
+
+    # Same exit-code contract as the other checkers: any issue -> non-zero.
+    sys.exit(1 if issue_count > 0 else 0)
 
 
 if __name__ == "__main__":

@@ -592,9 +592,10 @@ def build_lock_from_source(source_path: "Path | str") -> Path:
     import subprocess
     import tempfile
 
-    lock_file = Path(tempfile.NamedTemporaryFile(
+    with tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", prefix="gwent_lock_", delete=False
-    ).name)
+    ) as tmp:
+        lock_file = Path(tmp.name)
     result = subprocess.run(
         [sys.executable, str(Path(__file__).parent / "context_lock.py"),
          "build", str(source_path), "--output", str(lock_file)],
@@ -814,7 +815,11 @@ class TermAuthority:
             import json
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-            except (ValueError, OSError):
+            except (ValueError, OSError) as exc:
+                # A truncated/corrupt card table would silently disable every
+                # card-name lock downstream — surface it like _load_effect_text.
+                print(f"[WARN] card_names_4lang.json failed to parse ({exc}); "
+                      f"card-name locking degraded.", file=sys.stderr)
                 data = {}
             for rec in data.values():
                 en = (rec.get("en") or "").strip()
@@ -1596,15 +1601,24 @@ class TermAuthority:
         for cn in sorted(cn_to_entries, key=len, reverse=True):
             if len(cn) < 2 or cn in matched:
                 continue
-            occ = next(
-                (m for m in re.finditer(re.escape(cn), text)
-                 if not any(not (m.end() <= s or m.start() >= e)
-                            for s, e in consumed)),
-                None,
-            )
-            if occ is None:
+            # Literal substring scan via str.find — no regex needed for a plain
+            # literal (re.finditer(re.escape(cn)) here thrashed the 512-entry
+            # re compile cache across ~1700 CN keys). Advancing by len(cn) after
+            # each hit mirrors finditer's non-overlapping scan exactly.
+            occ_start = -1
+            pos = 0
+            while True:
+                idx = text.find(cn, pos)
+                if idx == -1:
+                    break
+                end = idx + len(cn)
+                if all(end <= s or idx >= e for s, e in consumed):
+                    occ_start = idx
+                    break
+                pos = end
+            if occ_start == -1:
                 continue
-            consumed.append((occ.start(), occ.end()))
+            consumed.append((occ_start, occ_start + len(cn)))
             matched.add(cn)
             self._emit_cn_result(cn, cn_to_entries[cn], "cn_exact",
                                  cn, results, seen_terms)
@@ -1669,16 +1683,6 @@ class TermAuthority:
             if re.search(rf"\b{re.escape(key)}s?\b", text_lower):
                 hits.append(rec)
         return hits
-
-    def get_canonical(self, term: str) -> str | None:
-        """Return canonical EN for a term, or None if unknown."""
-        resolved = self.resolve(term)
-        return resolved["canonical_en"] if resolved else None
-
-    def get_cn(self, term: str) -> str | None:
-        """Return official Chinese for a term, or None if unknown/ambiguous."""
-        resolved = self.resolve(term)
-        return resolved["cn"] if resolved else None
 
 
 # Cached module-level instance for scripts that need repeated lookups.

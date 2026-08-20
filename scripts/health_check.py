@@ -136,9 +136,19 @@ def check_skill_file(skill_path: Path) -> list[tuple[str, str]]:
         else:
             results.append(("FAIL", f"SKILL.md: Missing {section}"))
 
-    # Check for workflow phases (SKILL.md uses Phase A/B/C/D/E)
-    phase_count = text.count("### Phase")
-    results.append(("INFO", f"SKILL.md: {phase_count} workflow phases defined"))
+    # Check the workflow steps actually documented in SKILL.md (Step 1/2/3 of
+    # the translate.py pipeline). This replaces a dead "### Phase" count — the
+    # Phase A-E structure no longer exists in SKILL.md.
+    step_headings = [
+        "### Step 1: Prepare",
+        "### Step 2: Translate",
+        "### Step 3: Finish",
+    ]
+    missing_steps = [s for s in step_headings if s not in text]
+    if missing_steps:
+        results.append(("FAIL", f"SKILL.md: Missing workflow steps {missing_steps}"))
+    else:
+        results.append(("PASS", "SKILL.md: 3 workflow steps (Prepare/Translate/Finish) defined"))
 
     # Check for special modes
     if "Diff Review Mode" in text:
@@ -531,12 +541,21 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
                 test_file = Path(tf.name)
             try:
                 result = subprocess.run(
-                    [sys.executable, str(check_script), str(test_file)],
+                    [sys.executable, str(check_script), str(test_file),
+                     "--direction", "encn", "--json"],
                     capture_output=True,
                     text=True,
                     timeout=10,
                 )
-                if result.returncode != 0 and "forbidden term" in result.stdout:
+                # Assert on the JSON envelope (exit code + parsed issue list),
+                # not on human-readable wording like "forbidden term".
+                try:
+                    import json
+                    data = json.loads(result.stdout)["data"]
+                    issues = data["issues"]
+                except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                    issues = None
+                if issues and result.returncode == 1:
                     results.append(("PASS", "check_translation.py: Detects errors correctly"))
                 else:
                     results.append(("WARN", "check_translation.py: Unexpected test result"))

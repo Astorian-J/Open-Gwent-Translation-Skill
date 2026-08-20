@@ -16,8 +16,9 @@ Categories:
   4. Check block (both)   — missing/wrong -> BLOCKED; correct -> PASS
   5. CJK absorb           — 希里 inside 冒牌希里 -> NOT present
   6. True unknown         — out-of-dict fabricated words -> not falsely locked
-  7. Gate integrity       — H1 fail-closed guard, H2 --fix keeps TA, M9 lock
-                            build failure, M5 degradation signal propagation
+  7. Gate integrity       — H1 fail-closed guard (check_translation + phase_c),
+                            H2 --fix keeps TA, M9 lock build failure, M5
+                            degradation signal (producer + consumer propagation)
 """
 
 import argparse
@@ -34,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _shared import TermAuthority, build_lock_from_source  # noqa: E402
 from check_translation import check_term_authority_violations  # noqa: E402
+from phase_c_check import check_context_lock_terms  # noqa: E402
 from term_enforcer import enforce_terms, count_occurrences, _build_cjk_suppress  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -41,23 +43,22 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 def _lock_from(source_text: str) -> dict:
     """Build a real context lock from synthetic source text (temp file)."""
-    p = Path(tempfile.mktemp(suffix=".md"))
-    p.write_text(source_text, encoding="utf-8")
-    lp = build_lock_from_source(str(p))
-    p.unlink()
-    lock = json.loads(lp.read_text(encoding="utf-8"))
-    lp.unlink()
-    return lock
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "source.md"
+        p.write_text(source_text, encoding="utf-8")
+        lp = build_lock_from_source(str(p))
+        try:
+            return json.loads(lp.read_text(encoding="utf-8"))
+        finally:
+            lp.unlink(missing_ok=True)
 
 
 def _enforce(source_text: str, translation_text: str) -> dict:
     lock = _lock_from(source_text)
-    tp = Path(tempfile.mktemp(suffix=".txt"))
-    tp.write_text(translation_text, encoding="utf-8")
-    try:
+    with tempfile.TemporaryDirectory() as td:
+        tp = Path(td) / "translated.txt"
+        tp.write_text(translation_text, encoding="utf-8")
         return enforce_terms(tp, lock)
-    finally:
-        tp.unlink()
 
 
 def _t_en_extraction() -> tuple[str, str]:
@@ -161,19 +162,16 @@ def _t_true_unknown() -> tuple[str, str]:
 
 def _t_h1_guard_fail_closed() -> tuple[str, str]:
     """Corrupted lock AND null-envelope (data:null) both -> [checker error]."""
-    tp = Path(tempfile.mktemp(suffix=".txt"))
-    tp.write_text("这张卡很强。", encoding="utf-8")
-    bad = Path(tempfile.mktemp(suffix=".json"))
-    bad.write_text("{broken json", encoding="utf-8")
-    try:
+    with tempfile.TemporaryDirectory() as td:
+        tp = Path(td) / "translated.txt"
+        tp.write_text("这张卡很强。", encoding="utf-8")
+        bad = Path(td) / "lock.json"
+        bad.write_text("{broken json", encoding="utf-8")
         crashed = check_term_authority_violations(tp, lock_path=bad)
         # --source on a missing file: term_enforcer exits 1 with a
         # "data": null error envelope (key present, value null).
         null_env = check_term_authority_violations(
             tp, source_path=Path("/tmp/definitely-not-exist-src.md"))
-    finally:
-        tp.unlink()
-        bad.unlink()
     if not any("[checker error]" in i for i in crashed):
         return ("FAIL", f"corrupted lock not fail-closed: {crashed}")
     if not any("[checker error]" in i for i in null_env):
@@ -181,20 +179,38 @@ def _t_h1_guard_fail_closed() -> tuple[str, str]:
     return ("PASS", "H1 fail-closed: corrupted lock + null-envelope -> [checker error]")
 
 
+def _t_h1_guard_fail_closed_phase_c() -> tuple[str, str]:
+    """phase_c_check.py carries its own copy of the H1 guard clause — drive it too.
+
+    Same two branches as _t_h1_guard_fail_closed: corrupted lock -> [checker
+    error]; --source on a missing file (null-envelope, data:null) -> no crash,
+    [checker error]."""
+    with tempfile.TemporaryDirectory() as td:
+        tp = Path(td) / "translated.txt"
+        tp.write_text("这张卡很强。", encoding="utf-8")
+        bad = Path(td) / "lock.json"
+        bad.write_text("{broken json", encoding="utf-8")
+        crashed = check_context_lock_terms(tp, lock_path=bad)
+        null_env = check_context_lock_terms(
+            tp, source_path=Path("/tmp/definitely-not-exist-src.md"))
+    if not any("[checker error]" in i for i in crashed):
+        return ("FAIL", f"phase_c corrupted lock not fail-closed: {crashed}")
+    if not any("[checker error]" in i for i in null_env):
+        return ("FAIL", f"phase_c null-envelope not fail-closed: {null_env}")
+    return ("PASS", "H1 fail-closed (phase_c): corrupted lock + null-envelope -> [checker error]")
+
+
 def _t_h2_fix_keeps_ta() -> tuple[str, str]:
     """--fix rewrites 费->人口 AND term authority violations survive the re-check."""
-    src = Path(tempfile.mktemp(suffix=".md"))
-    src.write_text("Ciri is a strong gold card.\n", encoding="utf-8")
-    trans = Path(tempfile.mktemp(suffix=".txt"))
-    trans.write_text("这张12费换8战力的卡很多人带。\n", encoding="utf-8")
-    try:
+    with tempfile.TemporaryDirectory() as td:
+        src = Path(td) / "source.md"
+        src.write_text("Ciri is a strong gold card.\n", encoding="utf-8")
+        trans = Path(td) / "translated.txt"
+        trans.write_text("这张12费换8战力的卡很多人带。\n", encoding="utf-8")
         r = subprocess.run(
             [sys.executable, str(SCRIPT_DIR / "check_translation.py"),
              str(trans), "--source", str(src), "--fix", "--direction", "encn"],
             capture_output=True, text=True, timeout=60)
-    finally:
-        src.unlink()
-        trans.unlink()
     if "Auto-fixed" not in r.stdout:
         return ("FAIL", f"--fix did not apply: {r.stdout[:200]}")
     if "term authority" not in r.stdout or r.returncode != 1:
@@ -204,20 +220,19 @@ def _t_h2_fix_keeps_ta() -> tuple[str, str]:
 
 def _t_m9_guard_lock_build_fail() -> tuple[str, str]:
     """Guard with --source whose lock build fails -> TA status=error, BLOCKED."""
-    trans = Path(tempfile.mktemp(suffix=".txt"))
-    trans.write_text("这张卡很强。\n", encoding="utf-8")
-    bad_source = tempfile.mkdtemp()  # a directory: lock build must fail
-    try:
+    with tempfile.TemporaryDirectory() as td:
+        trans = Path(td) / "translated.txt"
+        trans.write_text("这张卡很强。\n", encoding="utf-8")
+        bad_source = Path(td) / "a_directory.md"  # a directory: lock build must fail
+        bad_source.mkdir()
         r = subprocess.run(
             [sys.executable, str(SCRIPT_DIR / "completeness_guard.py"),
-             str(trans), "--source", bad_source, "--direction", "encn", "--json"],
+             str(trans), "--source", str(bad_source), "--direction", "encn", "--json"],
             capture_output=True, text=True, timeout=120)
-        data = json.loads(r.stdout)["data"]
-    except (json.JSONDecodeError, KeyError) as e:
-        return ("FAIL", f"guard stdout not clean JSON: {e}: {r.stdout[:200]}")
-    finally:
-        trans.unlink()
-        shutil.rmtree(bad_source, ignore_errors=True)
+        try:
+            data = json.loads(r.stdout)["data"]
+        except (json.JSONDecodeError, KeyError) as e:
+            return ("FAIL", f"guard stdout not clean JSON: {e}: {r.stdout[:200]}")
     checks = {c["name"]: c for c in data.get("checks", [])}
     ta = checks.get("term_authority", {})
     if (data.get("all_passed") is not False or ta.get("passed") is not False
@@ -248,6 +263,47 @@ def _t_m5_degradation_signal() -> tuple[str, str]:
     return ("PASS", "M5: TA load failure -> degraded list + enforce_terms data.warnings")
 
 
+def _t_m5_consumer_propagation() -> tuple[str, str]:
+    """Degraded term_enforcer -> check_translation reports [checker warning], exit 1.
+
+    Locks the CONSUMER side of M5 (the producer side is _t_m5_degradation_signal):
+    when TermAuthority fails to load inside the term_enforcer subprocess, its
+    data.warnings must surface in check_translation's output as a
+    "[checker warning] term_enforcer degraded" issue that counts toward the
+    issue total and the exit code — otherwise a degraded run reads as a false
+    PASS. Degradation is triggered by appending a non-UTF-8 byte to the
+    terminology_map.md of a TEMP COPY of scripts/ + references/ (scripts
+    resolve references relative to __file__.parent.parent, so the copy is
+    self-contained) — the tracked repo tree is never touched, so even SIGKILL
+    mid-test cannot corrupt it.
+    """
+    lock = _lock_from("Ciri is strong.")  # built while references are healthy
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        shutil.copytree(SCRIPT_DIR, root / "scripts",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(SCRIPT_DIR.parent / "references", root / "references")
+        (root / "references" / "terminology_map.md").write_bytes(b"\xff")  # non-UTF-8
+        tp = root / "translated.txt"
+        tp.write_text("这张卡很强。\n", encoding="utf-8")
+        lp = root / "lock.json"
+        lp.write_text(json.dumps(lock, ensure_ascii=False), encoding="utf-8")
+        r = subprocess.run(
+            [sys.executable, str(root / "scripts" / "check_translation.py"),
+             str(tp), "--lock", str(lp), "--direction", "encn", "--json"],
+            capture_output=True, text=True, timeout=60)
+    try:
+        envelope = json.loads(r.stdout)
+        issues = envelope["data"]["issues"]
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        return ("FAIL", f"check_translation stdout not a clean JSON envelope: {e}: {r.stdout[:200]}")
+    if not any("[checker warning]" in str(i.get("message", "")) for i in issues):
+        return ("FAIL", f"degradation warning not propagated to consumer: {issues}")
+    if r.returncode != 1:
+        return ("FAIL", f"degraded run not counted toward exit code (exit {r.returncode})")
+    return ("PASS", "M5 consumer: degraded term_enforcer -> [checker warning] issue + exit 1")
+
+
 _TESTS = [
     _t_en_extraction,
     _t_cn_extraction,
@@ -257,9 +313,11 @@ _TESTS = [
     _t_cjk_absorb,
     _t_true_unknown,
     _t_h1_guard_fail_closed,
+    _t_h1_guard_fail_closed_phase_c,
     _t_h2_fix_keeps_ta,
     _t_m9_guard_lock_build_fail,
     _t_m5_degradation_signal,
+    _t_m5_consumer_propagation,
 ]
 
 

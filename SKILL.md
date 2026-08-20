@@ -49,7 +49,7 @@ and reads like a native Gwent player wrote it. Casual but not stiff.
 
 > **IMPORTANT**: Every translation MUST go through `translate.py` — a two-command
 > deterministic pipeline. Skipping either command produces UNVERIFIED output that
-> MUST NOT be finalized. Do NOT run `auto_pipeline pre/post`, `phase_c_check`,
+> MUST NOT be finalized. Do NOT run `auto_pipeline`, `phase_c_check`,
 > `term_enforcer`, or `completeness_guard` manually — they are now internal steps
 > of `translate.py`. The pipeline is the only entry point:
 >

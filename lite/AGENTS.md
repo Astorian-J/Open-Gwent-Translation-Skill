@@ -96,7 +96,8 @@ Before output, confirm:
 
 These belong to the main skill's full-article pipeline:
 
-- `auto_pipeline.py pre / post` — full term injection / new-term learning
+- `auto_pipeline.py pre` — full term injection (runs inside `translate.py
+  prepare`); new-term learning runs inside `translate.py finish`
 - `completeness_guard.py` — 5-check final gate
 - `phase_c_check.py` — Phase C self-check
 - `term_enforcer.py` — requires a source / lock file

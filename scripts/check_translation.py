@@ -591,13 +591,9 @@ def check_english_residue(text: str) -> list[str]:
     if not card_map:
         return issues
 
-    # Extract English phrases using shared logic (supports function words)
-    from _shared import (
-        extract_card_names,
-        extract_card_names_no_colon,
-        SKIP_WORDS_MINIMAL,
-    )
-
+    # Extract English phrases using shared logic (supports function words).
+    # extract_card_names / extract_card_names_no_colon / SKIP_WORDS_MINIMAL are
+    # imported from _shared at module level.
     candidates = set()
 
     # 1. Card names WITH colons (e.g., "Saskia: Commander")
@@ -747,7 +743,9 @@ def check_term_authority_violations(
     """
     script = Path(__file__).parent / "term_enforcer.py"
     if not script.exists():
-        return []
+        # Fail-closed, same semantics as the crash guard below: a missing
+        # sibling checker must NOT read as "no violations".
+        return ["[checker error] scripts/term_enforcer.py missing — term authority check cannot run"]
 
     if lock_path:
         flag, ref = "--lock", str(lock_path)
@@ -904,6 +902,7 @@ def main():
         ]
         data = {
             "direction": direction,
+            "direction_auto_detected": args.direction is None,
             "issue_count": len(issues),
             "warning_count": len(warnings),
             "auto_fixable_count": auto_fixable,

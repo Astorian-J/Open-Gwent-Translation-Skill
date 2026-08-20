@@ -17,56 +17,13 @@ from pathlib import Path
 from difflib import SequenceMatcher
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import json_output
+from _shared import json_output, parse_markdown_table
 
 
 def similarity(a: str, b: str) -> float:
     if not a or not b:
         return 0.0
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
-
-
-def parse_markdown_table(text: str, filename: str) -> list[dict]:
-    """Parse markdown tables from text."""
-    results = []
-    in_table = False
-    headers = []
-
-    for line in text.split("\n"):
-        line = line.strip()
-
-        # Detect table header
-        if line.startswith("|") and "---" not in line and not in_table:
-            headers = [h.strip().lower() for h in line.split("|")]
-            in_table = False  # Wait for separator
-            continue
-
-        # Table separator
-        if line.startswith("|") and "---" in line:
-            in_table = True
-            continue
-
-        # Table row
-        if in_table and line.startswith("|") and "---" not in line:
-            parts = [p.strip() for p in line.split("|")]
-            if len(parts) >= 3:
-                # Build row dict from headers
-                row = {"_file": filename}
-                for i, h in enumerate(headers):
-                    if i < len(parts):
-                        row[h] = parts[i]
-                # Only include rows that look like data (not header repeats)
-                first_val = parts[1] if len(parts) > 1 else ""
-                if first_val and first_val not in ("English", "Forbidden", "Wrong", "—", ""):
-                    results.append(row)
-            continue
-
-        # End of table
-        if in_table and not line.startswith("|"):
-            in_table = False
-            headers = []
-
-    return results
 
 
 def search_references(query: str, ref_dir: Path, fuzzy: bool = False) -> list[dict]:
@@ -96,8 +53,11 @@ def search_references(query: str, ref_dir: Path, fuzzy: bool = False) -> list[di
 
         text = fpath.read_text(encoding="utf-8")
 
-        # Parse tables
-        rows = parse_markdown_table(text, fname)
+        # Parse tables (shared parser; header keys are lowercased with spaces
+        # normalized to underscores)
+        rows = parse_markdown_table(text, min_columns=1)
+        for row in rows:
+            row["_file"] = fname
 
         for row in rows:
             # Search all fields
@@ -149,7 +109,7 @@ def search_references(query: str, ref_dir: Path, fuzzy: bool = False) -> list[di
     return deduped
 
 
-def format_result(r: dict, plain: bool = False) -> str:
+def format_result(r: dict) -> str:
     """Format a single search result."""
     lines = []
     file = r["file"]
@@ -161,7 +121,7 @@ def format_result(r: dict, plain: bool = False) -> str:
     # Extract relevant fields based on file type
     if file == "terminology_map.md":
         en = row.get("english", row.get("forbidden", ""))
-        cn = row.get("chinese", row.get("must use", row.get("slang", "")))
+        cn = row.get("chinese", row.get("must_use", row.get("slang", "")))
         notes = row.get("notes", "")
         if en and cn:
             lines.append(f"    {en} → {cn}")
@@ -179,8 +139,8 @@ def format_result(r: dict, plain: bool = False) -> str:
 
     elif file == "card_overrides.md":
         en = row.get("english", "") or row.get("alias", "")
-        cn = row.get("chinese", "") or row.get("maps to", "") or row.get("修正后", "")
-        cid = row.get("card id", "")
+        cn = row.get("chinese", "") or row.get("maps_to", "") or row.get("修正后", "")
+        cid = row.get("card_id", "")
         faction = row.get("faction", "")
         parts = []
         if en:
@@ -226,7 +186,7 @@ def format_result(r: dict, plain: bool = False) -> str:
             lines.append(f"    {notes}")
 
     elif file == "ambiguous_names.md":
-        en = row.get("full name", "")
+        en = row.get("full_name", "")
         cn = row.get("chinese", "")
         clue = row.get("clue", "")
         if en and cn:
@@ -239,10 +199,7 @@ def format_result(r: dict, plain: bool = False) -> str:
         right = row.get("right", "")
         issue = row.get("issue", "")
         if wrong and right:
-            if plain:
-                lines.append(f"    [WRONG] {wrong} → [RIGHT] {right}")
-            else:
-                lines.append(f"    [WRONG] {wrong} → [RIGHT] {right}")
+            lines.append(f"    [WRONG] {wrong} → [RIGHT] {right}")
         if issue:
             lines.append(f"    Issue: {issue}")
 
@@ -305,7 +262,7 @@ def main():
         print(f"{icon}{file}")
         print(f"{'=' * 50}")
         for r in file_results[:5]:  # Limit to 5 per file
-            print(format_result(r, plain=args.plain))
+            print(format_result(r))
             print()
 
         if len(file_results) > 5:

@@ -227,6 +227,9 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
     """
     translation = translated_path.read_text(encoding="utf-8")
     direction = lock.get("direction") or detect_direction(translation)
+    # True when the lock carried no direction and the heuristic fallback ran
+    # (term_enforcer has no --direction flag; the lock is the only override).
+    direction_auto_detected = not lock.get("direction")
     is_cnen = direction == "cnen"
     violations: list[dict] = []
     passed = 0
@@ -386,6 +389,7 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
         "pass_count": passed,
         "locked_terms_checked": checked,
         "direction": direction,
+        "direction_auto_detected": direction_auto_detected,
         "warnings": degraded_warnings,
     }
 
@@ -422,7 +426,13 @@ def main():
             sys.exit(1)
         lock_file = build_lock_from_source(source_path)
 
-    lock = load_lock(lock_file)
+    try:
+        lock = load_lock(lock_file)
+    finally:
+        if not args.lock:
+            # --source builds a /tmp/gwent_lock_*.json temp lock (the caller
+            # owns cleanup, per build_lock_from_source's contract).
+            lock_file.unlink(missing_ok=True)
     result = enforce_terms(translated_path, lock)
 
     # Degradation (e.g. CJK suppress built incompletely) can flip a BLOCKED

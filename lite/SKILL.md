@@ -27,7 +27,7 @@ agent_created: true
 - 用户说「翻一下这句」「这段聊天什么意思」「quick translate」
 
 **不要用本 skill**：长文章翻译、需要术语锁表 / 格式骨架 / 完整校验的正式内容——
-用 `gwent-translation-style`（跑 `auto_pipeline pre/post` + `completeness_guard`）。
+用 `gwent-translation-style`（跑 `translate.py prepare` → 翻译 → `translate.py finish` 全流程，内含 `completeness_guard`）。
 
 ---
 
@@ -79,7 +79,7 @@ python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "siege" --fuzzy --plain
 
 **不要跑以下脚本**（这些是完整文章用的，聊天场景太重）：
 
-- `auto_pipeline.py pre / post` — 全量术语注入 / 新词学习，短内容不需要
+- `auto_pipeline.py pre` — 全量术语注入（在 `translate.py prepare` 内运行）；新词学习在 `translate.py finish` 内完成，短内容不需要
 - `completeness_guard.py` — 5 项最终把关
 - `phase_c_check.py` — Phase C 自检
 - `term_enforcer.py` — 需要源文件 lock，聊天场景不适用

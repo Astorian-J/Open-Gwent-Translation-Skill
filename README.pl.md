@@ -129,9 +129,9 @@ gwent-translation-style/
 ├── lite/                    # Wersja lite — tłumaczenie czatu
 │   ├── SKILL.md                 # Umiejętność lite (tłumaczenie czatu)
 │   └── AGENTS.md                # Interfejs niezależny od agenta
-└── scripts/                 # 16 Python scripts
+└── scripts/                 # 15 Python scripts
     ├── translate.py             # Main entry: prepare→translate→finish pipeline
-    ├── auto_pipeline.py         # Pre/post-processing (internal to translate.py)
+    ├── auto_pipeline.py         # Pre-processing + residue scan (internal to translate.py)
     ├── check_translation.py     # Residue + slang detection
     ├── completeness_guard.py    # Final gate
     ├── phase_c_check.py         # Self-check
@@ -144,9 +144,8 @@ gwent-translation-style/
     ├── backtranslate.py         # Back-translation check
     ├── lookup.py                # Term lookup
     ├── learn.py                 # Learn new terms
-    ├── health_check.py          # Integrity check (56 PASS)
-    ├── _shared.py               # Shared logic (TermAuthority)
-    └── agent_utils.py           # JSON envelope helpers
+    ├── health_check.py          # Integrity check (63 PASS)
+    └── _shared.py               # Shared logic (TermAuthority)
 ```
 
 ## Najważniejsze terminy

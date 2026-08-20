@@ -2,17 +2,15 @@
 """
 Gwent Translation Auto-Pipeline.
 
-ONE command to rule them all. Run this before and after translation
-to ensure all preprocessing and postprocessing steps are executed.
+Two sub-commands: pre-translation preprocessing (pre) and post-translation
+residue scanning (scan). The full translation workflow is driven by
+translate.py (prepare/finish); this script provides the building blocks.
 
 Usage (Pre-translation):
     python auto_pipeline.py pre source.md --date 2026-05 --type meta
 
-Usage (Post-translation, after you have translated.txt):
-    python auto_pipeline.py post source.md translated.txt
-
-This script chains all sub-scripts automatically so the agent
-does not need to remember individual steps.
+Usage (Residue scan, after you have translated.txt):
+    python auto_pipeline.py scan translated.txt --direction encn
 """
 
 import argparse
@@ -243,12 +241,15 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
                     _stale.unlink()
             except OSError:
                 pass
-    skeleton_file = Path(tempfile.NamedTemporaryFile(
+    # delete=False：文件要留给后续跨进程复用，这里只关闭句柄，不删文件。
+    with tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", prefix="gwent_skeleton_", delete=False
-    ).name)
-    lock_file = Path(tempfile.NamedTemporaryFile(
+    ) as _tmp:
+        skeleton_file = Path(_tmp.name)
+    with tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", prefix="gwent_lock_", delete=False
-    ).name)
+    ) as _tmp:
+        lock_file = Path(_tmp.name)
 
     # Step 1: Format skeleton
     ok, out, _ = run_script(
@@ -342,14 +343,14 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
         "",
     ]
 
-    lines.append("[1/3] Extracting format skeleton...")
+    lines.append("[1/6] Extracting format skeleton...")
     if skeleton_extracted:
         lines.append(f"    [OK] Skeleton saved to: {skeleton_file}")
     else:
         lines.append(f"    [WARN] Format extraction skipped or failed: {out.strip()}")
     lines.append("")
 
-    lines.append("[2/3] Building context lock...")
+    lines.append("[2/6] Building context lock...")
     if lock_built:
         lines.append(f"    [OK] Lock table saved to: {lock_file}")
         if "terms" in out:
@@ -358,7 +359,7 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
         lines.append(f"    [WARN] Context lock skipped or failed: {out.strip()}")
     lines.append("")
 
-    lines.append("[3/3] Building mandatory term lock table...")
+    lines.append("[3/6] Building mandatory term lock table...")
     lines.append(f"    [OK] {term_authority['locked_count']} locked, "
                  f"{term_authority['ambiguous_count']} ambiguous, "
                  f"{term_authority['pending_count']} pending")
@@ -404,6 +405,7 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
             lines.append(f"    - ... ({len(term_authority['pending_terms']) - 10} more)")
         lines.append("")
 
+    lines.append("[4/6] Scanning card name references...")
     if quick_ref:
         lines.append("    Card name quick reference:")
         lines.append("    | English | Chinese |")
@@ -417,6 +419,7 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
         lines.append("    [INFO] No additional card names detected in source")
         lines.append("")
 
+    lines.append("[5/6] Loading official effect text...")
     if official_effects:
         lines.append("    OFFICIAL EFFECT TEXT (引用效果时逐字照抄，勿改写)")
         lines.append("    | Card | Chinese | Official ability |")
@@ -428,7 +431,11 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
             lines.append(f"    | ... ({len(official_effects) - OFFICIAL_EFFECTS_CAP} more; "
                          f"全部见 effect_text.json) | ... | ... |")
         lines.append("")
+    else:
+        lines.append("    [INFO] No official effect text available for cards in source")
+        lines.append("")
 
+    lines.append("[6/6] Scanning slang/jargon...")
     if slang_hits:
         lines.append("    SLANG / JARGON HINTS (按意向译，勿字面硬译)")
         lines.append("    | English | 意向译 | 字面禁译 |")
@@ -437,6 +444,9 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
             lines.append(f"    | {rec['english']} | {rec['intended_cn']} | {rec['literal_forbidden']} |")
         if len(slang_hits) > SLANG_HINTS_CAP:
             lines.append(f"    | ... ({len(slang_hits) - SLANG_HINTS_CAP} more) | ... | ... |")
+        lines.append("")
+    else:
+        lines.append("    [INFO] No slang/jargon detected in source")
         lines.append("")
 
     lines.append("-" * 50)
@@ -448,107 +458,9 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
     lines.append("")
     lines.append("1. Perform the translation using the quick reference above")
     lines.append("2. Save translation to a file (e.g., translated.txt)")
-    lines.append("3. Run: python auto_pipeline.py post source.md translated.txt")
+    lines.append("3. Run: python scripts/translate.py finish translated.txt --source source.md")
     lines.append("")
-    lines.append("You must run 'post' after translation. Do not finalize")
-    lines.append("the translation without running post first.")
-    lines.append("=" * 60)
-    lines.append("")
-
-    return "\n".join(lines), all_ok
-
-
-def post_translation(source_path: Path, translated_path: Path, direction: str | None = None, json_mode: bool = False) -> tuple[str | dict, bool]:
-    """Run all postprocessing steps. Returns a report and overall success."""
-    all_ok = True
-    text = translated_path.read_text(encoding="utf-8")
-    direction = direction or detect_direction(text)
-
-    # Step 1: Check terminology
-    check_ok, check_out, check_parsed = run_script(
-        "check_translation.py",
-        [str(translated_path), "--direction", direction],
-        json_mode=json_mode,
-    )
-    if not check_ok:
-        all_ok = False
-    terminology_issue_count = check_parsed.get("data", {}).get("issue_count", 0) if check_parsed else 0
-
-    # Step 2: Diff review (if user provided their own translation — not applicable here)
-    # Skip auto diff-review; only run if explicitly requested
-
-    # Step 3: Learn new terms
-    learn_ok, learn_out, learn_parsed = run_script(
-        "learn.py",
-        [str(source_path), str(translated_path), "--auto"],
-        json_mode=json_mode,
-    )
-    if not learn_ok:
-        all_ok = False
-    if learn_parsed and "data" in learn_parsed:
-        new_terms_learned = learn_parsed["data"].get("added_to_pending", 0)
-    else:
-        new_terms_learned = 0
-        if "Discovered" in learn_out and "potential new term" in learn_out:
-            try:
-                new_terms_learned = int(learn_out.split("Discovered ")[1].split(" potential new term")[0])
-            except (IndexError, ValueError):
-                pass
-
-    # Step 4: Health check
-    health_ok, health_out, _ = run_script(
-        "health_check.py",
-        [],
-        json_mode=json_mode,
-    )
-    if not health_ok:
-        all_ok = False
-    health_check_passed = health_ok
-
-    if json_mode:
-        data = {
-            "command": "post",
-            "source": str(source_path),
-            "translated": str(translated_path),
-            "direction": direction,
-            "terminology_issue_count": terminology_issue_count,
-            "new_terms_learned": new_terms_learned,
-            "health_check_passed": health_check_passed,
-        }
-        return data, all_ok
-
-    lines = [
-        "=" * 60,
-        "GWENT TRANSLATION PIPELINE — POST-TRANSLATION",
-        "=" * 60,
-        "",
-        f"Source:      {source_path}",
-        f"Translated:  {translated_path}",
-        f"Direction:   {'EN->CN' if direction == 'encn' else 'CN->EN'}",
-        "",
-    ]
-
-    lines.append("[1/3] Running terminology check...")
-    lines.append(check_out)
-    lines.append("")
-
-    lines.append("[2/3] Learning new terms...")
-    lines.append(learn_out)
-    lines.append("")
-
-    lines.append("[3/3] Skill health check...")
-    for line in health_out.split("\n"):
-        if "PASS" in line or "FAIL" in line or "All checks" in line:
-            lines.append(line)
-    lines.append("")
-
-    lines.append("=" * 60)
-    lines.append("MANDATORY NEXT STEP — DO NOT SKIP")
-    lines.append("")
-    lines.append("Run: python scripts/completeness_guard.py")
-    lines.append("")
-    lines.append("You must run the guard BEFORE finalizing the translation.")
-    lines.append("Do not ignore guard output.")
+    lines.append("The translation is NOT final until finish reports PASS.")
     lines.append("=" * 60)
     lines.append("")
 
@@ -568,6 +480,7 @@ def scan_translation(
     not given, and passed through to check_translation.py so both sides agree.
     """
     text = translated_path.read_text(encoding="utf-8")
+    direction_auto_detected = direction is None
     direction = direction or detect_direction(text)
 
     ok, out, parsed = run_script(
@@ -595,6 +508,7 @@ def scan_translation(
             "command": "scan",
             "translated": str(translated_path),
             "direction": direction,
+            "direction_auto_detected": direction_auto_detected,
             "residue_count": len(residues),
             "residues": residues,
         }
@@ -629,8 +543,8 @@ def scan_translation(
     else:
         lines.append(f"[PASS] No {source_lang} residue found. Translation is clean.")
         lines.append("")
-        lines.append("If you have not yet run post-processing:")
-        lines.append("  python auto_pipeline.py post source.md translated.txt")
+        lines.append("Next step — run the final gate:")
+        lines.append("  python scripts/translate.py finish translated.txt --source source.md")
 
     lines.append("")
     return "\n".join(lines), len(residues) == 0
@@ -647,12 +561,6 @@ def main():
                      default="general", help="Article type")
     pre.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     pre.add_argument("--verbose-terms", action="store_true", help="Emit full term/violation lists (default: counts + top 5)")
-
-    post = subparsers.add_parser("post", help="Post-translation checks")
-    post.add_argument("source", help="Original source file")
-    post.add_argument("translated", help="Translated file")
-    post.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
-    post.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
 
     scan = subparsers.add_parser("scan", help="Scan translated file for untranslated card names")
     scan.add_argument("translated", help="Translated file to scan")
@@ -684,18 +592,6 @@ def main():
 
     if args.command == "pre":
         report, ok = pre_translation(source_path, args.date, args.type, json_mode=json_mode, verbose_terms=args.verbose_terms)
-        if json_mode:
-            json_output(report, exit_code=0 if ok else 1)
-        print(report)
-        sys.exit(0 if ok else 1)
-    elif args.command == "post":
-        translated_path = Path(args.translated)
-        if not translated_path.exists():
-            if json_mode:
-                json_output(None, errors=[f"Translated file not found: {args.translated}"], exit_code=1)
-            print(f"Error: Translated file not found: {args.translated}")
-            sys.exit(1)
-        report, ok = post_translation(source_path, translated_path, direction=args.direction, json_mode=json_mode)
         if json_mode:
             json_output(report, exit_code=0 if ok else 1)
         print(report)
