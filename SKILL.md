@@ -151,7 +151,9 @@ The machine-checkable rules behind `finish` live in `references/phase_c_checklis
 
 #### If `finish` is BLOCKED — the re-translate loop (agent-driven)
 
-`finish` calls **no LLM** and edits **no file**. When it reports `BLOCKED`, the agent
+`finish` calls **no LLM** and never touches your translation file. (After a
+genuine PASS it runs `learn.py --auto`, which appends newly discovered terms to
+`references/pending_terms.md` — nothing else is written.) When it reports `BLOCKED`, the agent
 drives the fix loop from the violation list. Each violation carries `term`,
 `expected_official`, `severity`, and `offending_quote` (the locatable snippet in the
 translation; empty for "missing" — the term was dropped, so add it):

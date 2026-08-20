@@ -14,8 +14,10 @@ follow the 3 steps below. If the user posts Gwent text in either language
 without explicit instruction, default to translating it.
 
 > For **full-article** translation (meta reports, BC proposals, card analysis),
-> use the main skill `gwent-translation-style` instead — see `../AGENTS.md` for
-> its `translate.py` three-step pipeline with pre-injection and completeness guard.
+> use the main skill `gwent-translation-style` instead — see the AGENTS.md in the
+> main skill directory (resolve it the same way as `$GWENT_SKILL_DIR` in the
+> "Locate the shared scripts" section below) for its `translate.py` three-step
+> pipeline with pre-injection and completeness guard.
 
 ## When to use lite
 
@@ -170,5 +172,6 @@ For anything not listed, run `lookup.py`.
   envelope as the main skill, so lite composes cleanly into deterministic
   JSON tool pipelines.
 - For programmatic / cross-agent tool access (Cursor, Claude Desktop, remote
-  agents without a local filesystem), an MCP server is planned — see
-`../SIMPLE-MCP-PLAN.md`.
+  agents without a local filesystem), an MCP server is planned but not yet
+  built; until then, agents with a local filesystem use this file's
+  `$GWENT_SKILL_DIR`-based commands.

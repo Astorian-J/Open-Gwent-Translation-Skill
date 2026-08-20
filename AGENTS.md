@@ -117,6 +117,11 @@ python scripts/auto_pipeline.py pre source.md --date YYYY-MM --type general --js
   - `card-analysis` — single card or small set analysis
   - `patch-notes` — official patch notes
   - `general` — default, catch-all
+- `--verbose-terms`: emit the FULL `card_references` / `locked_terms` /
+  `ambiguous_terms` / `pending_terms` lists. By default `--json` emits complete
+  counts plus a top-5 sample of each big list (so a card-heavy article cannot
+  flood agent context); if you need every locked term, pass this flag or read
+  the lock file at `lock_path`.
 
 JSON data:
 
@@ -144,13 +149,8 @@ JSON data:
     "pending_count": 2,
     "locked_terms": [
       {
-        "extracted": "OTB",
         "canonical_en": "Off the Books",
-        "chinese": "黑市买卖",
-        "type": "abbreviation",
-        "source_ref": "competitive_terms.md",
-        "aliases": [],
-        "abbrevs": ["OTB"]
+        "chinese": "黑市买卖"
       }
     ],
     "ambiguous_terms": [
@@ -282,10 +282,12 @@ Final check. Combines terminology, residue, Phase C, and term authority checks.
 Direction-aware: direction is auto-detected from the file or set with
 `--direction`, and applied to every downstream check. The residue check looks
 for English residue (EN→CN) or Chinese residue (CN→EN); term authority
-enforcement applies to EN→CN only. The `term_authority` check carries a
-`status` field: `ran` (executed), `not_applicable` (CN→EN — enforcing official
-CN terms does not apply), `skipped` (EN→CN but no `--source`/lock provided),
-or `error` (the check itself raised an exception).
+enforcement runs in BOTH directions (the lock carries the official target each
+way: EN→CN asserts the official Chinese appears in the Chinese translation,
+CN→EN asserts the official English appears in the English translation). The
+`term_authority` check carries a `status` field: `ran` (executed), `skipped`
+(no `--source`/lock provided; not run), or `error` (the check itself raised).
+(`not_applicable` is a reserved value that current code never emits.)
 
 ```bash
 python scripts/completeness_guard.py translated.txt --json

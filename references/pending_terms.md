@@ -3,6 +3,18 @@
 Terms discovered during translation that need verification.
 After verification, move confirmed entries to the appropriate reference file.
 
+Entry template (`learn.py --auto` writes this shape). Add real entries
+flush-left (`### ` at column 0) so learn.py / health_check can parse them;
+this template itself is shown indented on purpose so parsers do not count it
+as an entry:
+
+    ### <English term or card name>
+    - Type: card | phrase | abbrev
+    - Suggested: (translate and verify)
+    - Confidence: low
+    - Discovered: YYYY-MM-DD
+    - Status: pending review
+
 Rules for confirming:
 1. Verify the Chinese translation against server card data or official sources
 2. Check if the term already exists under a different name

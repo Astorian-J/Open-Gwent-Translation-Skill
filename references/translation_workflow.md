@@ -61,7 +61,7 @@ For articles longer than 5 paragraphs, build a terminology lock table:
 3. Record in mental lock table: "Term" → "翻译" (locked for this article)
 4. Subsequent mentions MUST use the same translation
 
-**This is done automatically by `auto_pipeline.py pre`.**
+**This is done automatically by `translate.py prepare` (which runs `auto_pipeline.py pre`).**
 If you need to manually edit the lock table:
 ```bash
 python scripts/context_lock.py add "English Term" "中文翻译" --lock /tmp/lock.json
@@ -75,13 +75,13 @@ If the source has Markdown/HTML formatting:
 2. Translate only the text content, preserving all formatting
 3. Restore the skeleton with translated content
 
-**Format extraction is done automatically by `auto_pipeline.py pre`.**
+**Format extraction is done automatically by `translate.py prepare` (which runs `auto_pipeline.py pre`).**
 If the user later provides translated chunks, restore with:
 ```bash
 python scripts/format_skeleton.py restore /tmp/skeleton.json translated_chunks.txt --output result.md
 ```
 
-## Step 5: Terminology Check
+## Step 4: Terminology Check
 
 **For EN → CN**: Check against correction_guide.md.
 
@@ -109,7 +109,7 @@ Exceptions:
 - EN → CN: "synergy" → 协同配合 (technical), 康博 (card review), 配合 (general)
 - CN → EN: "康博" → combo (casual), synergy (technical)
 
-## Step 6: Number Format Check
+## Step 5: Number Format Check
 
 **EN → CN**:
 - "X for Y" format: X = power, Y = provision
@@ -121,14 +121,17 @@ Exceptions:
 - Output: "X for Y" (e.g., "5人口6战力" → "6 for 5")
 - Use "provision" in formal, "cost" only for SY Tribute context
 
-## Step 8: Output
+## Step 6: Output
 
 Present the final translation. If user provided their own translation,
 first output analysis, then the corrected version.
 
-Save the final translation to a file (e.g., `translated.txt`) before running `translate.py finish`.
+Save the final translation to a file before running `translate.py finish`.
+Work in a scratch directory OUTSIDE the skill directory (e.g., the article's
+own folder or /tmp) — translation working files must not accumulate in the
+skill installation.
 
-## Step 9: Learn (Self-Evolution)
+## Step 7: Learn (Self-Evolution)
 
 After delivering the translation, analyze the source text for terms not in
 our reference database:
@@ -146,7 +149,7 @@ our reference database:
 
 3. **Record to pending buffer**:
    - Add new term + suggested translation to `references/pending_terms.md`
-   - Format: see existing entries in that file
+   - Format: the entry template in that file's header
    - Mark confidence as `low` until verified
 
 4. **Suggest to user** (brief, at end of response):

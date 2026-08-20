@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-08-20 — 批B：文档对齐 + 数据维护 + 目录卫生（M2/M3/M13/M14/M16/M17/L2/L10）
+
+- **M2** SKILL.md 关于 `finish` "edits no file" 的说法改为真话（不碰译文文件；
+  PASS 后 learn.py --auto 追加 pending_terms.md）。
+- **M3** AGENTS.md 三处过时：pre 的 JSON 示例 locked_terms 条目修为实际形状
+  （仅 canonical_en/chinese）；文档化默认 top-5 截断与 `--verbose-terms`；
+  term_authority status 文档改为 ran/skipped/error（not_applicable 已废弃，
+  CN→EN 也强制执行）。
+- **M16** translation_workflow.md：auto_pipeline pre/post 表述统一为
+  translate.py prepare/finish 入口；步骤断号 0-3/5/6/8/9 重排为 0-7；
+  Step 6 补"翻译工作文件放 skill 目录外"指引；pending_terms 格式指引改指文件头模板。
+- **M17** lite/AGENTS.md 两处断链修复（`../AGENTS.md` 改运行时定位、删悬空
+  `../SIMPLE-MCP-PLAN.md` 引用）；lite/SKILL.md 流程表述已在批A对齐。
+- **M13** 补记 2026-07-24 ~ 07-30 共 20 个提交的 changelog（见下方补记节）。
+- **M14** version_map.md 狄拉夫行 ID 修正：132104 是卡兰希尔的 ID（复制错），
+  改为真实的 202291/202888；全文件 ID 已对照 card_names_4lang.json 审计，
+  其余零错误。
+- **L2** .gitignore 补 source.md / source.pack.md / translated.txt 防翻译残留
+  再落仓库根；部署目录的三个残留文件已清理。
+- **L10** 删除过时两个月的旧打包 ~/.claude/skills/gwent-translation-style.zip。
+
 ## 2026-08-20 — 批A：代码行为类修复（13 组，A1-A13）
 
 第二轮审查（/tmp/gwent-review-round1.md）的代码行为类问题一次性修复，详见
@@ -101,6 +122,34 @@ build_card_meta 离线解析失败改友好错误；README 四语种 56→63 PAS
   端到端语义：references 损坏时管线必 FAIL/带降级 issue，不得干净 PASS。
 - **R3 回归用例**：`test_rebuild.py` 新增 4 条（H1 守卫含 null-envelope 分支 / H2
   `--fix` 保留 TA / M9 lock 构建失败 / M5 降级传播），总数 7→11，health_check 自动纳入。
+
+## 2026-07-24 ~ 2026-07-30 — 补记（changelog 滞后追录）
+
+> 7-23 之后有 20 个提交未记 changelog（审查 M13），按主题补记：
+
+- **rebuild 系列共 8 个提交（07-24）**：19c72ae 四语种卡表 + 库拆分 + 激进英文
+  提取；9b38479 中文源提取 + 方向感知 build_lock；4725c7f 双向 presence 校验 +
+  CJK 假阳性修复；85a2cbb 精确违规报告 + agent 重译循环文档；7ffd995 游戏术语
+  校验 + `--verbose-terms` 输出控制；4d9865f committed 合成行为测试接入
+  health_check；395cfb4 收紧激进 matcher 消常见词误锁；9b9f5c6 card_names.md
+  引用改指 card_overrides.md / card_names_4lang.json。
+- **8db3faa** 入口任务声明：SKILL.md/AGENTS.md/lite 两文件顶部加「你现在的任务」
+  块；AGENTS.md 流程从 auto_pipeline 五阶段同步到 translate.py 三步（另配 opencode
+  本地斜杠命令 /gwent-translate，在 ~/.config/opencode/commands/，属仓库外配置）。
+- **9a3ad9f** pack 展示完整锁表（build_pack 改读 lock 文件，卡名全量进 pack）；
+  cnen 锁质量修复（口语词误锁/slang 泄漏进强制锁/中文提取改位置消费）。
+- **009b319 / bf01948** README 四语种同步 translate.py 三步；clone 说明补
+  install.sh 必跑（卡牌库不入库）。
+- **6079319 / 501f11b** prepare 检测 4lang 卡牌库就绪（缺失 STOP 警告）→ 缺失时
+  自动构建（本地 card-db 秒级，否则联网），开箱即用。
+- **0ca79ce** 采纳另一台电脑实测反馈修 3 处（提取假阳性过滤、官方中文名引号
+  归一化匹配、费正则排除 浪/恩）。
+- **2ebb1f6 + e1255ee** sync from app：平衡调整方向判断引导（增强/削弱规则）、
+  Markdown 格式保留、卡牌类型标注注入、card_meta.json 入库、37 个新领袖术语、
+  The 开头卡名首词 skip 漏锁修复。
+- **a80d56a** GN=黄金孽鬼像（Golden Nekker）缩写登记，避免误判 GN=Nilfgaard。
+- **649a759** --- 分割线数量门禁（双向，译文少于原文则 block）。
+- **3480c90** 术语变体识别引导（标点/typo/重音/简称/别称按 Term Lock Table 规范译名）。
 
 ## 2026-07-23 — CDPR 版权文本清理（effect_text.json 改 fetch-at-build + NOTICE）
 
