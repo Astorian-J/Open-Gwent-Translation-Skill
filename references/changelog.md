@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-08-22 — 子串卡名弃锁 _drop_subsumed + eternal 屏蔽（BC34 假违规修复）
+
+- **来源**：dsh（DeepSeek Harness）翻译 BC34 排名表实测发现并提交补丁，
+  Claude 独立复现+复核+审查后合入。
+- **bug**：只出现在更长卡名里的子串卡名被单独加锁（如源文只有
+  "Avallac'h: Sage" 却同时锁裸 "Avallac'h"），CJK 吸收规则使短名锁
+  永远不可通过 → finish 对正确译文报假 term_missing。
+- **修复**：`get_all_for_text` 末尾 `_drop_subsumed`——术语在源文的所有
+  出现都被更长已锁卡名 span 包含时，丢弃该独立锁（长名锁已验证官方译名，
+  零拦截损失）。独立出现不受影响（保留短锁）。
+- **顺带**：samples 基线 25→18，消失 7 条（Brewess/Griffin/Guerilla/
+  Imposter/Pockets/Schirru/Yago）逐一核实全为同类陈年假阳性。
+- **CARD_VARIANT_COMMON_WORDS + eternal**：Eternal 模糊误配 Ethereal
+  （编辑距离 2）的复发防线；无卡正好叫 Eternal，同 wagon→Dagon 先例。
+- **test_rebuild 新增 `_t_subsume_guard`**（弃锁/独立出现保留/无 Ethereal
+  误锁三断言），13→14；health_check 63→64 PASS。
+- **回归基线变化**：encn samples `check_translation` 基线由 25 改为 18
+  （假阳性修复所致，非漏检；bc34 案例锁表 41→38）。
+
 ## 2026-08-20 — 批B：文档对齐 + 数据维护 + 目录卫生（M2/M3/M13/M14/M16/M17/L2/L10）
 
 - **M2** SKILL.md 关于 `finish` "edits no file" 的说法改为真话（不碰译文文件；

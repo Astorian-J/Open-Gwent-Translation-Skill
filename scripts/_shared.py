@@ -257,7 +257,9 @@ CARD_VARIANT_COMMON_WORDS: frozenset[str] = frozenset({
     # common English prose words that aggressive-matched onto card names.
     # right (from "Right now"), main / northern / seeing / shadow are not cards;
     # wagon is the fuzzy source that wrongly matched Dagon (-> "货车").
-    "main", "northern", "right", "seeing", "shadow", "wagon",
+    # eternal is the fuzzy source that wrongly matched Ethereal (-> "虚无");
+    # no card is named exactly "Eternal" (Eternal Fire/The Eternal Eclipse lock as full names).
+    "main", "northern", "right", "seeing", "shadow", "wagon", "eternal",
 })
 
 # Single capitalized token (Latin accents / apostrophes / hyphens OK).
@@ -273,6 +275,67 @@ def _fold_ascii(s: str) -> str:
     import unicodedata
     s = unicodedata.normalize("NFKD", s).lower()
     return re.sub(r"[^a-z0-9]", "", s)
+
+
+def _drop_subsumed(results: list[dict], text: str) -> list[dict]:
+    """Drop locked terms whose EVERY source occurrence sits strictly inside a
+    LONGER locked card name (e.g. "Avallac'h" within "Avallac'h: Sage",
+    "Illusionist" within "Yennefer: Illusionist", "Eternal" within
+    "Eternal Eclipse Deacon").
+
+    Such standalone locks are unpassable by design: the enforcer's CJK absorb
+    rule (希里 inside 冒牌希里 -> not counted) means the short CN never counts
+    when the translation correctly renders the FULL card name — so the shorter
+    lock only produces false "term missing" violations. The longer name's own
+    lock already verifies the official CN, so nothing is lost by dropping the
+    subsumed entry. Entries whose term also occurs standalone are kept.
+
+    Matching is done on apostrophe/accent-folded, lowercased text so spans are
+    consistent between term and covering name ("Avallac'H" vs "Avallac'h").
+    """
+    folded_text = _fold_ascii(text)
+    canon_spans: dict[str, list[tuple[int, int]]] = {}
+    for r in results:
+        if not r.get("cn") or not r.get("canonical_en"):
+            continue
+        f = _fold_ascii(r["canonical_en"])
+        if len(f) >= 2:
+            canon_spans.setdefault(f, []).extend(
+                (m.start(), m.end()) for m in re.finditer(re.escape(f), folded_text)
+            )
+
+    kept: list[dict] = []
+    for r in results:
+        if not r.get("cn") or not r.get("canonical_en"):
+            kept.append(r)
+            continue
+        term_f = _fold_ascii(r["term"])
+        canon_f = _fold_ascii(r["canonical_en"])
+        if len(term_f) < 2:
+            kept.append(r)
+            continue
+        occ = list(re.finditer(re.escape(term_f), folded_text))
+        if not occ:
+            kept.append(r)
+            continue
+        # Spans of OTHER results' canonical names that strictly contain the term.
+        covering: list[tuple[int, int]] = []
+        for f, spans in canon_spans.items():
+            if len(f) > len(term_f) and f != canon_f and term_f in f:
+                covering.extend(spans)
+        covering.sort()
+        covered = 0
+        for m in occ:
+            for p, q in covering:
+                if p > m.start():
+                    break
+                if q >= m.end():
+                    covered += 1
+                    break
+        if covered == len(occ):
+            continue  # fully subsumed by longer locked names — drop this lock
+        kept.append(r)
+    return kept
 
 
 def _edit_distance(a: str, b: str) -> int:
@@ -1401,7 +1464,13 @@ class TermAuthority:
         return results
 
     def get_all_for_text(self, text: str) -> list[dict]:
-        """Extract and resolve all known terms from a source text."""
+        """Extract and resolve all known terms from a source text.
+
+        Fully-subsumed entries are dropped: a term whose every occurrence sits
+        inside a longer locked card name yields no standalone lock (the CJK
+        absorb rule would make it unpassable at the gate). See
+        _drop_subsumed.
+        """
         candidates: set[str] = set()
         for name in extract_card_names(text):
             candidates.add(name.strip())
@@ -1494,7 +1563,7 @@ class TermAuthority:
             seen.add(seen_key)
             results.append({"term": variant, **resolved})
 
-        return results
+        return _drop_subsumed(results, text)
 
     # --- CN->EN source extraction (dictionary lookup) -------------------------
 

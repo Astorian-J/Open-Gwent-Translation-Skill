@@ -107,6 +107,39 @@ def _t_false_lock_guard() -> tuple[str, str]:
     return ("PASS", "False-lock guard: Deploy/Armor/Boost/cat/rat not mis-locked to cards")
 
 
+def _t_subsume_guard() -> tuple[str, str]:
+    ta = TermAuthority()
+
+    def locked(text: str) -> set[str]:
+        keys: set[str] = set()
+        for r in ta.get_all_for_text(text):
+            if r.get("cn") and r.get("canonical_en"):
+                keys.add(r["term"].lower())
+                keys.add(r["canonical_en"].lower())
+        return keys
+
+    # Substring card names occurring ONLY inside longer locked card names must
+    # NOT keep standalone locks (Avallac'h inside "Avallac'h: Sage", Illusionist
+    # inside "Yennefer: Illusionist" — CJK absorb made those locks unpassable).
+    res = locked("Rank 4 is Avallac'h: Sage, rank 5 Yennefer: Illusionist.")
+    subsumed_bad = [t for t in ("avallac'h", "illusionist") if t in res]
+    full_ok = {"avallac'h: sage", "yennefer: illusionist"} <= res
+    if subsumed_bad or not full_ok:
+        return ("FAIL", f"subsumed locks kept={subsumed_bad}, full names locked={full_ok}")
+
+    # A standalone occurrence keeps the short lock (only subsumed ones drop).
+    res2 = locked("Avallac'h: Sage and plain Avallac'h both see play.")
+    if not {"avallac'h", "avallac'h: sage"} <= res2:
+        return ("FAIL", f"standalone Avallac'h lost its lock: {sorted(res2)}")
+
+    # "Eternal" must not fuzzy-lock to Ethereal (edit distance 2; blocklisted).
+    res3 = ta.get_all_for_text("Eternal Eclipse Deacon is rank 10.")
+    ethereal = [r for r in res3 if r.get("canonical_en") == "Ethereal"]
+    if ethereal:
+        return ("FAIL", f"Eternal fuzzy-locked to Ethereal: {ethereal}")
+    return ("PASS", "Subsume guard: substring-only drops, standalone keeps, no Eternal->Ethereal")
+
+
 def _t_block_encn() -> tuple[str, str]:
     wrong = _enforce("Ciri and Scorch are strong.", "这张卡很强，没提任何卡名。")
     right = _enforce("Ciri and Scorch are strong.", "希里和烧灼都很强。")
@@ -308,6 +341,7 @@ _TESTS = [
     _t_en_extraction,
     _t_cn_extraction,
     _t_false_lock_guard,
+    _t_subsume_guard,
     _t_block_encn,
     _t_block_cnen,
     _t_cjk_absorb,
