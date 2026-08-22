@@ -6,9 +6,13 @@ Outputs suggested additions to pending_terms.md for verification.
 
 Usage:
     python learn.py <source_file> [--auto] [--json]
+    python learn.py --commit [--json]
 
     source_file:      English source text
-    --auto:           Write directly to pending_terms.md (default: preview only)
+    --auto:           Write discoveries to the gitignored auto buffer
+                      (references/pending_terms.auto.md, default: preview only)
+    --commit:         Merge the auto buffer into the tracked pending_terms.md
+                      (the human review inbox) and delete the buffer
     --json:           Output structured JSON for agent consumption
 """
 
@@ -22,6 +26,8 @@ from collections import Counter
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
+    _QUOTE_NORM,
+    _edit_distance,
     SKIP_ABBREVS_FULL,
     SKIP_WORDS_FULL,
     extract_abbreviations,
@@ -39,9 +45,16 @@ def _get_ref_path(filename: str) -> Path:
 
 
 def _add_term(terms: dict[str, str], en: str, cn: str) -> None:
-    """Add English term(s) to the dictionary, splitting on '/'."""
+    """Add English term(s) to the dictionary, splitting on '/'.
+
+    Typographic quotes fold to ASCII first: card data ships names like
+    "The Manor’s Dark Secret" (U+2019) — without the fold, the >127 guard
+    below silently drops every such card, and its fragments then leak into
+    pending as "unknown" terms.
+    """
     if not en or not cn:
         return
+    en = en.translate(_QUOTE_NORM)
     if any(ord(c) > 127 for c in en):
         return
     for part in en.split("/"):
@@ -82,9 +95,9 @@ def load_all_terms() -> dict[str, str]:
     return terms
 
 
-def load_pending_terms() -> list[dict]:
-    """Load terms already in pending buffer."""
-    pending = _get_ref_path("pending_terms.md")
+def load_pending_terms(path: Path | None = None) -> list[dict]:
+    """Load terms already in a pending file (tracked inbox or auto buffer)."""
+    pending = path or _get_ref_path("pending_terms.md")
     if not pending.exists():
         return []
 
@@ -124,14 +137,19 @@ def extract_candidate_terms(source_text: str) -> list[tuple[str, str]]:
         if not is_likely_common_word(first):
             candidates.append(("phrase", name))
 
-    # Pattern 3: All-caps abbreviations
+    # Pattern 3: All-caps abbreviations. Table/label markers (NOTE, RANK, ...)
+    # are all-caps in BC tables but are never terms — gate them through the
+    # common-word list via capitalize() ("NOTE" -> "Note").
     for abbrev in extract_abbreviations(source_text, skip_abbrevs=SKIP_ABBREVS_FULL):
-        candidates.append(("abbrev", abbrev))
+        if not is_likely_common_word(abbrev.capitalize()):
+            candidates.append(("abbrev", abbrev))
 
     # Pattern 4: Single-word capitalized terms that are not common words.
+    # capitalize() folds ALL-CAPS table markers ("NOTE" -> "Note") into the
+    # curated list lookup, same as Pattern 3.
     for match in re.finditer(r'\b([A-Z][a-zA-Z]{3,})\b', source_text):
         word = match.group(1)
-        if not is_likely_common_word(word):
+        if not is_likely_common_word(word.capitalize()):
             candidates.append(("phrase", word))
 
     # Pattern 5: Words with special Gwent notation
@@ -142,6 +160,38 @@ def extract_candidate_terms(source_text: str) -> list[tuple[str, str]]:
 
 
 
+# Typo-gate minimum candidate length. Short candidates (Kiri vs ciri, seal
+# vs seas) sit in every known term's 1-edit neighborhood — gating them would
+# silently swallow real new card names, which is learn's whole job. Same
+# reasoning as _shared.CARD_FUZZY_MIN_TOKEN ("short = noisy").
+TYPO_GATE_MIN_LEN = 5
+
+
+def _is_typo_of_known(key: str, known, known_tokens) -> bool:
+    """True when key is within edit distance 1 of a known term or token.
+
+    Whole-key compare first; single-word candidates additionally compare
+    against known terms' individual words ("Dechhand" is 1 edit from the
+    word "deckhand" inside "acherontia deckhand" but 10 from the full key).
+    Candidates shorter than TYPO_GATE_MIN_LEN are never gated.
+    """
+    if len(key) < TYPO_GATE_MIN_LEN:
+        return False
+    if any(
+        _edit_distance(key, k) <= 1
+        for k in known
+        if abs(len(k) - len(key)) <= 1
+    ):
+        return True
+    if " " not in key:
+        return any(
+            _edit_distance(key, t) <= 1
+            for t in known_tokens
+            if abs(len(t) - len(key)) <= 1
+        )
+    return False
+
+
 def find_unknown_terms(source_text: str) -> list[dict]:
     """Find terms in source that are not in our reference database."""
     known = load_all_terms()
@@ -150,10 +200,15 @@ def find_unknown_terms(source_text: str) -> list[dict]:
     unknown = []
     seen = set()
     # pending_terms 只读不写，循环外预读一次（原写法每个未知候选都重读重解析）
-    pending_keys = {p.get("source", "").lower() for p in load_pending_terms()}
+    pending_keys = {
+        p.get("source", "").lower().translate(_QUOTE_NORM)
+        for p in load_pending_terms()
+    }
+    # Known terms' individual words, for token-level typo comparison below.
+    known_tokens = {w for k in known for w in k.split()}
 
     for term_type, term_text in candidates:
-        key = term_text.lower()
+        key = term_text.lower().translate(_QUOTE_NORM)
         if key in seen:
             continue
         seen.add(key)
@@ -169,6 +224,12 @@ def find_unknown_terms(source_text: str) -> list[dict]:
                 found_parent = True
                 break
         if found_parent:
+            continue
+
+        # Typo gate (see _is_typo_of_known): real data ships typos like
+        # "Dechhand" for "Deckhand" — 1-edit neighbors of known terms are
+        # noise, not discoveries.
+        if _is_typo_of_known(key, known, known_tokens):
             continue
 
         # For colon-style card names, if the prefix is a known standalone card
@@ -209,7 +270,10 @@ def format_pending_entry(term: dict) -> str:
         f"- Type: {term['type']}",
         f"- Suggested: (translate and verify)",
         f"- Confidence: {term['confidence']}",
-        f"- Discovered: {datetime.now().strftime('%Y-%m-%d')}",
+        # Preserve the original discovery date when re-formatting (e.g. a
+        # --commit merge re-renders buffered entries; the date should say when
+        # the term was FOUND, not when it was merged).
+        f"- Discovered: {term.get('discovered') or datetime.now().strftime('%Y-%m-%d')}",
         "- Status: pending review",
         ""
     ]
@@ -233,33 +297,52 @@ def preview_new_terms(source_text: str, silent: bool = False) -> list[dict]:
     return unknown
 
 
-def add_to_pending(terms: list[dict]) -> int:
-    """Add terms to pending_terms.md. Returns count added.
+AUTO_BUFFER_NAME = "pending_terms.auto.md"
 
+
+def add_to_pending(terms: list[dict], buffer: bool = False) -> tuple[int, Path]:
+    """Append terms to the tracked pending inbox or the auto buffer.
+
+    --auto discovery writes to the gitignored auto buffer (never dirties a
+    deployed copy's tracked file, so `git pull --ff-only` keeps working);
+    --commit later merges the buffer into the tracked inbox for human review.
+
+    Returns (count_added, path_written).
     Uses atomic write (temp file + rename) to avoid corruption
     if two processes run simultaneously.
     """
     import os
     import tempfile
 
-    pending_path = _get_ref_path("pending_terms.md")
+    pending_path = _get_ref_path(AUTO_BUFFER_NAME if buffer else "pending_terms.md")
 
-    # Create file with header if not exists
-    if not pending_path.exists():
-        content = (
+    if buffer:
+        header = (
+            "# Pending Terms — auto buffer (learn --auto)\n\n"
+            "Collected automatically during finish; NOT tracked by git.\n"
+            "Run `python scripts/learn.py --commit` to merge into pending_terms.md "
+            "for human review.\n\n"
+            "---\n\n"
+        )
+    elif not pending_path.exists():
+        header = (
             "# Pending Terms (待审核术语)\n\n"
             "Terms discovered during translation that need verification.\n"
             "After verification, move confirmed entries to the appropriate reference file.\n\n"
             "---\n\n"
         )
     else:
-        content = pending_path.read_text(encoding="utf-8")
+        header = None
 
-    # Check for duplicates
+    content = header if header is not None else pending_path.read_text(encoding="utf-8")
+
+    # Check for duplicates (quote-folded: _QUOTE_NORM's invariant — every
+    # English-name comparison folds, so a hand-written curly-quote entry and
+    # an ASCII re-discovery dedupe against each other)
     existing_sources = set()
     for line in content.split("\n"):
         if line.startswith("### "):
-            existing_sources.add(line[4:].strip().lower())
+            existing_sources.add(line[4:].strip().lower().translate(_QUOTE_NORM))
 
     added = 0
     for term in terms:
@@ -282,15 +365,50 @@ def add_to_pending(terms: list[dict]) -> int:
                 os.unlink(temp_path)
             raise
 
-    return added
+    return added, pending_path
+
+
+def commit_buffer() -> tuple[int, int]:
+    """Merge the auto buffer into the tracked pending inbox.
+
+    Returns (merged, dropped_duplicates). The buffer file is physically
+    removed afterwards — committed entries live in the tracked inbox, and
+    an emptied buffer would only invite double-merges.
+    """
+    buffer_path = _get_ref_path(AUTO_BUFFER_NAME)
+    if not buffer_path.exists():
+        return 0, 0
+    entries = load_pending_terms(buffer_path)
+    if not entries:
+        buffer_path.unlink(missing_ok=True)
+        return 0, 0
+    merged, _ = add_to_pending(entries, buffer=False)
+    # missing_ok: a concurrent --commit may have consumed the buffer between
+    # our read and this unlink — treat that as success, not a crash.
+    buffer_path.unlink(missing_ok=True)
+    return merged, len(entries) - merged
 
 
 def main():
     parser = argparse.ArgumentParser(description="Gwent translation learning script")
-    parser.add_argument("source", help="English source file")
-    parser.add_argument("--auto", action="store_true", help="Write directly to pending_terms.md")
+    parser.add_argument("source", nargs="?", help="English source file (not needed for --commit)")
+    parser.add_argument("--auto", action="store_true",
+                        help="Write discoveries to the gitignored auto buffer (pending_terms.auto.md)")
+    parser.add_argument("--commit", action="store_true",
+                        help="Merge the auto buffer into the tracked pending_terms.md (human review inbox)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     args = parser.parse_args()
+
+    if args.commit:
+        merged, dupes = commit_buffer()
+        if args.json:
+            json_output({"command": "commit", "merged": merged, "dropped_duplicates": dupes}, exit_code=0)
+        tail = f" ({dupes} duplicate(s) dropped)" if dupes else ""
+        print(f"Committed {merged} term(s) from auto buffer to pending_terms.md{tail}")
+        return
+
+    if not args.source:
+        parser.error("source file is required unless --commit is given")
 
     source_path = Path(args.source)
 
@@ -304,15 +422,16 @@ def main():
 
     unknown = preview_new_terms(source_text, silent=args.json)
 
-    added = 0
+    added, buffer_path = 0, _get_ref_path(AUTO_BUFFER_NAME)
     if unknown and args.auto:
-        added = add_to_pending(unknown)
+        added, buffer_path = add_to_pending(unknown, buffer=True)
 
     if args.json:
         data = {
             "new_terms_found": len(unknown),
             "auto_write": args.auto,
-            "added_to_pending": added,
+            "added_to_buffer": added,
+            "buffer_path": str(buffer_path),
             "terms": unknown,
         }
         json_output(data, exit_code=0)
@@ -321,9 +440,10 @@ def main():
         sys.exit(0)
 
     if args.auto:
-        print(f"Added {added} term(s) to pending_terms.md")
+        print(f"Added {added} term(s) to the auto buffer ({buffer_path.name})")
+        print("Review and merge into the tracked inbox with: python scripts/learn.py --commit")
     else:
-        print("Preview mode. Run with --auto to write to pending_terms.md")
+        print("Preview mode. Run with --auto to write to the auto buffer")
         print("Or manually add confirmed terms to the appropriate reference file.")
 
 

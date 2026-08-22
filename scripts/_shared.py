@@ -8,6 +8,14 @@ across learn.py, context_lock.py, and diff_review.py.
 import json
 import re
 import sys
+
+# Quote-shape normalization: card data and sources mix typographic and ASCII
+# quotes ("Manor’s" vs "Manor's"). Everything that compares English names
+# key-side folds through this table so both shapes meet.
+_QUOTE_NORM = str.maketrans({
+    "“": '"', "”": '"',
+    "‘": "'", "’": "'",
+})
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -165,6 +173,9 @@ SKIP_WORDS_FULL: frozenset[str] = frozenset({
     # Articles and determiners
     "The", "A", "An", "This", "That", "These", "Those", "It", "Its",
     "Such", "Each", "Every", "All", "Both", "Either", "Neither",
+    # Table/label markers — BC ranking tables and data dumps carry these as
+    # column headers/footnotes (e.g. "| NOTE |"), never as terms.
+    "Note", "Rank", "Name", "Type", "Date", "Total", "Top",
     # Personal pronouns
     "He", "She", "They", "We", "You", "I", "Me", "My", "His", "Her",
     "Their", "Our", "Your", "One", "Ones",

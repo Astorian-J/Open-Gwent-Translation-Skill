@@ -87,7 +87,8 @@ python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "siege" --fuzzy --plain
 - `completeness_guard.py` — 5 项最终把关
 - `phase_c_check.py` — Phase C 自检
 - `term_enforcer.py` — 需要源文件 lock，聊天场景不适用
-- `format_skeleton.py` / `learn.py` / `diff_review.py` / `backtranslate.py`
+- `learn.py` / `diff_review.py` / `backtranslate.py` — 完整文章流程用
+- `format_skeleton.py` — 独立结构工具（不在 prepare/finish 流水线内），聊天场景不用
 
 ---
 

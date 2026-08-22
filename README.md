@@ -31,7 +31,7 @@ A two-command deterministic pipeline — `translate.py` — wraps every automate
 
 | Step | What happens | Who runs it |
 |---|---|---|
-| 1. Prepare | Loads references, locks card terms, injects official effects + slang hints, extracts format skeleton → writes a translation pack | `translate.py prepare` (deterministic) |
+| 1. Prepare | Loads references, locks card terms, injects official effects + slang hints → writes a translation pack | `translate.py prepare` (deterministic) |
 | 2. Translate | You or your agent translate, guided by the pack's locked term table | The only LLM step |
 | 3. Finish | Hard gate: residue / term-authority / Phase C / completeness all re-verified; BLOCKED = do not finalize | `translate.py finish` (deterministic) |
 

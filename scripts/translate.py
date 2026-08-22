@@ -335,33 +335,33 @@ def _ensure_card_db() -> tuple[int, bool]:
     if ready:
         return count, ready
 
-    print("=" * 60)
-    print("[AUTO] Card database (card_names_4lang.json) not built — building now")
-    print("[AUTO] First run only; ~3 min if fetching online, needs internet.")
-    print("=" * 60)
+    print("=" * 60, file=sys.stderr)
+    print("[AUTO] Card database (card_names_4lang.json) not built — building now", file=sys.stderr)
+    print("[AUTO] First run only; ~3 min if fetching online, needs internet.", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
     build_script = SCRIPTS_DIR / "build_card_names_reference.py"
     src_dir = os.environ.get("GWENT_CARD_DB") or str(Path.home() / "gwent-card-db")
     if Path(src_dir).is_dir():
         build_args = ["--src", src_dir]
-        print(f"[AUTO] Using local card-db: {src_dir}")
+        print(f"[AUTO] Using local card-db: {src_dir}", file=sys.stderr)
     else:
         build_args = ["--fetch"]
-        print("[AUTO] No local card-db found; fetching from api.gwent.one ...")
+        print("[AUTO] No local card-db found; fetching from api.gwent.one ...", file=sys.stderr)
     try:
         result = subprocess.run(
             [sys.executable, str(build_script), *build_args],
             capture_output=True, text=True, timeout=300,
         )
     except subprocess.TimeoutExpired:
-        print("[WARN] Auto-build timed out (5 min). Build manually:")
-        print("       python scripts/build_card_names_reference.py --fetch")
+        print("[WARN] Auto-build timed out (5 min). Build manually:", file=sys.stderr)
+        print("       python scripts/build_card_names_reference.py --fetch", file=sys.stderr)
         return _card_db_status()
     if result.returncode != 0:
         msg = (result.stderr or result.stdout or "").strip()[:200]
-        print(f"[WARN] Auto-build failed: {msg}")
-        print("[WARN] Build manually: python scripts/build_card_names_reference.py --fetch")
+        print(f"[WARN] Auto-build failed: {msg}", file=sys.stderr)
+        print("[WARN] Build manually: python scripts/build_card_names_reference.py --fetch", file=sys.stderr)
         return _card_db_status()
-    print("[AUTO] Card database built.")
+    print("[AUTO] Card database built.", file=sys.stderr)
     global _CARD_DB_CACHE
     _CARD_DB_CACHE = None  # the file just changed on disk — re-read it fresh
     return _card_db_status()
@@ -569,8 +569,8 @@ def cmd_prepare(args: argparse.Namespace) -> None:
     # effect_text is an enhancement layer (official ability text injection). If
     # missing, translation still works — just warn, don't auto-build (slow fetch).
     if not (SCRIPTS_DIR.parent / "references" / "effect_text.json").exists():
-        print("[INFO] effect_text.json 缺失（官方效果逐字注入不可用，翻译照跑）。")
-        print("       想补跑: python scripts/build_effect_reference.py --fetch  (约 3 分钟)")
+        print("[INFO] effect_text.json 缺失（官方效果逐字注入不可用，翻译照跑）。", file=sys.stderr)
+        print("       想补跑: python scripts/build_effect_reference.py --fetch  (约 3 分钟)", file=sys.stderr)
 
     # Run auto_pipeline pre (Phase A, reused wholesale).
     pre_args = ["pre", str(source_path), "--type", article_type]
@@ -590,7 +590,6 @@ def cmd_prepare(args: argparse.Namespace) -> None:
     pre_data = parsed["data"]
     pre_exit_code = parsed.get("exit_code", 1)
     lock_built = bool(pre_data.get("lock_built", False))
-    skeleton_extracted = bool(pre_data.get("skeleton_extracted", False))
 
     pack_path = source_path.with_name(source_path.stem + ".pack.md")
     pack_content = build_pack(source_path, direction, args.date, article_type, pre_data, lock_built)
@@ -602,7 +601,7 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         print(f"Error: failed to write pack to {pack_path}: {e}")
         sys.exit(1)
 
-    ready = lock_built and skeleton_extracted and pre_exit_code == 0 and cards_ready
+    ready = lock_built and pre_exit_code == 0 and cards_ready
 
     data = {
         "command": "prepare",
@@ -614,7 +613,6 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         "pack_path": str(pack_path),
         "pre_exit_code": pre_exit_code,
         "lock_built": lock_built,
-        "skeleton_extracted": skeleton_extracted,
         "term_counts": {
             "locked": pre_data.get("term_authority", {}).get("locked_count", 0),
             "ambiguous": pre_data.get("term_authority", {}).get("ambiguous_count", 0),
@@ -638,7 +636,6 @@ def cmd_prepare(args: argparse.Namespace) -> None:
     print(f"Pack:      {pack_path}")
     print(f"Lock:      {'built' if lock_built else 'FAILED (pack written with empty lock table)'}")
     print(f"CardDB:    {card_db_count} cards {'(READY)' if cards_ready else '(NOT READY — run build_card_names_reference.py, then re-run prepare)'}")
-    print(f"Skeleton:  {'extracted' if skeleton_extracted else 'failed'}")
     print(f"Terms:     {data['term_counts']['locked']} locked, "
           f"{data['term_counts']['ambiguous']} ambiguous, "
           f"{data['term_counts']['pending']} pending")
@@ -802,9 +799,10 @@ def cmd_finish(args: argparse.Namespace) -> None:
     if not blocked:
         learned = 0
         if learn_result and isinstance(learn_result, dict):
-            learned = learn_result.get("added_to_pending", 0)
+            learned = learn_result.get("added_to_buffer", 0)
         print("[PASS] Guard: all checks passed.")
-        print(f"       Learn: recorded {learned} new term(s).")
+        print(f"       Learn: recorded {learned} new term(s) to the auto buffer"
+              " (merge with: python scripts/learn.py --commit).")
         print("")
         print("[PASS] TRANSLATION READY — you may finalize.")
     else:

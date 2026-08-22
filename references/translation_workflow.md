@@ -67,16 +67,17 @@ If you need to manually edit the lock table:
 python scripts/context_lock.py add "English Term" "中文翻译" --lock /tmp/lock.json
 ```
 
-## Step 3: Extract Format Skeleton (for formatted articles)
+## Step 3: Preserve Formatting (for formatted articles)
 
-If the source has Markdown/HTML formatting:
+If the source has Markdown/HTML formatting, follow the pack's
+**Markdown Format Preservation** section: translate line-by-line keeping
+headings/lists/tables/quotes and their markers 1:1 — only translate the text
+inside the markers.
 
-1. Extract the format skeleton (headings, lists, blockquotes, tables)
-2. Translate only the text content, preserving all formatting
-3. Restore the skeleton with translated content
-
-**Format extraction is done automatically by `translate.py prepare` (which runs `auto_pipeline.py pre`).**
-If the user later provides translated chunks, restore with:
+`format_skeleton.py` is a **standalone** structure extract/restore tool
+(it is no longer run by `translate.py prepare`). Use it only when you
+manually extracted a skeleton and need to restore translated chunks back
+into the original structure:
 ```bash
 python scripts/format_skeleton.py restore /tmp/skeleton.json translated_chunks.txt --output result.md
 ```
@@ -148,21 +149,26 @@ our reference database:
    - If the term is new, note it
 
 3. **Record to pending buffer**:
-   - Add new term + suggested translation to `references/pending_terms.md`
+   - `learn.py --auto` writes discoveries to the gitignored auto buffer
+     `references/pending_terms.auto.md` (never the tracked inbox directly)
+   - `python scripts/learn.py --commit` merges the buffer into the tracked
+     `references/pending_terms.md` review inbox
    - Format: the entry template in that file's header
    - Mark confidence as `low` until verified
 
 4. **Suggest to user** (brief, at end of response):
-   - "本次翻译中发现 X 个新术语已记录到 pending_terms.md，请审核后移入正式库"
+   - "本次翻译中发现 X 个新术语已记录到 auto buffer，用 learn.py --commit 并入 pending_terms.md 后请审核移入正式库"
 
 **Important**: Never write directly to the confirmed reference files.
-Always use pending_terms.md as the buffer. Only move to confirmed files
-after human verification against server data or official sources.
+`--auto` only ever writes the auto buffer; only `--commit` (or a human)
+moves entries into `pending_terms.md`; only human verification moves them
+into the confirmed reference files.
 
-**Learning is done automatically by `translate.py finish` (runs `learn.py --auto` after a PASS).**
+**Learning is done automatically by `translate.py finish` (runs `learn.py --auto` after a PASS — writes the auto buffer).**
 Only run the learning script manually if the pipeline was skipped:
 ```bash
-python scripts/learn.py source.txt --auto
+python scripts/learn.py source.txt --auto   # discover → auto buffer
+python scripts/learn.py --commit            # buffer → tracked review inbox
 ```
 
 ## Special Modes

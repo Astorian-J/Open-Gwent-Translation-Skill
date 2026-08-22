@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-08-22（三）— 批2：skeleton 摘除 + learn 噪音根治与缓冲落盘 + 编排级测试（交流式方案第二批 3 项）
+
+- **skeleton 摘除**（kimi/dsh/Claude 三方终裁）：auto_pipeline pre 物理删除 skeleton
+  步骤（tempfile/Step/报告键/人类输出/陈旧清理 pattern，步骤 6→5 重编号）；translate
+  ready 公式与输出同步；文档全面对齐（README 工作表/workflow Step3 改"照 pack 的
+  格式保留节做"/lite 两文件标 standalone）
+- **learn 噪音根治**（BC34 五条噪音 → 0）+ 根因修复：_QUOTE_NORM 提升到 _shared，
+  _add_term 弯引号折叠（原 ASCII 守卫把 "Manor’s" 类卡名整张丢弃→已知词表缺口）；
+  Pattern 3/4 常用词门（NOTE 类表格标记，SKIP_WORDS_FULL +Note/Rank/Name/Type/Date/Total/Top）；
+  typo 门 _is_typo_of_known（整键+词级两档距离≤1，最短长度护栏 5 防 Kiri↔ciri 误杀）
+- **learn 落盘改造**：--auto 写 gitignored 缓冲 pending_terms.auto.md（装机副本不再
+  dirty，ff-only pull 不再挂）；新增 --commit 合并入 tracked 审核收件箱后删缓冲
+  （missing_ok 防并发）；Discovered 日期在合并时保真；SKILL/AGENTS/workflow 文档同步
+- **编排级测试 _t_pipeline**（dsh#5）：tmp 副本隔离跑 prepare→good/bad finish→
+  4lang 缺失 fail-closed 四段断言（GWENT_CARD_DB 空目录保证离线）。**首跑即抓到真
+  bug**：prepare 的 [AUTO]/[INFO] 诊断打 stdout 污染 --json 信封 → 已全部改 stderr
+- test_rebuild 18→19、health_check 68→69；samples 基线 18 不变
+- pragmatic 审查批2 0C/4I/5M 全修（typo 门短词误杀实证/skeleton 与 learn 两片文档
+  失同步/commit 并发 unlink/pending 折叠不变量/日期保真/裸 clone 前置指引）；
+  报告 .scratch/comm-dev-0822/review-report-batch2.md
+
 ## 2026-08-22（二）— 批1：BLOCKED 明细透传 + lite 修复 + 锁表过滤（交流式开发 12 项方案之首批 6 项）
 
 - **finish/guard 违规明细透传**（dsh+kimi 双撞车项）：三个子检查 + term_authority

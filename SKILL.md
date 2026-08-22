@@ -140,7 +140,7 @@ python scripts/translate.py finish translated.txt --source source.md --direction
 ```
 
 - **`PASS`** = all checks passed (terminology, residue, Phase C, term authority); new terms
-  recorded to `pending_terms.md`. You may finalize.
+  recorded to the auto buffer (`pending_terms.auto.md`). You may finalize.
 - **`BLOCKED`** = **DO NOT FINALIZE**. Fix the reported issues and re-run until PASS.
 
 `finish` runs every check through `completeness_guard` and additionally refuses to pass if
@@ -153,7 +153,9 @@ The machine-checkable rules behind `finish` live in `references/phase_c_checklis
 
 `finish` calls **no LLM** and never touches your translation file. (After a
 genuine PASS it runs `learn.py --auto`, which appends newly discovered terms to
-`references/pending_terms.md` — nothing else is written.) When it reports `BLOCKED`, the agent
+the gitignored auto buffer `references/pending_terms.auto.md` — nothing else is
+written; `learn.py --commit` later merges the buffer into the tracked
+`pending_terms.md` review inbox.) When it reports `BLOCKED`, the agent
 drives the fix loop from the violation list. Each violation carries `term`,
 `expected_official`, `severity`, and `offending_quote` (the locatable snippet in the
 translation; empty for "missing" — the term was dropped, so add it):

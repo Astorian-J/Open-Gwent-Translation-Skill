@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
+    _QUOTE_NORM,
     build_lock_from_source,
     detect_direction,
     extract_cn_variants,
@@ -37,14 +38,9 @@ def _contains_cjk(target: str) -> bool:
     return bool(re.search(r"[一-鿿]", target))
 
 
-# Quote normalization: official card names carry Chinese quotes ("" U+201C/U+201D,
-# '' U+2018/U+2019), but translations often use ASCII quotes. Normalize to ASCII
-# before matching, or "残翼" (CN quotes) vs "残翼" (ASCII) mismatch and term_authority
-# reports a false negative (card treated as missing from the translation).
-_QUOTE_NORM = str.maketrans({
-    "“": '"', "”": '"',
-    "‘": "'", "’": "'",
-})
+# Quote normalization moved to _shared._QUOTE_NORM (card data also carries
+# typographic apostrophes in ENGLISH names — "Manor’s" — so the English-side
+# loaders fold through the same table). See its comment there for the why.
 
 
 def count_occurrences(text: str, targets: list[str], cjk_suppress: set[str] | None = None) -> int:

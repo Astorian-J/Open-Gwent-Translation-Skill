@@ -212,6 +212,97 @@ def _t_card_db_cache() -> tuple[str, str]:
     return ("PASS", "card_db cache: hit honored, miss repopulates")
 
 
+def _t_pipeline() -> tuple[str, str]:
+    """End-to-end orchestration: prepare -> good/bad translation -> finish.
+
+    Locks the BC34 bug class into an assertion: the substring card name
+    "Avallac'h" (only occurring inside "Avallac'h: Sage") must NOT get a
+    standalone lock row, and a correct translation must PASS finish while a
+    residue+provision-reversed one must BLOCK with actionable violations.
+    Runs against a throwaway copy of this repo (learn --auto writes runtime
+    files and the last leg deletes the build-time card DB), so the working
+    tree stays pristine. GWENT_CARD_DB points at an empty dir so a missing
+    card DB fails closed OFFLINE (never the ~3-min online fetch).
+    """
+    import os
+    import re as _re
+    source_md = "Avallac'h: Sage sees play. Geralt: Igni costs 12 provisions for 8 points.\n"
+    good_cn = "阿瓦拉克：贤者能上场。杰洛特：伊格尼法印是12人口8战力。\n"
+    bad_cn = "Avallac'h: Sage sees play. 杰洛特：伊格尼法印是8战力12人口。\n"
+    with tempfile.TemporaryDirectory() as td:
+        repo = Path(td) / "skill"
+        shutil.copytree(
+            SCRIPT_DIR.parent, repo,
+            ignore=shutil.ignore_patterns(".git", ".scratch", "__pycache__", "*.pyc"),
+        )
+        offline_db = Path(td) / "empty-card-db"
+        offline_db.mkdir()
+        env = {**os.environ, "GWENT_CARD_DB": str(offline_db)}
+        src = repo / "pipeline_source.md"
+        src.write_text(source_md, encoding="utf-8")
+
+        def run(args_: list[str]) -> subprocess.CompletedProcess:
+            return subprocess.run(
+                [sys.executable, str(repo / "scripts" / "translate.py"), *args_],
+                capture_output=True, text=True, timeout=300, env=env, cwd=str(repo),
+            )
+
+        # The copy carries this machine's gitignored card DB; a bare clone
+        # would have none — fail with a pointer instead of a confusing
+        # "prepare not ready: 0 cards".
+        if not (repo / "references" / "card_names_4lang.json").exists():
+            return ("FAIL", "card DB missing in this checkout — build first: "
+                    "python scripts/build_card_names_reference.py --src ~/gwent-card-db "
+                    "(or run install.sh)")
+
+        # 1) prepare: ready + pack lock-table shape (full names locked, no
+        #    standalone substring row — the _drop_subsumed regression)
+        r = run(["prepare", str(src), "--json"])
+        if r.returncode != 0:
+            return ("FAIL", f"prepare exit {r.returncode}: {r.stdout[-200:]}")
+        pdata = json.loads(r.stdout)["data"]
+        if not pdata.get("ready") or not pdata.get("cards_ready"):
+            return ("FAIL", f"prepare not ready: {pdata.get('card_db_count')} cards")
+        pack = (repo / "pipeline_source.pack.md").read_text(encoding="utf-8")
+        if "Geralt: Igni" not in pack:
+            return ("FAIL", "pack missing full-name lock (Geralt: Igni)")
+        # Scope to the MANDATORY lock table only — the quick-reference table
+        # legitimately lists a base card AND its variants for lookup.
+        mand = pack.split("MANDATORY Term Lock Table", 1)[1].split("\n## ", 1)[0]
+        if _re.search(r"^\| Avallac'h \|", mand, _re.M):
+            return ("FAIL", "MANDATORY table still carries a standalone Avallac'h row")
+
+        # 2) finish on a correct translation -> PASS
+        good = repo / "pipeline_good.md"
+        good.write_text(good_cn, encoding="utf-8")
+        r = run(["finish", str(good), "--source", str(src), "--direction", "encn", "--json"])
+        if r.returncode != 0:
+            return ("FAIL", f"finish(good) exit {r.returncode}: {r.stdout[-300:]}")
+
+        # 3) finish on residue + provision-reversed translation -> BLOCKED
+        #    with actionable violations
+        bad = repo / "pipeline_bad.md"
+        bad.write_text(bad_cn, encoding="utf-8")
+        r = run(["finish", str(bad), "--source", str(src), "--direction", "encn", "--json"])
+        if r.returncode == 0:
+            return ("FAIL", "finish(bad) unexpectedly PASSED")
+        fdata = json.loads(r.stdout)["data"]
+        if not fdata.get("blocked"):
+            return ("FAIL", "finish(bad) exit 1 but blocked flag not set")
+        if not fdata.get("violations") or not fdata.get("violations_total"):
+            return ("FAIL", "finish(bad) BLOCKED without actionable violation detail")
+
+        # 4) card DB missing -> prepare fails closed (offline, never fetches)
+        (repo / "references" / "card_names_4lang.json").unlink()
+        r = run(["prepare", str(src), "--json"])
+        if r.returncode == 0:
+            return ("FAIL", "prepare PASSED with card DB missing (should fail closed)")
+        mdata = json.loads(r.stdout).get("data") or {}
+        if mdata.get("cards_ready", True):
+            return ("FAIL", "cards_ready should be False when the card DB is missing")
+    return ("PASS", "pipeline: prepare pack shape, good PASS, bad BLOCKED w/ detail, DB-missing fail-closed")
+
+
 def _t_block_encn() -> tuple[str, str]:
     wrong = _enforce("Ciri and Scorch are strong.", "这张卡很强，没提任何卡名。")
     right = _enforce("Ciri and Scorch are strong.", "希里和烧灼都很强。")
@@ -418,6 +509,7 @@ _TESTS = [
     _t_lock_terms_filter,
     _t_violations_aggregation,
     _t_card_db_cache,
+    _t_pipeline,
     _t_block_encn,
     _t_block_cnen,
     _t_cjk_absorb,

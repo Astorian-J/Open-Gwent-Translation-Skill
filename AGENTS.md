@@ -131,8 +131,6 @@ JSON data:
   "source": "source.md",
   "date": "2026-05",
   "type": "general",
-  "skeleton_extracted": true,
-  "skeleton_path": "/tmp/skeleton.json",
   "lock_built": true,
   "lock_path": "/tmp/lock.json",
   "card_references_found": 12,
@@ -383,7 +381,8 @@ The following scripts also support `--json` and can be used independently:
 - `scripts/lookup.py` — Search reference files for a term.
 - `scripts/context_lock.py` — Build/check per-document terminology locks.
 - `scripts/term_enforcer.py` — Enforce locked terms in a translation.
-- `scripts/format_skeleton.py` — Extract/restore Markdown structure.
+- `scripts/format_skeleton.py` — Standalone Markdown structure extract/restore
+  tool (not part of the prepare/finish pipeline).
 - `scripts/diff_review.py` — Compare source and translation.
 - `scripts/learn.py` — Discover new terms from the source text.
 - `scripts/backtranslate.py` — Heuristic back-translation validation.
@@ -410,8 +409,10 @@ All translation rules and data live in `references/`:
   mandatory translation reference; never translate those terms literally.
 - `phase_c_check.py` returns `ready: true` when automated checks pass, but
   manual warnings may still require review.
-- After a PASS, `translate.py finish` runs `learn.py --auto`, which may append
-  new terms to `references/pending_terms.md`.
-  These are intended for verification and should not be silently committed.
+- After a PASS, `translate.py finish` runs `learn.py --auto`, which appends
+  new terms to the gitignored auto buffer `references/pending_terms.auto.md`.
+  `learn.py --commit` merges the buffer into the tracked
+  `references/pending_terms.md` review inbox; committed entries are intended
+  for verification and should not be silently promoted to reference files.
 - The default (non-JSON) output is formatted for readability in terminals and
   logs; use `--json` when building deterministic tool pipelines.

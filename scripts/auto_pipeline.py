@@ -231,10 +231,10 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
     """Run all preprocessing steps. Returns a report and overall success."""
     all_ok = True
     # 清理上次 pre 遗留的陈旧临时文件（>1 小时），避免 /tmp 长期累积。不能清理本次/
-    # 并发刚创建的：skeleton/lock 路径会返回给调用方，供后续 completeness_guard
-    # --lock / format_skeleton restore 跨进程复用（故不能用 TemporaryDirectory 包本函数）。
+    # 并发刚创建的：lock 路径会返回给调用方，供后续 completeness_guard
+    # --lock 跨进程复用（故不能用 TemporaryDirectory 包本函数）。
     _now = time.time()
-    for _pat in ("gwent_skeleton_*.json", "gwent_lock_*.json"):
+    for _pat in ("gwent_lock_*.json",):
         for _stale in Path(tempfile.gettempdir()).glob(_pat):
             try:
                 if _now - _stale.stat().st_mtime > 3600:
@@ -243,25 +243,11 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
                 pass
     # delete=False：文件要留给后续跨进程复用，这里只关闭句柄，不删文件。
     with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", prefix="gwent_skeleton_", delete=False
-    ) as _tmp:
-        skeleton_file = Path(_tmp.name)
-    with tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", prefix="gwent_lock_", delete=False
     ) as _tmp:
         lock_file = Path(_tmp.name)
 
-    # Step 1: Format skeleton
-    ok, out, _ = run_script(
-        "format_skeleton.py",
-        ["extract", str(source_path), "--output", str(skeleton_file)],
-        json_mode=json_mode,
-    )
-    skeleton_extracted = ok
-    if not ok:
-        all_ok = False
-
-    # Step 2: Context lock
+    # Step 1: Context lock
     ok, out, _ = run_script(
         "context_lock.py",
         ["build", str(source_path), "--output", str(lock_file)],
@@ -271,13 +257,13 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
     if not ok:
         all_ok = False
 
-    # Step 3: Build term authority report from lock file
+    # Step 2: Build term authority report from lock file
     term_authority = build_term_authority_report(lock_file)
 
-    # Step 4: Build card name quick reference table
+    # Step 3: Build card name quick reference table
     quick_ref = build_card_lookup_table(source_path)
 
-    # Step 5: Official effect text for cards in the source — inject so the agent
+    # Step 4: Official effect text for cards in the source — inject so the agent
     # copies the official CN ability verbatim when quoting effects. Long
     # sentences can't be locked by term_enforcer, so this is the enforcement
     # lever for effect text. See references/effect_text.json.
@@ -292,7 +278,7 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
                 "official_ability": rec["cn_ability"],
             })
 
-    # Step 6: Slang/jargon hints for terms found in the source — inject the
+    # Step 5: Slang/jargon hints for terms found in the source — inject the
     # intended CN register so the agent translates community tone (加强版 for
     # "on steroids") instead of literal gibberish (类固醇). Prevention layer;
     # check_translation warns if a detected slang is translated literally.
@@ -318,8 +304,6 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
             "source": str(source_path),
             "date": date or "auto",
             "type": article_type,
-            "skeleton_extracted": skeleton_extracted,
-            "skeleton_path": str(skeleton_file),
             "lock_built": lock_built,
             "lock_path": str(lock_file),
             "card_references_found": len(quick_ref),
@@ -343,14 +327,7 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
         "",
     ]
 
-    lines.append("[1/6] Extracting format skeleton...")
-    if skeleton_extracted:
-        lines.append(f"    [OK] Skeleton saved to: {skeleton_file}")
-    else:
-        lines.append(f"    [WARN] Format extraction skipped or failed: {out.strip()}")
-    lines.append("")
-
-    lines.append("[2/6] Building context lock...")
+    lines.append("[1/5] Building context lock...")
     if lock_built:
         lines.append(f"    [OK] Lock table saved to: {lock_file}")
         if "terms" in out:
@@ -359,7 +336,7 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
         lines.append(f"    [WARN] Context lock skipped or failed: {out.strip()}")
     lines.append("")
 
-    lines.append("[3/6] Building mandatory term lock table...")
+    lines.append("[2/5] Building mandatory term lock table...")
     lines.append(f"    [OK] {term_authority['locked_count']} locked, "
                  f"{term_authority['ambiguous_count']} ambiguous, "
                  f"{term_authority['pending_count']} pending")
@@ -405,7 +382,7 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
             lines.append(f"    - ... ({len(term_authority['pending_terms']) - 10} more)")
         lines.append("")
 
-    lines.append("[4/6] Scanning card name references...")
+    lines.append("[3/5] Scanning card name references...")
     if quick_ref:
         lines.append("    Card name quick reference:")
         lines.append("    | English | Chinese |")
@@ -419,7 +396,7 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
         lines.append("    [INFO] No additional card names detected in source")
         lines.append("")
 
-    lines.append("[5/6] Loading official effect text...")
+    lines.append("[4/5] Loading official effect text...")
     if official_effects:
         lines.append("    OFFICIAL EFFECT TEXT (引用效果时逐字照抄，勿改写)")
         lines.append("    | Card | Chinese | Official ability |")
@@ -435,7 +412,7 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
         lines.append("    [INFO] No official effect text available for cards in source")
         lines.append("")
 
-    lines.append("[6/6] Scanning slang/jargon...")
+    lines.append("[5/5] Scanning slang/jargon...")
     if slang_hits:
         lines.append("    SLANG / JARGON HINTS (按意向译，勿字面硬译)")
         lines.append("    | English | 意向译 | 字面禁译 |")

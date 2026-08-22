@@ -109,7 +109,8 @@ These belong to the main skill's full-article pipeline:
 - `completeness_guard.py` — 5-check final gate
 - `phase_c_check.py` — Phase C self-check
 - `term_enforcer.py` — requires a source / lock file
-- `format_skeleton.py`, `learn.py`, `diff_review.py`, `backtranslate.py`
+- `learn.py`, `diff_review.py`, `backtranslate.py` — full-article pipeline tools
+- `format_skeleton.py` — standalone structure tool (not part of prepare/finish)
 
 ## Optional residue check
 
