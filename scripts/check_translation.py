@@ -855,9 +855,10 @@ def main():
     issues, warnings = check_translation(text, locked_phrases, direction, source_text=source_text)
 
     # Term authority enforces that locked source terms appear with their
-    # official Chinese translation -- an EN->CN concern only. For CN->EN the
-    # output is English, so the lock model does not apply and the check is
-    # skipped to avoid flagging the target language.
+    # official translation. This inline pass covers EN->CN only (English
+    # terms -> official Chinese); CN->EN enforcement is NOT lost — the
+    # guard's term_enforcer check runs for BOTH directions against the same
+    # lock, so running it here too would only duplicate work.
     # Collected separately so a --fix re-check (which reassigns `issues`
     # wholesale) cannot drop TA violations from the report; auto_fix only
     # rewrites provision phrasing (费→人口), so it cannot add/remove TA hits.

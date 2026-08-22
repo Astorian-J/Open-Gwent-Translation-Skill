@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-08-22（二）— 批1：BLOCKED 明细透传 + lite 修复 + 锁表过滤（交流式开发 12 项方案之首批 6 项）
+
+- **finish/guard 违规明细透传**（dsh+kimi 双撞车项）：三个子检查 + term_authority
+  全部改为内部 --json 解析（物理删除全部人类文本抠数字分支）；明细进
+  checks[].issues（terms_summary 截断）；guard BLOCKED 与 finish BLOCKED 逐条打印
+  （format_issue 共用渲染，含 rule_id）；finish 顶层 violations 聚合全部失败检查
+  （带 check 标签）+ violations_total（真值=各检查 issue_count 之和）
+- **lite 修复**：删两处 check_translation --plain 假命令（该 flag 史上不存在，
+  lookup 的 flag 张冠李戴）；路径解析加"兄弟目录上溯"指引（自定义 INSTALL_DIR
+  布局命中）
+- **pack 锁表过滤**：_load_lock_terms 只收 confirmed/auto_locked（对齐
+  context_lock:158 口径），MANDATORY 表不再出现空中文行；顺删恒不触发的
+  setdefault 死代码
+- **注释/文档对齐 6 处**：translate.py cnen 旧注释/--direction help；guard
+  not_applicable 死分支物理删除+docstring 收窄；check_translation TA 注释改真话；
+  AGENTS.md 两处矛盾（:206 单双向、:291 保留值）
+- **install.sh**：effect_text 本地镜像优先（对齐 card_names 两段式）；尾部加
+  health_check 自检（信息性）
+- **微优化**：_card_db_status 模块级缓存（构建成功显式失效）；_parse_json_envelope
+  物理删除扫描兜底（污染源已迁 stderr，fail-closed 由调用方保证）
+- **新增 4 项测试**（_t_format_issue_shapes/_t_lock_terms_filter/
+  _t_violations_aggregation/_t_card_db_cache），test_rebuild 14→18、health_check
+  64→68
+- pragmatic 审查批1 0C/3I/5M 全修（NameError 兜底崩溃/guard 人类模式 TA 明细
+  双缺口/新逻辑零覆盖 + 5 Minor）；报告 .scratch/comm-dev-0822/review-report-batch1.md
+
 ## 2026-08-22 — 子串卡名弃锁 _drop_subsumed + eternal 屏蔽（BC34 假违规修复）
 
 - **来源**：dsh（DeepSeek Harness）翻译 BC34 排名表实测发现并提交补丁，

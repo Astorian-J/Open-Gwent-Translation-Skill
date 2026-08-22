@@ -33,8 +33,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _shared import TermAuthority, build_lock_from_source  # noqa: E402
+from _shared import TermAuthority, build_lock_from_source, format_issue  # noqa: E402
 from check_translation import check_term_authority_violations  # noqa: E402
+import translate  # noqa: E402
+from translate import _aggregate_violations, _card_db_status, _load_lock_terms  # noqa: E402
 from phase_c_check import check_context_lock_terms  # noqa: E402
 from term_enforcer import enforce_terms, count_occurrences, _build_cjk_suppress  # noqa: E402
 
@@ -138,6 +140,76 @@ def _t_subsume_guard() -> tuple[str, str]:
     if ethereal:
         return ("FAIL", f"Eternal fuzzy-locked to Ethereal: {ethereal}")
     return ("PASS", "Subsume guard: substring-only drops, standalone keeps, no Eternal->Ethereal")
+
+
+def _t_format_issue_shapes() -> tuple[str, str]:
+    ta = format_issue({"term": "Avallac'h", "expected_official": "阿瓦拉克"})
+    if "Avallac'h" not in ta or "阿瓦拉克" not in ta:
+        return ("FAIL", f"TA shape lost fields: {ta!r}")
+    cat = format_issue({"category": "provision_mix", "message": "12 provisions"})
+    if "provision_mix" not in cat or "12 provisions" not in cat:
+        return ("FAIL", f"category shape lost fields: {cat!r}")
+    rule = format_issue({"rule_id": "encn-10", "message": "quote residue"})
+    if "encn-10" not in rule or "quote residue" not in rule:
+        return ("FAIL", f"rule_id shape lost fields: {rule!r}")
+    if format_issue("bare") != "bare":
+        return ("FAIL", "bare string not passed through")
+    weird = format_issue({"weird": "shape"})
+    if "weird" not in weird:
+        return ("FAIL", f"unknown-dict fallback broken: {weird!r}")
+    return ("PASS", "format_issue: 4 known shapes + unknown-dict fallback render")
+
+
+def _t_lock_terms_filter() -> tuple[str, str]:
+    lock = {"terms": {
+        "Confirmed Card": {"canonical_en": "Confirmed Card", "cn": "已确认", "status": "confirmed"},
+        "Auto Card": {"canonical_en": "Auto Card", "cn": "自动", "status": "auto_locked"},
+        "Ambig": {"canonical_en": "Ambig", "cn": "", "status": "ambiguous"},
+        "Pend": {"canonical_en": "Pend", "cn": "", "status": "pending"},
+        "NoStatus": {"canonical_en": "NoStatus", "cn": "无状态"},
+    }}
+    with tempfile.TemporaryDirectory() as td:
+        lp = Path(td) / "lock.json"
+        lp.write_text(json.dumps(lock), encoding="utf-8")
+        got = {t["canonical_en"] for t in _load_lock_terms(lp)}
+    if got != {"Confirmed Card", "Auto Card"}:
+        return ("FAIL", f"status filter wrong: {sorted(got)}")
+    return ("PASS", "lock_terms filter: only confirmed/auto_locked kept (dict + list forms)")
+
+
+def _t_violations_aggregation() -> tuple[str, str]:
+    checks = [
+        {"name": "term_authority", "passed": False, "issue_count": 2,
+         "violations": [{"term": "T", "expected_official": "X"}], "issues": []},
+        {"name": "terminology", "passed": False, "issue_count": 1,
+         "issues": [{"category": "c", "message": "m"}, "bare"]},
+        {"name": "file_exists", "passed": True, "issues": [{"message": "ignored"}]},
+    ]
+    out = _aggregate_violations(checks)
+    tags = {v["check"] for v in out}
+    if tags != {"term_authority", "terminology"}:
+        return ("FAIL", f"failed-check filter/tags wrong: {sorted(tags)}")
+    if len(out) != 3 or not any(v.get("term") == "T" for v in out) \
+            or not any(v.get("message") == "bare" for v in out):
+        return ("FAIL", f"aggregation contents wrong: {out}")
+    return ("PASS", "violations aggregation: dual keys + check tag + bare wrap")
+
+
+def _t_card_db_cache() -> tuple[str, str]:
+    saved = translate._CARD_DB_CACHE
+    try:
+        translate._CARD_DB_CACHE = (1234, True)
+        if _card_db_status() != (1234, True):
+            return ("FAIL", "cache hit not honored")
+        translate._CARD_DB_CACHE = None
+        count, ready = _card_db_status()
+        if translate._CARD_DB_CACHE is None:
+            return ("FAIL", "fresh read did not repopulate cache")
+        if ready != (count >= 1000):
+            return ("FAIL", "readiness threshold mismatch")
+    finally:
+        translate._CARD_DB_CACHE = saved
+    return ("PASS", "card_db cache: hit honored, miss repopulates")
 
 
 def _t_block_encn() -> tuple[str, str]:
@@ -342,6 +414,10 @@ _TESTS = [
     _t_cn_extraction,
     _t_false_lock_guard,
     _t_subsume_guard,
+    _t_format_issue_shapes,
+    _t_lock_terms_filter,
+    _t_violations_aggregation,
+    _t_card_db_cache,
     _t_block_encn,
     _t_block_cnen,
     _t_cjk_absorb,

@@ -47,15 +47,19 @@ if [ -n "$PENDING_BACKUP" ] && [ -f "$PENDING_BACKUP" ]; then
 fi
 
 # Build effect_text.json (CDPR official card ability text; NOT committed — see NOTICE).
-# Online fetch from api.gwent.one (~3 min, CN-reachable). Wrapped in `if` so a fetch
-# failure degrades gracefully under `set -e` instead of aborting the install:
-# translation still works, only official-effect verbatim injection is disabled.
+# Same strategy as card_names_4lang below: local card-db mirror first (offline,
+# seconds), online fetch from api.gwent.one as fallback (~3 min, CN-reachable).
+# Wrapped in `if` so a failure degrades gracefully under `set -e` instead of
+# aborting the install: translation still works, only official-effect verbatim
+# injection is disabled.
 if command -v python3 >/dev/null 2>&1; then
-    echo "Fetching official card data from api.gwent.one (approx. 3 min, CN-reachable)..."
-    if python3 "$SKILL_DIR/scripts/build_effect_reference.py" --fetch; then
-        echo "effect_text.json built."
+    echo "Building effect_text.json (local mirror first, online fallback)..."
+    if python3 "$SKILL_DIR/scripts/build_effect_reference.py"; then
+        echo "effect_text.json built (local mirror)."
+    elif python3 "$SKILL_DIR/scripts/build_effect_reference.py" --fetch; then
+        echo "effect_text.json built (api.gwent.one online)."
     else
-        echo "WARNING: online fetch failed. Skill installed in degraded mode"
+        echo "WARNING: both local mirror and online fetch failed. Skill installed in degraded mode"
         echo "         (translation works; official card-effect injection disabled)."
         echo "         Retry later: python3 scripts/build_effect_reference.py --fetch"
     fi
@@ -94,6 +98,16 @@ if [ -f "$SKILL_DIR/lite/SKILL.md" ]; then
     echo "Lite skill installed at: $LITE_DIR"
 else
     echo "WARNING: lite/SKILL.md not found in repo, skipping lite skill"
+fi
+
+# Post-install self-check (informational; never aborts the install — a
+# degraded install is visible above, health_check just restates it with
+# per-check detail).
+if command -v python3 >/dev/null 2>&1; then
+    echo ""
+    echo "Running post-install self-check (health_check.py)..."
+    python3 "$SKILL_DIR/scripts/health_check.py" || \
+        echo "NOTE: health_check reported failures above — review before relying on the skill."
 fi
 
 echo ""

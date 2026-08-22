@@ -46,6 +46,12 @@ GWENT_SKILL_DIR="${GWENT_SKILL_DIR:-$HOME/.claude/skills/gwent-translation-style
 [ -d "$GWENT_SKILL_DIR" ] || GWENT_SKILL_DIR="$HOME/.hermes/skills/gwent-translation-style"
 ```
 
+> **When neither default exists** (custom `INSTALL_DIR` layout, e.g. `~/.agents/skills/`):
+> the main skill sits as a sibling of this lite directory —
+> `<this file's directory>/../gwent-translation-style` (the standard install.sh
+> layout). Derive it from the actual path you read this file from and
+> `export GWENT_SKILL_DIR=<that path>`.
+
 For other environments (opencode, custom install paths), set the env var
 explicitly:
 
@@ -111,7 +117,7 @@ If the translation was saved to a file and you want a terminology-residue
 sanity check (optional, usually skipped for chat):
 
 ```bash
-python3 "$GWENT_SKILL_DIR/scripts/check_translation.py" translated.txt --plain
+python3 "$GWENT_SKILL_DIR/scripts/check_translation.py" translated.txt
 ```
 
 Without `--source`, only basic rules run (forbidden terms, residue, Chinese

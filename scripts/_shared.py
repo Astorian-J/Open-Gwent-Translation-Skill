@@ -5,6 +5,7 @@ Extracted to eliminate duplication of proper-noun extraction logic
 across learn.py, context_lock.py, and diff_review.py.
 """
 
+import json
 import re
 import sys
 from collections.abc import Iterator
@@ -103,6 +104,30 @@ def terms_summary(items, verbose: bool, n: int = TERMS_SUMMARY_TOP_N):
     "counts + top N" and ``--verbose-terms`` switches to the complete list.
     """
     return list(items) if verbose else list(items)[:n]
+
+
+def format_issue(issue) -> str:
+    """Render one checker issue as a single human-readable line.
+
+    Tolerates the shapes the sub-checkers emit: term/expected pairs from
+    term_enforcer, category+message dicts from check_translation, plain
+    message dicts from the residue scan, or bare strings.
+    """
+    if not isinstance(issue, dict):
+        return str(issue)
+    parts: list[str] = []
+    if issue.get("term"):
+        parts.append(f"「{issue['term']}」")
+    if issue.get("expected_official"):
+        parts.append(f"-> {issue['expected_official']}")
+    if issue.get("category"):
+        parts.append(f"[{issue['category']}]")
+    if issue.get("rule_id"):
+        parts.append(f"[{issue['rule_id']}]")
+    msg = issue.get("message") or issue.get("label") or issue.get("offending_quote")
+    if msg:
+        parts.append(str(msg))
+    return " ".join(parts) if parts else json.dumps(issue, ensure_ascii=False)
 
 
 # --- Regex patterns ---

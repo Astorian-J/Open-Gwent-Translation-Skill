@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import build_lock_from_source, detect_direction, json_output, terms_summary
+from _shared import build_lock_from_source, detect_direction, format_issue, json_output, terms_summary
 
 
 def run_script_json(script_name: str, args: list[str]) -> tuple[bool, dict | None, str]:
@@ -50,66 +50,42 @@ def run_script_json(script_name: str, args: list[str]) -> tuple[bool, dict | Non
     return result.returncode == 0, parsed, output
 
 
-def run_check_translation(file_path: Path, lock_path: Path | None, direction: str, json_mode: bool) -> tuple[bool, int]:
-    """Run check_translation.py and return (pass, issue_count)."""
+def run_check_translation(file_path: Path, lock_path: Path | None, direction: str) -> tuple[bool, int, list]:
+    """Run check_translation.py; return (pass, issue_count, structured issues).
+
+    Always speaks --json to the sub-script and parses its envelope — no
+    human-text scraping. A failed parse degrades to (ok, 0, []): counts read
+    0 but `passed` still carries the sub-script's exit code, so a broken
+    checker can never fake a PASS here (the caller's except guard and the
+    finish-level status checks back this up).
+    """
     args = [str(file_path), "--direction", direction]
     if lock_path:
         args.extend(["--lock", str(lock_path)])
-
-    if json_mode:
-        ok, parsed, _ = run_script_json("check_translation.py", args)
-        if parsed and "data" in parsed:
-            return ok, parsed["data"].get("issue_count", 0)
-        return ok, 0
-
-    script = Path(__file__).parent / "check_translation.py"
-    result = subprocess.run(
-        [sys.executable, str(script), *args],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    output = result.stdout.strip()
-    issue_count = 0
-    if "Found" in output and "issue(s)" in output:
-        try:
-            issue_count = int(output.split("Found ")[1].split(" issue(s)")[0])
-        except (IndexError, ValueError):
-            pass
-    return issue_count == 0 and result.returncode == 0, issue_count
+    ok, parsed, _ = run_script_json("check_translation.py", args)
+    if parsed and isinstance(parsed.get("data"), dict):
+        d = parsed["data"]
+        return ok, d.get("issue_count", 0), d.get("issues", []) or []
+    return ok, 0, []
 
 
-def run_residue_scan(file_path: Path, direction: str, json_mode: bool) -> tuple[bool, int]:
-    """Run auto_pipeline.py scan and return (pass, issue_count)."""
+def run_residue_scan(file_path: Path, direction: str) -> tuple[bool, int, list]:
+    """Run auto_pipeline.py scan; return (pass, residue_count, residue items)."""
     script = Path(__file__).parent / "auto_pipeline.py"
     if not script.exists():
         # Fail-closed: a missing sibling checker surfaces through the caller's
         # except guard as passed=False (same semantics as the M9 lock guard).
         raise FileNotFoundError(f"scripts/auto_pipeline.py missing — check cannot run")
 
-    if json_mode:
-        ok, parsed, _ = run_script_json("auto_pipeline.py", ["scan", str(file_path), "--direction", direction])
-        if parsed and "data" in parsed:
-            return ok, parsed["data"].get("residue_count", 0)
-        return ok, 0
-
-    result = subprocess.run(
-        [sys.executable, str(script), "scan", str(file_path), "--direction", direction],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    output = result.stdout.strip()
-    # Count both English residue (EN->CN) and Chinese residue (CN->EN) lines.
-    issue_count = sum(
-        1 for line in output.split("\n")
-        if "English residue:" in line or "Chinese residue:" in line
-    )
-    return issue_count == 0 and result.returncode == 0, issue_count
+    ok, parsed, _ = run_script_json("auto_pipeline.py", ["scan", str(file_path), "--direction", direction])
+    if parsed and isinstance(parsed.get("data"), dict):
+        d = parsed["data"]
+        return ok, d.get("residue_count", 0), d.get("residues", []) or []
+    return ok, 0, []
 
 
-def run_phase_c_check(file_path: Path, lock_path: Path | None, direction: str, json_mode: bool) -> tuple[bool, int]:
-    """Run phase_c_check.py and return (pass, issue_count)."""
+def run_phase_c_check(file_path: Path, lock_path: Path | None, direction: str) -> tuple[bool, int, list]:
+    """Run phase_c_check.py; return (pass, automated_failed, failed checks)."""
     script = Path(__file__).parent / "phase_c_check.py"
     if not script.exists():
         # Fail-closed: a missing sibling checker surfaces through the caller's
@@ -119,46 +95,29 @@ def run_phase_c_check(file_path: Path, lock_path: Path | None, direction: str, j
     args = [str(file_path), "--direction", direction]
     if lock_path:
         args.extend(["--lock", str(lock_path)])
-
-    if json_mode:
-        ok, parsed, _ = run_script_json("phase_c_check.py", args)
-        if parsed and "data" in parsed:
-            return ok, parsed["data"].get("automated_failed", 0)
-        return ok, 0
-
-    result = subprocess.run(
-        [sys.executable, str(script), *args],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    output = result.stdout.strip()
-    issue_count = 0
-    if "automated check(s) failed" in output:
-        try:
-            issue_count = int(output.split("automated check(s) failed")[0].strip().split()[-1])
-        except (IndexError, ValueError):
-            pass
-    return issue_count == 0 and result.returncode == 0, issue_count
+    ok, parsed, _ = run_script_json("phase_c_check.py", args)
+    if parsed and isinstance(parsed.get("data"), dict):
+        d = parsed["data"]
+        return ok, d.get("automated_failed", 0), d.get("automated_issues", []) or []
+    return ok, 0, []
 
 
-def run_term_authority_check(file_path: Path, lock_path: Path | None, direction: str, json_mode: bool) -> tuple[bool, int, str, list[dict]]:
+def run_term_authority_check(file_path: Path, lock_path: Path | None) -> tuple[bool, int, str, list[dict]]:
     """Run term_enforcer.py and return (pass, violation_count, status, violations).
 
     status is one of:
-      "not_applicable" — reserved (no longer used; CN->EN now enforces too)
-      "skipped"        — no lock file provided; not run
-      "ran"            — actually executed; pass/count are meaningful
-      "error"          — the check itself raised (set by the caller's except guard)
+      "skipped" — no lock file provided; not run
+      "ran"     — actually executed; pass/count are meaningful
+      "error"   — the check itself raised (set by the caller's except guard)
 
     Direction-aware since the lock carries the official target for both ways:
     EN->CN asserts the official Chinese appears in the Chinese translation;
     CN->EN asserts the official English appears in the English translation
     (term_enforcer.enforce_terms branches on the lock's direction).
 
-    violations: the per-term violation dicts (populated in json_mode; empty
-    otherwise), each carrying term / expected_official / severity /
-    offending_quote so a BLOCKED report is agent-actionable.
+    violations: the per-term violation dicts, each carrying term /
+    expected_official / severity / offending_quote so a BLOCKED report is
+    agent-actionable.
     """
     if lock_path is None:
         return True, 0, "skipped", []
@@ -169,39 +128,23 @@ def run_term_authority_check(file_path: Path, lock_path: Path | None, direction:
         # status="error" + passed=False (same semantics as the M9 lock guard).
         raise FileNotFoundError(f"scripts/term_enforcer.py missing — check cannot run")
 
-    if json_mode:
-        ok, parsed, _ = run_script_json("term_enforcer.py", [str(file_path), "--lock", str(lock_path)])
-        if parsed and isinstance(parsed.get("data"), dict):
-            data = parsed["data"]
-            # Degradation can flip a BLOCKED into a false PASS — surface each
-            # notice as a counted violation-like entry so it blocks the gate.
-            degraded = data.get("warnings", [])
-            violations = data.get("violations", [])
-            for w in degraded:
-                violations.append({
-                    "term": "[checker warning]",
-                    "expected_official": "term_enforcer degraded",
-                    "severity": "error",
-                    "offending_quote": w,
-                })
-            count = data.get("violation_count", 0) + len(degraded)
-            return ok and not degraded, count, "ran", violations
-        return ok, 0, "ran", []
-
-    result = subprocess.run(
-        [sys.executable, str(script), str(file_path), "--lock", str(lock_path)],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    output = result.stdout.strip()
-    issue_count = 0
-    if "Issues:" in output:
-        try:
-            issue_count = int(output.split("Issues:")[1].strip().split()[0])
-        except (IndexError, ValueError):
-            pass
-    return issue_count == 0 and result.returncode == 0, issue_count, "ran", []
+    ok, parsed, _ = run_script_json("term_enforcer.py", [str(file_path), "--lock", str(lock_path)])
+    if parsed and isinstance(parsed.get("data"), dict):
+        data = parsed["data"]
+        # Degradation can flip a BLOCKED into a false PASS — surface each
+        # notice as a counted violation-like entry so it blocks the gate.
+        degraded = data.get("warnings", [])
+        violations = data.get("violations", [])
+        for w in degraded:
+            violations.append({
+                "term": "[checker warning]",
+                "expected_official": "term_enforcer degraded",
+                "severity": "error",
+                "offending_quote": w,
+            })
+        count = data.get("violation_count", 0) + len(degraded)
+        return ok and not degraded, count, "ran", violations
+    return ok, 0, "ran", []
 
 
 def main() -> None:
@@ -260,24 +203,24 @@ def main() -> None:
 
     # Check 2: Terminology check
     try:
-        passed, count = run_check_translation(file_path, lock_path, direction, args.json)
-        checks.append({"name": "terminology", "passed": passed, "issue_count": count, "message": "No terminology issues" if passed else f"Terminology: {count} issue(s)"})
+        passed, count, issues = run_check_translation(file_path, lock_path, direction)
+        checks.append({"name": "terminology", "passed": passed, "issue_count": count, "issues": terms_summary(issues, args.verbose_terms), "message": "No terminology issues" if passed else f"Terminology: {count} issue(s)"})
     except Exception as e:
-        checks.append({"name": "terminology", "passed": False, "issue_count": 0, "message": f"Terminology check failed: {e}"})
+        checks.append({"name": "terminology", "passed": False, "issue_count": 0, "issues": [], "message": f"Terminology check failed: {e}"})
 
     # Check 3: Residue scan (English residue for EN->CN, Chinese residue for CN->EN)
     try:
-        passed, count = run_residue_scan(file_path, direction, args.json)
-        checks.append({"name": "residue_scan", "passed": passed, "issue_count": count, "message": f"No {residue_lang} residue" if passed else f"Residue: {count} untranslated card name(s)"})
+        passed, count, residues = run_residue_scan(file_path, direction)
+        checks.append({"name": "residue_scan", "passed": passed, "issue_count": count, "issues": terms_summary(residues, args.verbose_terms), "message": f"No {residue_lang} residue" if passed else f"Residue: {count} untranslated card name(s)"})
     except Exception as e:
-        checks.append({"name": "residue_scan", "passed": False, "issue_count": 0, "message": f"Residue scan failed: {e}"})
+        checks.append({"name": "residue_scan", "passed": False, "issue_count": 0, "issues": [], "message": f"Residue scan failed: {e}"})
 
     # Check 4: Phase C self-check
     try:
-        passed, count = run_phase_c_check(file_path, lock_path, direction, args.json)
-        checks.append({"name": "phase_c", "passed": passed, "issue_count": count, "message": "Phase C checks passed" if passed else f"Phase C: {count} issue(s)"})
+        passed, count, failed_items = run_phase_c_check(file_path, lock_path, direction)
+        checks.append({"name": "phase_c", "passed": passed, "issue_count": count, "issues": terms_summary(failed_items, args.verbose_terms), "message": "Phase C checks passed" if passed else f"Phase C: {count} issue(s)"})
     except Exception as e:
-        checks.append({"name": "phase_c", "passed": False, "issue_count": 0, "message": f"Phase C check failed: {e}"})
+        checks.append({"name": "phase_c", "passed": False, "issue_count": 0, "issues": [], "message": f"Phase C check failed: {e}"})
 
     # Check 5: Term authority enforcement (both directions)
     if lock_build_error is not None:
@@ -287,10 +230,8 @@ def main() -> None:
         checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "status": "error", "violations": [], "message": f"Term authority: context lock build failed ({lock_build_error}); check could not run"})
     else:
         try:
-            passed, count, status, ta_violations = run_term_authority_check(file_path, lock_path, direction, args.json)
-            if status == "not_applicable":
-                msg = "Term authority: not applicable (CN->EN)"
-            elif status == "skipped":
+            passed, count, status, ta_violations = run_term_authority_check(file_path, lock_path)
+            if status == "skipped":
                 msg = "Term authority: skipped (no lock file)"
             else:
                 msg = "Term authority checks passed" if passed else f"Term authority: {count} violation(s)"
@@ -353,6 +294,8 @@ def main() -> None:
         for check in checks:
             if not check["passed"]:
                 print(f"  • {check['message']}")
+                for issue in (check.get("issues", []) or []) + (check.get("violations", []) or []):
+                    print(f"      - {format_issue(issue)}")
         print("")
         print("Fix all issues above, then re-run the gate via translate.py:")
         print(f"  python scripts/translate.py finish {file_path} --source <source.md> --direction {direction}")

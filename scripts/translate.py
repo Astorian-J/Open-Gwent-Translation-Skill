@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import detect_direction, json_output, source_is_chinese
+from _shared import detect_direction, format_issue, json_output, source_is_chinese, terms_summary
 
 SCRIPTS_DIR = Path(__file__).parent
 
@@ -135,24 +135,39 @@ PACK_FORMAT_GUIDE = [
 ]
 
 def _parse_json_envelope(stdout: str) -> dict | None:
-    """Parse a JSON envelope from a script's stdout, tolerating leading non-JSON text.
+    """Parse a JSON envelope from a script's stdout.
 
-    completeness_guard prints a `[WARN] context lock build failed ...` line to
-    stdout when build_lock_from_source raises (the exact "silent pass" scenario
-    this orchestrator exists to catch). That [WARN] prefixes the JSON envelope,
-    so a plain json.loads fails on the mixed output. We scan for the first '{'
-    that raw_decodes into a complete object (raw_decode ignores trailing text).
+    Sub-scripts keep stdout pure JSON (their [WARN] diagnostics go to
+    stderr), so a plain json.loads is the whole contract. A parse failure
+    returns None and the caller treats the script as crashed — fail-closed,
+    never a guess at "probably fine" output.
     """
-    decoder = json.JSONDecoder()
-    for i, ch in enumerate(stdout):
-        if ch == "{":
-            try:
-                obj, _ = decoder.raw_decode(stdout[i:])
-            except (json.JSONDecodeError, ValueError):
-                continue
-            if isinstance(obj, dict):
-                return obj
-    return None
+    try:
+        obj = json.loads(stdout)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
+def _aggregate_violations(checks: list[dict]) -> list[dict]:
+    """Collect the agent-actionable details of every failed guard check.
+
+    Term authority entries carry term / expected_official / severity /
+    offending_quote under "violations"; the other checks carry their own
+    structured issue lists under "issues". Each aggregated entry is tagged
+    with its source check so a BLOCKED report can be fixed without
+    re-running the checkers by hand.
+    """
+    out: list[dict] = []
+    for c in checks:
+        if c.get("passed"):
+            continue
+        for i in (c.get("violations", []) or []) + (c.get("issues", []) or []):
+            if isinstance(i, dict):
+                out.append({**i, "check": c.get("name", "?")})
+            else:
+                out.append({"check": c.get("name", "?"), "message": str(i)})
+    return out
 
 
 def run_script_json(script_name: str, args: list[str], timeout: int) -> tuple[bool, dict | None, str]:
@@ -215,17 +230,24 @@ def _load_lock_terms(lock_path: str | None) -> list[dict]:
         data = json.loads(Path(lock_path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return []
+    # Only enforced statuses belong in the MANDATORY table (same set as
+    # context_lock's own enforcement filter): ambiguous entries carry an empty
+    # official CN and pending entries are "translate by judgment" — rendering
+    # either as a mandatory row with an empty Chinese cell contradicts the
+    # pack's own ambiguous/pending sections.
+    kept = ("confirmed", "auto_locked")
     terms = data.get("terms") or {}
     out: list[dict] = []
     if isinstance(terms, dict):
-        for key, val in terms.items():
-            if isinstance(val, dict):
-                row = dict(val)
-                row.setdefault("cn", key)  # the dict key is the term itself
-                out.append(row)
+        for val in terms.values():
+            if isinstance(val, dict) and val.get("status") in kept:
+                out.append(dict(val))
     elif isinstance(terms, list):
-        out = [t for t in terms if isinstance(t, dict)]
+        out = [t for t in terms if isinstance(t, dict) and t.get("status") in kept]
     return out
+
+
+_CARD_DB_CACHE: tuple[int, bool] | None = None
 
 
 def _card_db_status() -> tuple[int, bool]:
@@ -237,6 +259,9 @@ def _card_db_status() -> tuple[int, bool]:
     then translates card names freely with no warning. Shared by build_pack (pack
     banner) and cmd_prepare (status line + ready flag).
     """
+    global _CARD_DB_CACHE
+    if _CARD_DB_CACHE is not None:
+        return _CARD_DB_CACHE
     cards_json = SCRIPTS_DIR.parent / "references" / "card_names_4lang.json"
     count = 0
     if cards_json.exists():
@@ -244,7 +269,8 @@ def _card_db_status() -> tuple[int, bool]:
             count = len(json.loads(cards_json.read_text(encoding="utf-8")))
         except (json.JSONDecodeError, OSError, ValueError):
             count = 0
-    return count, count >= 1000
+    _CARD_DB_CACHE = (count, count >= 1000)
+    return _CARD_DB_CACHE
 
 
 _CARD_META_CACHE: dict | None = None
@@ -336,6 +362,8 @@ def _ensure_card_db() -> tuple[int, bool]:
         print("[WARN] Build manually: python scripts/build_card_names_reference.py --fetch")
         return _card_db_status()
     print("[AUTO] Card database built.")
+    global _CARD_DB_CACHE
+    _CARD_DB_CACHE = None  # the file just changed on disk — re-read it fresh
     return _card_db_status()
 
 
@@ -416,7 +444,7 @@ def build_pack(source_path: Path, direction: str, date: str | None,
                 f"| {_join_list(t.get('aliases'))} | {_join_list(t.get('abbrevs'))} |"
             )
     else:
-        L.append("_(none — see warning above if lock failed)_")
+        L.append("_(no enforced terms — the lock held only ambiguous/pending entries; see the sections below)_")
     L.append("")
 
     # Ambiguous names
@@ -696,9 +724,9 @@ def cmd_finish(args: argparse.Namespace) -> None:
     # completeness_guard.py swallows build_lock_from_source exceptions (returns
     # lock_path=None, prints [WARN], keeps going). With no lock, the term_authority
     # check returns status="skipped" -> passed=True, so the guard reports all_passed=True
-    # WITHOUT ever checking terminology. We refuse to trust that: for EN->CN, the
-    # term_authority check MUST have actually run (status=="ran"), or we BLOCK.
-    # (CN->EN legitimately returns "not_applicable" — that is correct, not a hole.)
+    # WITHOUT ever checking terminology. We refuse to trust that in EITHER
+    # direction: the term_authority check MUST have actually run (status=="ran"),
+    # or we BLOCK.
     block_reason: str | None = None
     if not all_passed:
         failed = [c for c in checks if not c.get("passed")]
@@ -722,11 +750,13 @@ def cmd_finish(args: argparse.Namespace) -> None:
 
     blocked = block_reason is not None
 
-    # Surface the agent-actionable term-authority violations at the top level so a
-    # BLOCKED report can be fixed directly: each carries term / expected_official /
-    # severity / offending_quote. (Also nested under guard.checks.term_authority.)
-    _ta = next((c for c in checks if c.get("name") == "term_authority"), None)
-    term_authority_violations = (_ta or {}).get("violations", [])
+    # Agent-actionable details of every failed check, top-level, tagged with
+    # the source check (see _aggregate_violations).
+    violations = _aggregate_violations(checks)
+    # True total per the project convention "counts stay complete, detail
+    # lists get truncated" — the guard truncates each check's issue list for
+    # payload size, so summing the truncated lists would undercount.
+    violations_total = sum(c.get("issue_count", 0) for c in checks if not c.get("passed"))
 
     # Learn only after a genuine PASS; never let it affect the gate.
     learn_result = None
@@ -748,7 +778,8 @@ def cmd_finish(args: argparse.Namespace) -> None:
         "guard": guard_data,
         "blocked": blocked,
         "block_reason": block_reason,
-        "violations": term_authority_violations,
+        "violations": terms_summary(violations, args.verbose_terms),
+        "violations_total": len(violations),
         "learn": learn_result,
     }
 
@@ -786,6 +817,12 @@ def cmd_finish(args: argparse.Namespace) -> None:
             # The hole: guard said PASS but we overridden to BLOCKED.
             print("[BLOCKED] Guard reported PASS, BUT term authority was not actually checked")
             print("          (context lock could not be built from source).")
+        if violations or violations_total:
+            shown = violations if args.verbose_terms else violations[:5]
+            print("")
+            print(f"Violations ({violations_total} total, showing {len(shown)} detail items; --verbose-terms for full lists):")
+            for v in shown:
+                print(f"   - [{v.get('check', '?')}] {format_issue(v)}")
         print("")
         print("[BLOCKED] DO NOT FINALIZE. Fix the issue(s) above and re-run:")
         print(f"  python scripts/translate.py finish {translated_path.name} "
@@ -811,7 +848,7 @@ def main() -> None:
     )
     prep.add_argument(
         "--direction", choices=["encn", "cnen"],
-        help="Direction for the pack banner + style table (default: encn)",
+        help="Direction for the pack banner + style table (default: auto-detected from source)",
     )
     prep.add_argument("--json", action="store_true", help="Output structured JSON")
 

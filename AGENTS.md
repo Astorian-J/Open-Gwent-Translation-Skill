@@ -203,7 +203,8 @@ Detailed terminology checker. Direction-aware: for EN->CN output it runs the
 full terminology check set and reports English residue; for CN->EN output it
 reports Chinese residue instead. Direction is auto-detected from the file, or
 set explicitly with `--direction`. Optionally accepts a source file (or
-pre-built lock) to run term authority enforcement, an EN->CN-only check.
+pre-built lock) to run term authority enforcement — the inline pass here is
+EN→CN only; the guard-level `term_authority` check enforces BOTH directions.
 
 ```bash
 python scripts/check_translation.py translated.txt --json
@@ -287,7 +288,6 @@ way: EN→CN asserts the official Chinese appears in the Chinese translation,
 CN→EN asserts the official English appears in the English translation). The
 `term_authority` check carries a `status` field: `ran` (executed), `skipped`
 (no `--source`/lock provided; not run), or `error` (the check itself raised).
-(`not_applicable` is a reserved value that current code never emits.)
 
 ```bash
 python scripts/completeness_guard.py translated.txt --json

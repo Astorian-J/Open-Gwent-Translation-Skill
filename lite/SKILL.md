@@ -45,6 +45,10 @@ GWENT_SKILL_DIR="${GWENT_SKILL_DIR:-$HOME/.claude/skills/gwent-translation-style
 [ -d "$GWENT_SKILL_DIR" ] || GWENT_SKILL_DIR="$HOME/.hermes/skills/gwent-translation-style"
 ```
 
+> **两条默认路径都不存在时**（自定义 INSTALL_DIR 装的，如 `~/.agents/skills/`）：
+> 主 skill 就在本 lite 目录的上一级的兄弟目录——`<本文件所在目录>/../gwent-translation-style`
+> （install.sh 的标准布局）。按你读到本文件的实际路径推算后 `export GWENT_SKILL_DIR=<该路径>`。
+
 查卡名 / 术语：
 
 ```bash
@@ -138,7 +142,7 @@ python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "siege" --fuzzy --plain
 如果译文已存成文件、且想兜底检查术语残留（不强制）：
 
 ```bash
-python3 "$GWENT_SKILL_DIR/scripts/check_translation.py" translated.txt --plain
+python3 "$GWENT_SKILL_DIR/scripts/check_translation.py" translated.txt
 ```
 
 不带 `--source`，只跑基础规则检查（禁用术语、英文残留、中文数字、括号等）。
