@@ -21,7 +21,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import build_lock_from_source, detect_direction, format_issue, json_output, terms_summary
+from _shared import (
+    build_lock_from_source,
+    detect_direction,
+    format_issue,
+    json_output,
+    parse_ta_envelope,
+    terms_summary,
+)
 
 
 def run_script_json(script_name: str, args: list[str]) -> tuple[bool, dict | None, str]:
@@ -54,12 +61,15 @@ def run_check_translation(file_path: Path, lock_path: Path | None, direction: st
     """Run check_translation.py; return (pass, issue_count, structured issues).
 
     Always speaks --json to the sub-script and parses its envelope — no
-    human-text scraping. A failed parse degrades to (ok, 0, []): counts read
-    0 but `passed` still carries the sub-script's exit code, so a broken
+    human-text scraping. Runs with --skip-ta: within the guard, term
+    authority is executed ONCE by check 5 (this used to run it three times
+    across checks 2/4/5); check_translation's own inline TA pass remains for
+    standalone invocations. A failed parse degrades to (ok, 0, []): counts
+    read 0 but `passed` still carries the sub-script's exit code, so a broken
     checker can never fake a PASS here (the caller's except guard and the
     finish-level status checks back this up).
     """
-    args = [str(file_path), "--direction", direction]
+    args = [str(file_path), "--direction", direction, "--skip-ta"]
     if lock_path:
         args.extend(["--lock", str(lock_path)])
     ok, parsed, _ = run_script_json("check_translation.py", args)
@@ -69,30 +79,20 @@ def run_check_translation(file_path: Path, lock_path: Path | None, direction: st
     return ok, 0, []
 
 
-def run_residue_scan(file_path: Path, direction: str) -> tuple[bool, int, list]:
-    """Run auto_pipeline.py scan; return (pass, residue_count, residue items)."""
-    script = Path(__file__).parent / "auto_pipeline.py"
-    if not script.exists():
-        # Fail-closed: a missing sibling checker surfaces through the caller's
-        # except guard as passed=False (same semantics as the M9 lock guard).
-        raise FileNotFoundError(f"scripts/auto_pipeline.py missing — check cannot run")
-
-    ok, parsed, _ = run_script_json("auto_pipeline.py", ["scan", str(file_path), "--direction", direction])
-    if parsed and isinstance(parsed.get("data"), dict):
-        d = parsed["data"]
-        return ok, d.get("residue_count", 0), d.get("residues", []) or []
-    return ok, 0, []
-
-
 def run_phase_c_check(file_path: Path, lock_path: Path | None, direction: str) -> tuple[bool, int, list]:
-    """Run phase_c_check.py; return (pass, automated_failed, failed checks)."""
+    """Run phase_c_check.py; return (pass, automated_failed, failed checks).
+
+    Runs with --skip-ta: encn-10's term-enforcement is covered by the
+    guard's single check-5 execution (see run_check_translation); without
+    the flag, phase_c would spawn term_enforcer a second time.
+    """
     script = Path(__file__).parent / "phase_c_check.py"
     if not script.exists():
         # Fail-closed: a missing sibling checker surfaces through the caller's
         # except guard as passed=False (same semantics as the M9 lock guard).
         raise FileNotFoundError(f"scripts/phase_c_check.py missing — check cannot run")
 
-    args = [str(file_path), "--direction", direction]
+    args = [str(file_path), "--direction", direction, "--skip-ta"]
     if lock_path:
         args.extend(["--lock", str(lock_path)])
     ok, parsed, _ = run_script_json("phase_c_check.py", args)
@@ -103,21 +103,22 @@ def run_phase_c_check(file_path: Path, lock_path: Path | None, direction: str) -
 
 
 def run_term_authority_check(file_path: Path, lock_path: Path | None) -> tuple[bool, int, str, list[dict]]:
-    """Run term_enforcer.py and return (pass, violation_count, status, violations).
+    """Run term_enforcer.py — the guard's SINGLE term-authority execution.
+
+    check_translation and phase_c run with --skip-ta inside the guard (their
+    own TA passes exist for standalone use); this check owns the one
+    execution, and every consumer of term_enforcer output interprets the
+    envelope through _shared.parse_ta_envelope so the fail-closed rules
+    (value-not-key data check, degraded-warnings-count-as-violations) can
+    never drift between checkers.
 
     status is one of:
       "skipped" — no lock file provided; not run
       "ran"     — actually executed; pass/count are meaningful
       "error"   — the check itself raised (set by the caller's except guard)
 
-    Direction-aware since the lock carries the official target for both ways:
-    EN->CN asserts the official Chinese appears in the Chinese translation;
-    CN->EN asserts the official English appears in the English translation
+    Direction-aware since the lock carries the official target for both ways
     (term_enforcer.enforce_terms branches on the lock's direction).
-
-    violations: the per-term violation dicts, each carrying term /
-    expected_official / severity / offending_quote so a BLOCKED report is
-    agent-actionable.
     """
     if lock_path is None:
         return True, 0, "skipped", []
@@ -128,29 +129,28 @@ def run_term_authority_check(file_path: Path, lock_path: Path | None) -> tuple[b
         # status="error" + passed=False (same semantics as the M9 lock guard).
         raise FileNotFoundError(f"scripts/term_enforcer.py missing — check cannot run")
 
-    ok, parsed, _ = run_script_json("term_enforcer.py", [str(file_path), "--lock", str(lock_path)])
-    if parsed and isinstance(parsed.get("data"), dict):
-        data = parsed["data"]
-        # Degradation can flip a BLOCKED into a false PASS — surface each
-        # notice as a counted violation-like entry so it blocks the gate.
-        degraded = data.get("warnings", [])
-        violations = data.get("violations", [])
-        for w in degraded:
-            violations.append({
-                "term": "[checker warning]",
-                "expected_official": "term_enforcer degraded",
-                "severity": "error",
-                "offending_quote": w,
-            })
-        count = data.get("violation_count", 0) + len(degraded)
-        return ok and not degraded, count, "ran", violations
-    return ok, 0, "ran", []
+    rc_ok, parsed, _raw = run_script_json("term_enforcer.py", [str(file_path), "--lock", str(lock_path)])
+    ta_ok, count, violations, err = parse_ta_envelope(parsed)
+    if err is not None:
+        return False, count, "ran", [{
+            "term": "[checker error]",
+            "expected_official": "term_enforcer envelope unusable",
+            "severity": "error",
+            "offending_quote": err,
+        }]
+    # rc_ok in the conjunction restores defense in depth: today term_enforcer's
+    # exit-code discipline (rc!=0 iff violations or degradation) makes this
+    # redundant with the envelope check — but why rely on another script's
+    # discipline staying perfect.
+    return ta_ok and rc_ok, count, "ran", violations
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Completeness Guard — Final gate before translation finalization")
     parser.add_argument("file", help="Translated file to check")
-    parser.add_argument("--source", help="Source file for term authority enforcement")
+    parser.add_argument("--source", help="Source file to build the term lock from"
+                        " (or pass --lock to reuse a prepare-time snapshot)")
+    parser.add_argument("--lock", help="Pre-built context lock JSON (reuse, do not rebuild)")
     parser.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     parser.add_argument("--verbose-terms", action="store_true", help="Emit full violation/term lists (default: counts + top 5)")
@@ -183,7 +183,15 @@ def main() -> None:
     # instead of letting each sub-script rebuild it from the source.
     lock_path: Path | None = None
     lock_build_error: str | None = None
-    if source_path:
+    if args.lock:
+        lock_path = Path(args.lock)
+        if not lock_path.exists():
+            # Fail-closed: an explicitly requested lock that is missing is an
+            # error, never a silent fallback to rebuilding from --source.
+            lock_build_error = f"--lock file not found: {args.lock}"
+            lock_path = None
+            print(f"[WARN] {lock_build_error}", file=sys.stderr)
+    elif source_path:
         try:
             lock_path = build_lock_from_source(source_path)
         except Exception as e:
@@ -202,18 +210,26 @@ def main() -> None:
     residue_lang = "English" if direction == "encn" else "Chinese"
 
     # Check 2: Terminology check
+    terminology_issues: list = []
+    terminology_ok = False
     try:
-        passed, count, issues = run_check_translation(file_path, lock_path, direction)
-        checks.append({"name": "terminology", "passed": passed, "issue_count": count, "issues": terms_summary(issues, args.verbose_terms), "message": "No terminology issues" if passed else f"Terminology: {count} issue(s)"})
+        terminology_ok, count, terminology_issues = run_check_translation(file_path, lock_path, direction)
+        checks.append({"name": "terminology", "passed": terminology_ok, "issue_count": count, "issues": terms_summary(terminology_issues, args.verbose_terms), "message": "No terminology issues" if terminology_ok else f"Terminology: {count} issue(s)"})
     except Exception as e:
         checks.append({"name": "terminology", "passed": False, "issue_count": 0, "issues": [], "message": f"Terminology check failed: {e}"})
 
-    # Check 3: Residue scan (English residue for EN->CN, Chinese residue for CN->EN)
-    try:
-        passed, count, residues = run_residue_scan(file_path, direction)
-        checks.append({"name": "residue_scan", "passed": passed, "issue_count": count, "issues": terms_summary(residues, args.verbose_terms), "message": f"No {residue_lang} residue" if passed else f"Residue: {count} untranslated card name(s)"})
-    except Exception as e:
-        checks.append({"name": "residue_scan", "passed": False, "issue_count": 0, "issues": [], "message": f"Residue scan failed: {e}"})
+    # Check 3: Residue (English residue for EN->CN, Chinese residue for CN->EN)
+    # — derived from check 2's structured issues: check_translation already
+    # runs the same residue detectors, so spawning auto_pipeline scan just
+    # re-ran the whole checker to filter one category back out.
+    if not terminology_ok:
+        checks.append({"name": "residue_scan", "passed": False, "issue_count": 0, "issues": [], "message": "Residue not checked (terminology check crashed)"})
+    else:
+        residue_issues = [
+            i for i in terminology_issues
+            if isinstance(i, dict) and i.get("category") in ("english_residue", "chinese_residue")
+        ]
+        checks.append({"name": "residue_scan", "passed": not residue_issues, "issue_count": len(residue_issues), "issues": terms_summary(residue_issues, args.verbose_terms), "message": f"No {residue_lang} residue" if not residue_issues else f"Residue: {len(residue_issues)} untranslated card name(s)"})
 
     # Check 4: Phase C self-check
     try:
@@ -239,7 +255,9 @@ def main() -> None:
         except Exception as e:
             checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "status": "error", "violations": [], "message": f"Term authority check failed: {e}"})
 
-    if lock_path:
+    # Only delete a lock WE built from --source; a caller's --lock snapshot
+    # (prepare/finish binding) must survive for later finish re-runs.
+    if lock_path and not args.lock:
         lock_path.unlink(missing_ok=True)
 
     all_pass = all(c["passed"] for c in checks)

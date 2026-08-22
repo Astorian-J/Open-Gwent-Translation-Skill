@@ -33,7 +33,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _shared import TermAuthority, build_lock_from_source, format_issue  # noqa: E402
+from _shared import TermAuthority, build_lock_from_source, format_issue, parse_ta_envelope  # noqa: E402
 from check_translation import check_term_authority_violations  # noqa: E402
 import translate  # noqa: E402
 from translate import _aggregate_violations, _card_db_status, _load_lock_terms  # noqa: E402
@@ -212,6 +212,25 @@ def _t_card_db_cache() -> tuple[str, str]:
     return ("PASS", "card_db cache: hit honored, miss repopulates")
 
 
+def _t_parse_ta_envelope() -> tuple[str, str]:
+    ok, n, v, err = parse_ta_envelope({"data": {"violation_count": 0, "violations": [], "warnings": []}})
+    if not (ok and n == 0 and v == [] and err is None):
+        return ("FAIL", f"clean envelope misread: ok={ok} n={n} err={err}")
+    ok, n, v, err = parse_ta_envelope({"data": {"violation_count": 2, "violations": [{"term": "T"}, {"term": "U"}]}})
+    if ok or n != 2 or len(v) != 2:
+        return ("FAIL", f"violations envelope misread: ok={ok} n={n}")
+    ok, n, v, err = parse_ta_envelope({"data": {"violation_count": 0, "violations": [], "warnings": ["references degraded"]}})
+    if ok or n != 1 or v[0].get("term") != "[checker warning]":
+        return ("FAIL", "degraded warning must flip to a counted violation")
+    ok, n, v, err = parse_ta_envelope({"data": None, "errors": ["boom"]})
+    if ok or err is None:
+        return ("FAIL", "data:null error envelope must fail closed")
+    ok, n, v, err = parse_ta_envelope("not-a-dict")
+    if ok or err is None:
+        return ("FAIL", "non-dict input must fail closed")
+    return ("PASS", "parse_ta_envelope: clean/violations/degraded/crash shapes")
+
+
 def _t_pipeline() -> tuple[str, str]:
     """End-to-end orchestration: prepare -> good/bad translation -> finish.
 
@@ -278,6 +297,21 @@ def _t_pipeline() -> tuple[str, str]:
         r = run(["finish", str(good), "--source", str(src), "--direction", "encn", "--json"])
         if r.returncode != 0:
             return ("FAIL", f"finish(good) exit {r.returncode}: {r.stdout[-300:]}")
+
+        # 2.5) pack/lock binding: a source edited after prepare BLOCKS, and
+        # --allow-source-changed re-gates against a REBUILT lock — the stale
+        # snapshot must NOT be reused (lock_reused False on that path).
+        src.write_text(source_md + "An extra closing line.\n", encoding="utf-8")
+        r = run(["finish", str(good), "--source", str(src), "--direction", "encn", "--json"])
+        if r.returncode == 0 or "source changed" not in (json.loads(r.stdout)["data"].get("block_reason") or ""):
+            return ("FAIL", "source-changed must BLOCK with a clear reason")
+        r = run(["finish", str(good), "--source", str(src), "--direction", "encn",
+                 "--allow-source-changed", "--json"])
+        if r.returncode != 0:
+            return ("FAIL", f"--allow-source-changed exit {r.returncode}: {r.stdout[-200:]}")
+        if json.loads(r.stdout)["data"].get("lock_reused"):
+            return ("FAIL", "--allow-source-changed must NOT reuse the stale snapshot")
+        src.write_text(source_md, encoding="utf-8")
 
         # 3) finish on residue + provision-reversed translation -> BLOCKED
         #    with actionable violations
@@ -509,6 +543,7 @@ _TESTS = [
     _t_lock_terms_filter,
     _t_violations_aggregation,
     _t_card_db_cache,
+    _t_parse_ta_envelope,
     _t_pipeline,
     _t_block_encn,
     _t_block_cnen,

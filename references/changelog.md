@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-08-22（四）— 批3：守卫链去重 + prepare/finish 锁绑定 + effect 接入（交流式方案收官 3 项）
+
+- **守卫链去重**（kimi#1）：guard 内 term_enforcer ×3→×1（check5 唯一实跑）；
+  check_translation/phase_c 新增 --skip-ta（guard 传；phase_c encn-10 skip 时降
+  manual note）；residue 检查改为从 check2 结构化 issues 按类别派生（物理删除
+  auto_pipeline scan 子进程）；**parse_ta_envelope 单点解析**（判值不判键/降级计
+  违规），三份解析拷贝（guard/phase_c/check_translation）全部收敛；顺删两处
+  rc==0 早退（会吞 rc=0 时的降级警告）
+- **prepare/finish 锁绑定**（dsh#4+kimi#5 撞车）：prepare 落 `<source>.lock.json`
+  sidecar（带 source_sha256）；finish 优先复用（lock_reused），源变更→BLOCK，
+  --allow-source-changed=按当前源重建（**审查抓出初版 Critical：逃生口误传过期锁**，
+  已修+测试钉死）；guard --lock（缺失 fail-closed 不回落；不删调用者的锁）；
+  NEXT STEP/提示改绝对路径
+- **effect_verifier 接入 finish**（kimi#7）：effect_check 信息性输出（绝不影响
+  退出码），无主脚本归位
+- 新增 _t_parse_ta_envelope + _t_pipeline 绑定两段；test_rebuild 19→20、
+  health_check 69→70
+- pragmatic 审查批3 1C/4I/8M：Critical+4I+可修 Minor 全修，residue 双计数等
+  3 条既有项带理由缓议；报告 .scratch/comm-dev-0822/review-report-batch3.md
+- 至此 2026-08-22 交流式开发 12 项方案全部落地（3 批 3 提交，来源 dsh+kimi 双
+  agent 评审，全部过 pragmatic 子 agent 审查）
+
 ## 2026-08-22（三）— 批2：skeleton 摘除 + learn 噪音根治与缓冲落盘 + 编排级测试（交流式方案第二批 3 项）
 
 - **skeleton 摘除**（kimi/dsh/Claude 三方终裁）：auto_pipeline pre 物理删除 skeleton

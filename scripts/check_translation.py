@@ -22,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
+    SKIP_WORDS_MINIMAL,
     detect_direction,
     extract_card_names,
     extract_card_names_no_colon,
@@ -32,7 +33,7 @@ from _shared import (
     get_term_authority,
     json_output,
     load_lock_file,
-    SKIP_WORDS_MINIMAL,
+    parse_ta_envelope,
 )
 
 # --- Load rules from references ---
@@ -757,35 +758,30 @@ def check_term_authority_violations(
         text=True,
         timeout=60,
     )
-    if result.returncode == 0:
-        return []
-
+    # No early-return on returncode==0: a rc-0 run can still carry degraded
+    # warnings. Single-point envelope interpretation (fail-closed rules live
+    # in parse_ta_envelope: value-not-key data check, degraded warnings count
+    # as violations).
     try:
         parsed = json.loads(result.stdout)
     except (json.JSONDecodeError, ValueError):
         parsed = None
-    if not isinstance(parsed, dict) or not isinstance(parsed.get("data"), dict):
-        # Fail-closed: a crashed term_enforcer must NOT read as "no violations".
-        # Judge by VALUE, not key — json_output's error envelopes carry
-        # "data": null (key present, value null), e.g. --source on a missing
-        # file; a key-existence check would pass those and crash on None.get.
-        errors = parsed.get("errors") if isinstance(parsed, dict) else None
-        if errors:
-            detail = "; ".join(str(e) for e in errors)
-        else:
-            detail = (result.stderr or "").strip()[-200:]
+    _ok, _count, violations, err = parse_ta_envelope(parsed)
+    if err is not None:
+        detail = err
+        if not (isinstance(parsed, dict) and parsed.get("errors")):
+            detail = (result.stderr or "").strip()[-200:] or err
         return [f"[checker error] term_enforcer crashed (exit {result.returncode}): {detail}"]
 
-    data = parsed["data"]
     issues: list[str] = []
-    # Degradation can flip a BLOCKED into a false PASS — count it as an issue.
-    for w in data.get("warnings", []):
-        issues.append(f"[checker warning] term_enforcer degraded: {w}")
-    for v in data.get("violations", []):
-        msg = f"term authority: 「{v['term']}」expected 「{v['expected_cn']}」"
-        if v.get("found_in_translation"):
-            msg += f", found 「{v['found_in_translation']}」"
-        issues.append(msg)
+    for v in violations:
+        if v.get("term") == "[checker warning]":
+            issues.append(f"[checker warning] term_enforcer degraded: {v.get('offending_quote', '')}")
+        else:
+            msg = f"term authority: 「{v['term']}」expected 「{v['expected_cn']}」"
+            if v.get("found_in_translation"):
+                msg += f", found 「{v['found_in_translation']}」"
+            issues.append(msg)
     return issues
 
 
@@ -828,6 +824,10 @@ def main():
     parser.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     parser.add_argument("--quiet", action="store_true", help="Suppress stderr notes (e.g. --fix no-op on CN->EN)")
+    parser.add_argument("--skip-ta", action="store_true",
+                        help="Skip the inline term-authority pass (for callers that run "
+                             "term_enforcer separately, e.g. completeness_guard's single "
+                             "check-5 execution)")
     args = parser.parse_args()
 
     path = Path(args.file)
@@ -863,7 +863,7 @@ def main():
     # wholesale) cannot drop TA violations from the report; auto_fix only
     # rewrites provision phrasing (费→人口), so it cannot add/remove TA hits.
     ta_issues: list[str] = []
-    if direction == "encn":
+    if direction == "encn" and not args.skip_ta:
         if args.lock:
             lock_path = Path(args.lock)
             if lock_path.exists():

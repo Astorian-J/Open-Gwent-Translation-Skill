@@ -30,6 +30,7 @@ Exit code:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -45,6 +46,7 @@ SCRIPTS_DIR = Path(__file__).parent
 PRE_TIMEOUT = 240
 GUARD_TIMEOUT = 300
 LEARN_TIMEOUT = 120
+EFFECT_TIMEOUT = 120  # official-effect verbatim pass (informational; same budget as learn)
 
 
 # --- Embedded style rules & checklists (mirrors SKILL.md Phase B/C) ---
@@ -524,8 +526,8 @@ def build_pack(source_path: Path, direction: str, date: str | None,
     L.append("")
     L.append("   ```bash")
     L.append(
-        f"   python scripts/translate.py finish translated.txt "
-        f"--source {source_path.name} --direction {direction}"
+        f"   python {(SCRIPTS_DIR / 'translate.py').resolve()} finish translated.txt "
+        f"--source {source_path.resolve()} --direction {direction}"
     )
     L.append("   ```")
     L.append("")
@@ -601,6 +603,24 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         print(f"Error: failed to write pack to {pack_path}: {e}")
         sys.exit(1)
 
+    # Bind the pack to its source: snapshot the lock next to the pack (same
+    # naming convention), stamped with the source's content hash. finish
+    # reuses this snapshot instead of rebuilding, and refuses to gate against
+    # a source that changed after prepare (unless --allow-source-changed) —
+    # closing the window where the agent translates pack A but the gate
+    # rebuilds its lock from a mutated source.
+    source_sha = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    lock_src = Path(pre_data.get("lock_path", "")) if pre_data.get("lock_path") else None
+    lock_sidecar = source_path.with_name(source_path.stem + ".lock.json")
+    if lock_src and lock_src.exists():
+        try:
+            lock_json = json.loads(lock_src.read_text(encoding="utf-8"))
+            lock_json["_prepare_meta"] = {"source_sha256": source_sha}
+            lock_sidecar.write_text(json.dumps(lock_json, ensure_ascii=False), encoding="utf-8")
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"[WARN] lock sidecar not written ({e}); finish will rebuild from source", file=sys.stderr)
+            lock_sidecar = None
+
     ready = lock_built and pre_exit_code == 0 and cards_ready
 
     data = {
@@ -613,6 +633,8 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         "pack_path": str(pack_path),
         "pre_exit_code": pre_exit_code,
         "lock_built": lock_built,
+        "lock_sidecar": str(lock_sidecar) if lock_sidecar else None,
+        "source_sha256": source_sha,
         "term_counts": {
             "locked": pre_data.get("term_authority", {}).get("locked_count", 0),
             "ambiguous": pre_data.get("term_authority", {}).get("ambiguous_count", 0),
@@ -642,8 +664,8 @@ def cmd_prepare(args: argparse.Namespace) -> None:
     print("")
     if ready:
         print("[PASS] Pack ready. Read it, translate the source, then run:")
-        print(f"  python scripts/translate.py finish <translated> "
-              f"--source {source_path.name} --direction {direction}")
+        print(f"  python {(SCRIPTS_DIR / 'translate.py').resolve()} finish <translated> "
+              f"--source {source_path.resolve()} --direction {direction}")
     else:
         if not cards_ready:
             print(f"[WARN] Card database NOT ready ({card_db_count} cards). Lock table is INCOMPLETE")
@@ -686,11 +708,70 @@ def cmd_finish(args: argparse.Namespace) -> None:
             f"(unreliable on mixed text — pass --direction explicitly for a trustworthy gate)"
         )
 
-    # Hard gate: completeness_guard with --source (mandatory, so the lock is built and
-    # term_authority actually runs) and --direction (so residue scanning targets the right lang).
-    guard_args = [str(translated_path), "--source", str(source_path), "--direction", direction]
+    # Hard gate. Prefer the prepare-time lock snapshot (pack/lock binding):
+    # reusing it guarantees the gate judges against the same term set the
+    # agent translated from. A source that changed after prepare invalidates
+    # the snapshot — refuse unless --allow-source-changed (the right fix is
+    # re-running prepare so pack and gate stay in sync).
+    lock_sidecar = source_path.with_name(source_path.stem + ".lock.json")
+    lock_reused = False
+    source_changed = False
+    block_before_guard = None
+    guard_args = [str(translated_path), "--direction", direction]
+    if lock_sidecar.exists():
+        try:
+            sidecar_meta = json.loads(lock_sidecar.read_text(encoding="utf-8")).get("_prepare_meta", {})
+        except (OSError, json.JSONDecodeError):
+            sidecar_meta = {}
+        current_sha = hashlib.sha256(source_path.read_bytes()).hexdigest()
+        if sidecar_meta.get("source_sha256") and sidecar_meta["source_sha256"] != current_sha:
+            source_changed = True
+            if not args.allow_source_changed:
+                block_before_guard = (
+                    "source changed after prepare: the pack's term lock is stale. "
+                    "Re-run prepare on the current source (or pass --allow-source-changed "
+                    "to gate against a freshly rebuilt lock)."
+                )
+        if not source_changed:
+            guard_args.extend(["--lock", str(lock_sidecar)])
+            lock_reused = True
+        # A changed source NEVER reuses the snapshot: --allow-source-changed
+        # only bypasses the BLOCK above, and the gate then rebuilds its lock
+        # from the CURRENT source — that is the documented contract.
+    if not lock_reused:
+        guard_args.extend(["--source", str(source_path)])
     if getattr(args, "verbose_terms", False):
         guard_args.append("--verbose-terms")
+
+    if block_before_guard:
+        data = {
+            "command": "finish",
+            "translated": str(translated_path),
+            "source": str(source_path),
+            "direction": direction,
+            "direction_warning": direction_warning,
+            "blocked": True,
+            "block_reason": block_before_guard,
+            "lock_reused": False,
+            "source_changed": True,
+            "violations": [],
+            "violations_total": 0,
+            "guard_exit_code": None,
+            "guard_all_passed": None,
+            "guard": None,
+            "learn": None,
+            "effect_check": None,
+        }
+        if args.json:
+            json_output(data, errors=[block_before_guard], exit_code=1)
+        print("=" * 60)
+        print("TRANSLATE — FINISH (HARD GATE)")
+        print("=" * 60)
+        print(f"\nTranslated: {translated_path}")
+        print(f"Source:     {source_path}")
+        print("")
+        print(f"[BLOCKED] {block_before_guard}")
+        sys.exit(1)
     _ok, parsed, raw = run_script_json("completeness_guard.py", guard_args, GUARD_TIMEOUT)
 
     if not parsed or "data" not in parsed:
@@ -764,6 +845,25 @@ def cmd_finish(args: argparse.Namespace) -> None:
         if lparsed and "data" in lparsed:
             learn_result = lparsed["data"]
 
+    # Official-effect verbatim check — INFORMATIONAL ONLY, never blocks: tells
+    # the agent which locked cards' official ability text was not copied
+    # verbatim (the pack asked for verbatim injection; a miss is a quality
+    # signal, not a gate failure). Runs in both PASS and BLOCK paths.
+    effect_check = None
+    _eok, eparsed, _eraw = run_script_json(
+        "effect_verifier.py", [str(source_path), str(translated_path)], EFFECT_TIMEOUT
+    )
+    if eparsed and isinstance(eparsed.get("data"), dict):
+        ed = eparsed["data"]
+        effect_check = {
+            "checked": ed.get("checked", 0),
+            "not_found_count": len(ed.get("not_found", []) or []),
+            "not_found_terms": terms_summary(
+                [i.get("english", "?") for i in ed.get("not_found", []) or []],
+                args.verbose_terms,
+            ),
+        }
+
     data = {
         "command": "finish",
         "translated": str(translated_path),
@@ -772,12 +872,15 @@ def cmd_finish(args: argparse.Namespace) -> None:
         "direction_warning": direction_warning,
         "guard_exit_code": guard_exit_code,
         "guard_all_passed": all_passed,
+        "lock_reused": lock_reused,
+        "source_changed": source_changed,
         "guard": guard_data,
         "blocked": blocked,
         "block_reason": block_reason,
         "violations": terms_summary(violations, args.verbose_terms),
         "violations_total": len(violations),
         "learn": learn_result,
+        "effect_check": effect_check,
     }
 
     exit_code = 1 if blocked else 0
@@ -801,8 +904,13 @@ def cmd_finish(args: argparse.Namespace) -> None:
         if learn_result and isinstance(learn_result, dict):
             learned = learn_result.get("added_to_buffer", 0)
         print("[PASS] Guard: all checks passed.")
+        if lock_reused:
+            print("       Lock: reused the prepare-time snapshot (pack/gate in sync).")
         print(f"       Learn: recorded {learned} new term(s) to the auto buffer"
               " (merge with: python scripts/learn.py --commit).")
+        if effect_check and effect_check["not_found_count"]:
+            print(f"       Effect: {effect_check['not_found_count']} official effect(s)"
+                  " not verbatim (informational — see JSON effect_check).")
         print("")
         print("[PASS] TRANSLATION READY — you may finalize.")
     else:
@@ -823,8 +931,8 @@ def cmd_finish(args: argparse.Namespace) -> None:
                 print(f"   - [{v.get('check', '?')}] {format_issue(v)}")
         print("")
         print("[BLOCKED] DO NOT FINALIZE. Fix the issue(s) above and re-run:")
-        print(f"  python scripts/translate.py finish {translated_path.name} "
-              f"--source {source_path.name} --direction {direction}")
+        print(f"  python {(SCRIPTS_DIR / 'translate.py').resolve()} finish {translated_path} "
+              f"--source {source_path.resolve()} --direction {direction}")
 
     sys.exit(exit_code)
 
@@ -859,6 +967,9 @@ def main() -> None:
     fin.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
     fin.add_argument("--json", action="store_true", help="Output structured JSON")
     fin.add_argument("--verbose-terms", action="store_true", help="Emit full violation/term lists (default: counts + top 5)")
+    fin.add_argument("--allow-source-changed", action="store_true",
+                     help="Gate against a freshly rebuilt lock even when the source changed "
+                          "after prepare (default: BLOCK until prepare is re-run)")
 
     args = parser.parse_args()
     if args.command == "prepare":

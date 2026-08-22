@@ -142,6 +142,9 @@ python scripts/translate.py finish translated.txt --source source.md --direction
 - **`PASS`** = all checks passed (terminology, residue, Phase C, term authority); new terms
   recorded to the auto buffer (`pending_terms.auto.md`). You may finalize.
 - **`BLOCKED`** = **DO NOT FINALIZE**. Fix the reported issues and re-run until PASS.
+  `finish` also refuses to run when the source changed after `prepare` (the pack's
+  `.lock.json` snapshot is stale) — re-run `prepare`, or pass `--allow-source-changed`
+  to gate against a freshly rebuilt lock.
 
 `finish` runs every check through `completeness_guard` and additionally refuses to pass if
 the context lock could not be built from the source — so terminology is never silently

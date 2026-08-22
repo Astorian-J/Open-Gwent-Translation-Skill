@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import detect_direction, json_output, parse_markdown_table
+from _shared import detect_direction, json_output, parse_markdown_table, parse_ta_envelope
 from check_translation import check_chinese_residue, check_english_residue
 
 
@@ -140,35 +140,31 @@ def check_context_lock_terms(
         text=True,
         timeout=60,
     )
-    if result.returncode == 0:
-        return []
+    # No early-return on returncode==0: the envelope can still carry degraded
+    # warnings (a rc-0 degraded run would silently read as "no violations").
 
     try:
         parsed = json.loads(result.stdout)
     except (json.JSONDecodeError, ValueError):
         parsed = None
-    if not isinstance(parsed, dict) or not isinstance(parsed.get("data"), dict):
-        # Fail-closed: a crashed term_enforcer must NOT read as "no violations".
-        # Judge by VALUE, not key — json_output's error envelopes carry
-        # "data": null (key present, value null), e.g. --source on a missing
-        # file; a key-existence check would pass those and crash on None.get.
-        errors = parsed.get("errors") if isinstance(parsed, dict) else None
-        if errors:
-            detail = "; ".join(str(e) for e in errors)
-        else:
-            detail = (result.stderr or "").strip()[-200:]
+    # Single-point envelope interpretation (fail-closed rules live there:
+    # value-not-key data check, degraded warnings count as violations).
+    _ok, _count, violations, err = parse_ta_envelope(parsed)
+    if err is not None:
+        detail = err
+        if not (isinstance(parsed, dict) and parsed.get("errors")):
+            detail = (result.stderr or "").strip()[-200:] or err
         return [f"[checker error] term_enforcer crashed (exit {result.returncode}): {detail}"]
 
-    data = parsed["data"]
     issues: list[str] = []
-    # Degradation can flip a BLOCKED into a false PASS — count it as an issue.
-    for w in data.get("warnings", []):
-        issues.append(f"[checker warning] term_enforcer degraded: {w}")
-    for v in data.get("violations", []):
-        msg = f"{v['issue_type']}: 「{v['term']}」expected 「{v['expected_cn']}」"
-        if v.get("found_in_translation"):
-            msg += f", found 「{v['found_in_translation']}」"
-        issues.append(msg)
+    for v in violations:
+        if v.get("term") == "[checker warning]":
+            issues.append(f"[checker warning] term_enforcer degraded: {v.get('offending_quote', '')}")
+        else:
+            msg = f"{v['issue_type']}: 「{v['term']}」expected 「{v['expected_cn']}」"
+            if v.get("found_in_translation"):
+                msg += f", found 「{v['found_in_translation']}」"
+            issues.append(msg)
     return issues
 
 
@@ -179,6 +175,7 @@ def run_phase_c_check(
     translated_path: Path | None = None,
     source_path: Path | None = None,
     lock_path: Path | None = None,
+    skip_ta: bool = False,
 ) -> tuple[list[str], list[str]]:
     """Run Phase C rules against text.
 
@@ -236,7 +233,12 @@ def run_phase_c_check(
                 for issue in check_ambiguous_names(text, ref_dir, source_path, lock_path):
                     automated_issues.append(f"[{rid}] {issue}")
             elif rid == "encn-10":
-                if translated_path and (source_path or lock_path):
+                if skip_ta:
+                    # The caller runs term_enforcer itself (completeness_guard's
+                    # single check-5 execution) — keep this rule visible as a
+                    # manual note instead of spawning a second TA run.
+                    manual_warnings.append(f"[{rid}] {rule['description']} — normally covered by the guard's term_authority check (which itself needs a --source/--lock)")
+                elif translated_path and (source_path or lock_path):
                     for issue in check_context_lock_terms(translated_path, source_path, lock_path):
                         automated_issues.append(f"[{rid}] {issue}")
                 else:
@@ -281,6 +283,9 @@ def main() -> None:
     parser.add_argument("--source", help="Source file for term authority check")
     parser.add_argument("--lock", help="Pre-built context lock JSON (reuse, do not rebuild)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
+    parser.add_argument("--skip-ta", action="store_true",
+                        help="Skip the encn-10 term-enforcement rule (for callers that run "
+                             "term_enforcer separately, e.g. completeness_guard)")
     args = parser.parse_args()
 
     file_path = Path(args.file)
@@ -297,7 +302,8 @@ def main() -> None:
     lock_path = Path(args.lock) if args.lock else None
 
     automated_issues, manual_warnings = run_phase_c_check(
-        text, direction, ref_dir, translated_path=file_path, source_path=source_path, lock_path=lock_path
+        text, direction, ref_dir, translated_path=file_path, source_path=source_path,
+        lock_path=lock_path, skip_ta=args.skip_ta,
     )
 
     if args.json:

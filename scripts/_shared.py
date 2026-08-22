@@ -138,6 +138,39 @@ def format_issue(issue) -> str:
     return " ".join(parts) if parts else json.dumps(issue, ensure_ascii=False)
 
 
+def parse_ta_envelope(parsed) -> tuple[bool, int, list[dict], str | None]:
+    """Single-point interpretation of a term_enforcer JSON envelope.
+
+    Returns (passed, violation_count, violations, error_detail).
+
+    Fail-closed rules (judge by VALUE, not key — json_output error envelopes
+    carry "data": null with the key present):
+      - parsed not a dict / data not a dict  -> (False, 1, [], error_detail)
+      - degraded warnings count as violations and flip passed to False (a
+        degraded checker must never read as "no violations")
+
+    Every consumer of term_enforcer output goes through here so the
+    interpretation can never drift between checkers again.
+    """
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("data"), dict):
+        errors = parsed.get("errors") if isinstance(parsed, dict) else None
+        detail = "; ".join(str(e) for e in errors) if errors else "no usable data"
+        return False, 1, [], detail
+    data = parsed["data"]
+    degraded = data.get("warnings", [])
+    violations = list(data.get("violations", []))
+    for w in degraded:
+        violations.append({
+            "term": "[checker warning]",
+            "expected_official": "term_enforcer degraded",
+            "severity": "error",
+            "offending_quote": w,
+        })
+    count = data.get("violation_count", 0) + len(degraded)
+    ok = data.get("violation_count", 0) == 0 and not degraded
+    return ok, count, violations, None
+
+
 # --- Regex patterns ---
 
 CARD_NAME_PATTERN = re.compile(

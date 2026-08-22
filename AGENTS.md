@@ -59,6 +59,13 @@ or `completeness_guard` manually — they are internal steps of `translate.py` n
 | 2. Translate | Agent reads `source.pack.md`, translates the full source, saves to `translated.txt` | Agent (the only LLM step) |
 | 3. Finish | `translate.py finish translated.txt --source source.md --direction encn` | `translate.py` (deterministic gate; internally runs `completeness_guard` + `learn`) |
 
+`prepare` snapshots its term lock as `<source>.lock.json` next to the pack;
+`finish` reuses that snapshot (`lock_reused` in the JSON) and BLOCKS if the
+source changed since `prepare` (`--allow-source-changed` rebuilds instead).
+The finish JSON also carries `effect_check` — an INFORMATIONAL count of
+source-mentioned cards whose official ability text was not copied verbatim
+(never affects the exit code).
+
 `finish` returns `PASS` (finalize) or `BLOCKED` (fix and re-run, up to 3 rounds,
 never finalize while BLOCKED). See `SKILL.md` Step 3 for the agent-driven
 re-translate loop on BLOCKED.
