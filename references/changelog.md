@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-26（三）— 禁用破折号规则进全部提示词入口
+
+- 用户要求：翻译不用破折号表达文字（「——」引出/补充是典型 AI 味）
+- 五处同步：translate.py STYLE_ENC/STYLE_CN（pack 风格表，双向各加 Dash 行）、
+  SKILL.md 两张方向表、lite/SKILL.md 与 lite/AGENTS.md 第 2 步、
+  style_reference.md 新增 Punctuation: No Dashes 节（含改写示例）
+- 规则口径：EN→CN 全文无「——」，原文 em-dash 也改写成逗号/句号/括号；
+  CN→EN 英文输出不用 —
+- 回归：test_rebuild 21 / health_check 71 / samples 22 不变
+
 ## 2026-08-26（二）— 小写 competitive 短语锁定 + 弯撇号卡名提取（blue coin 类聊天术语漏锁根治）
 
 - **根因**（部署实测发现）：散文/聊天里小写 "blue coin" 完全不进锁——锁表只认大写

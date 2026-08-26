@@ -97,6 +97,8 @@ Translate per direction (EN→CN or CN→EN):
 - **EN→CN**: Bilibili-player register — short sentences, active voice, Arabic
   numerals (5点 / 12人口 / R3), Chinese brackets 「（）」
 - **CN→EN**: native-player register — casual, not academic, English parens ()
+- No dashes: never use 「——」 (or — in English output) to introduce or pad text;
+  rewrite with commas, periods, or brackets, even when the source uses em-dashes
 - Use official renderings from the pack's [COPY] tables (`blue coin` → 蓝币,
   not "蓝色的硬币"; `provision` → 人口, not "费用")
 - Preserve rhetoric / hyperbole / irony — translate intent, not literal

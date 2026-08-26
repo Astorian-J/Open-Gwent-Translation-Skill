@@ -63,6 +63,18 @@ Translation style modeled after Metallic Danny BC proposal (2026-05-30, verified
 | slightly reduce | 稍微降低一点 | Slightly reduce power → 稍微降低一点强度 |
 | this season | 这个赛季 | This season we... → 这个赛季我们... |
 
+## Punctuation: No Dashes (禁用破折号)
+
+Translations NEVER use dashes to introduce or pad text — the 「——」 habit is a
+strong machine-translation tell:
+
+- EN→CN output: no 「——」 anywhere. Rewrite with commas, periods, or brackets.
+  A source em-dash ("this card is strong — it wins rounds alone") becomes
+  「这张卡很强，能单独赢下整局」 or 「这张卡很强（能单独赢下整局）」.
+- CN→EN output: no em-dash (—). Use commas, periods, or parentheses.
+- Hard style rule, not a suggestion: even a source full of em-dashes gets
+  rewritten into natural punctuation.
+
 ## Figurative Language & Tone Judgment (修辞与语气判断)
 
 Gwent community writing is heavy on metaphor, hyperbole, sarcasm, and trash-talk.

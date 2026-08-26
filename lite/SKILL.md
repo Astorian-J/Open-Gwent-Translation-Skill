@@ -76,6 +76,7 @@ python3 "$GWENT_SKILL_DIR/scripts/translate.py" prepare /tmp/gwent-lite-src.md
 
 - **EN → CN**：B 站玩家口语。短句、主动语态、阿拉伯数字（5点 / 12人口 / R3）、中文括号「（）」
 - **CN → EN**：native player 口气。casual 不书面，英文括号 ( )
+- **禁用破折号**：别用「——」引出或补充文字（AI 味重），改用逗号 / 句号 / 括号，原文有 em-dash 也改写；英文方向同理不用 —
 - **修辞 / 夸张 / 反讽**：译意图不译字面（`loud design` → 存在感太强，不是「太大声」）
 - **黑话保留味道**：`bleed` → 逼牌，`brick` → 卡手，`tutor` → 检索——不要书面化
 
