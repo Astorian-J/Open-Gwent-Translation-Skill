@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-08-26 — dsh 3 条可用性反馈 + 用户实测两问题：歧义消歧链修复 + lite 强制门禁
+
+- **歧义卡名消歧链修复**（用户实测问题①，核心修复）：`resolve()` 里精确匹配
+  排在歧义检查前，同名基础卡（Regis/Dandelion/Ciri/Avallac'h 这类"基础版本身
+  是张卡"的）永远锁死基础版译文，按语境线索选副标题版本反被 finish 拦——
+  歧义检查提到精确匹配之前（全名匹配不受影响）；配套 `_drop_subsumed` 补堵
+  歧义条目（无 cn）不走覆盖弃锁的洞（源文只出现全名时译文写基础版仍被拦）
+- **歧义名线索 + 违规带候选**：`ambiguous_names.md` 第 3 列语境线索（如
+  "Shield/protection context"）现在注入 pack 歧义名节（`_load_ambiguous_names`
+  带 clue 字段流到 variants）；check_translation 歧义违规消息内联全部候选中文
+  全名，修错不用翻参考文件
+- **lite 强制名词核对**（用户实测问题②）：finish 新增 `--lite`（guard `--lite`
+  跳过 Phase C 风格检查；finish 侧再跳过 learn + effect 审计；术语/残留/译名
+  权威三道门保留）；lite SKILL.md/AGENTS.md 流程重写为 prepare → 翻译 →
+  finish --lite 修到 PASS，废除"脑内自检"；新增专有名词铁律（疑似昆特名词
+  禁止凭记忆自创译名）——治 lite 随便给译名
+- **pack 分节标记**（dsh#1）：所有节打 `[COPY 照抄]`/`[JUDGE 判断]` 标签 +
+  顶部图例；pack 顶部加专有名词铁律（含 lookup 查证命令）
+- **finish 违规全量透传**（dsh#2）：finish 调 guard 恒传 `--verbose-terms`
+  （机器对机器不要 top-5 采样），JSON violations 恒全量；控制台展示上限 5→20；
+  finish 自己的 `--verbose-terms` 参数删除（已无行为差异）
+- **run 子命令**（dsh#3）：`translate.py run source [--translated out]`——
+  无 --translated=prepare+打印路径预解析的确切 finish 命令；带 --translated=
+  prepare+finish 一键；finish 在 `--source` 无对应 lock sidecar 且同目录存在
+  其他 sidecar 时打 WARN 列出已 prepare 过的文件名（路径传错一眼可见）
+- **residue 误报修复**：guard 里 `terminology_ok=False`（查出问题）被误当
+  "crashed"，术语一有问题 residue 就跳过且误报"Residue not checked (crashed)"
+  ——拆分 crashed 标志，residue 恒从 check2 结构化 issues 派生
+- 回归：test_rebuild 20→21（+歧义基名优先级测试）、health_check 70→71、samples encn 基线 18 不变
+
 ## 2026-08-22（四）— 批3：守卫链去重 + prepare/finish 锁绑定 + effect 接入（交流式方案收官 3 项）
 
 - **守卫链去重**（kimi#1）：guard 内 term_enforcer ×3→×1（check5 唯一实跑）；

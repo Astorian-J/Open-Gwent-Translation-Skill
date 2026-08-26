@@ -463,9 +463,11 @@ def check_translation(
         # Check if any full version (EN or CN) is present in the text
         has_full = any(en in text or (cn and cn in text) for en, cn in versions)
         if not has_full:
+            cn_candidates = " / ".join(cn for _, cn in versions if cn)
             issues.append(
                 f"ambiguous name: 「{base_name}」has multiple versions ({len(versions)}). "
-                f"Specify full name. See ambiguous_names.md"
+                f"Pick ONE by source context and use its full name: {cn_candidates}. "
+                f"See ambiguous_names.md"
             )
 
     # 7. Check Chinese numerals

@@ -2,8 +2,8 @@
 name: gwent-translation-lite
 description: |
   Gwent (昆特牌) lightweight translation for short chat content — group messages,
-  Discord/QQ comments, single sentences, brief remarks. Streamlined 3-step flow,
-  no heavy validation pipeline.
+  Discord/QQ comments, single sentences, brief remarks. 3-step flow with a
+  lightweight machine term gate (prepare -> translate -> finish --lite).
   Triggered by: 昆特聊天翻译, 昆特群消息翻译, 昆特短句翻译, Gwent chat translation, quick Gwent translate.
   For full articles (meta reports, BC proposals, card analysis), use gwent-translation-style instead.
 agent_created: true
@@ -12,7 +12,7 @@ agent_created: true
 # Gwent Translation Lite (昆特聊天短翻译)
 
 > 短聊天内容用本 skill。完整文章（meta report / BC 提案 / 卡牌分析）用 `gwent-translation-style`
-> （带 pre 注入 + 全套校验）。
+> （同一条流水线跑全量门禁，不带 `--lite`）。
 
 ## 你现在的任务
 
@@ -26,16 +26,19 @@ agent_created: true
 - 非正式口语内容
 - 用户说「翻一下这句」「这段聊天什么意思」「quick translate」
 
-**不要用本 skill**：长文章翻译、需要术语锁表 / 格式骨架 / 完整校验的正式内容——
-用 `gwent-translation-style`（跑 `translate.py prepare` → 翻译 → `translate.py finish` 全流程，内含 `completeness_guard`）。
+**不要用本 skill**：长文章翻译——用 `gwent-translation-style`（不带 `--lite` 的完整门禁）。
 
 ---
 
-## 流程（3 步，按需查询，不跑全套校验）
+## 专有名词铁律（最重要的一条）
 
-### 第 1 步：按需查询（仅当源文出现具体卡名 / 术语时）
+源文里的人名 / 卡牌名 / 关键词 / 机制词，凡疑似昆特牌专有名词：
+**一律用官方译名（prepare 锁表 / lookup 查询结果），禁止凭记忆自创译名。**
+你自己「记得」的译名可能是错的——这正是机器核对存在的原因。
 
-**不要预加载术语表。** 只在源文里出现具体卡牌名、术语、黑话且你不确定官方译法时，查一下：
+---
+
+## 流程（3 步：prepare → 翻译 → finish --lite 机器核对）
 
 先定位主 skill 目录（首次使用时跑一次，后续命令复用 `$GWENT_SKILL_DIR`）：
 
@@ -49,46 +52,57 @@ GWENT_SKILL_DIR="${GWENT_SKILL_DIR:-$HOME/.claude/skills/gwent-translation-style
 > 主 skill 就在本 lite 目录的上一级的兄弟目录——`<本文件所在目录>/../gwent-translation-style`
 > （install.sh 的标准布局）。按你读到本文件的实际路径推算后 `export GWENT_SKILL_DIR=<该路径>`。
 
-查卡名 / 术语：
+### 第 1 步：prepare（存文件 + 拿锁表）
+
+把要翻的内容存成临时文件，跑 prepare 生成术语锁表 pack：
 
 ```bash
-python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "Geralt" --plain
-python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "blue coin" --plain
-# 只记得大概拼写时，模糊匹配
-python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "siege" --fuzzy --plain
+printf '%s\n' "要翻译的内容" > /tmp/gwent-lite-src.md
+python3 "$GWENT_SKILL_DIR/scripts/translate.py" prepare /tmp/gwent-lite-src.md
 ```
 
-> **高频术语已在下方「快速参考」表里，不必查**——只查表里没有的具体卡名 / 冷门术语。
-> **其他环境**（opencode 等）：`export GWENT_SKILL_DIR=/path/to/gwent-translation-style` 指向主 skill 安装路径即可。
+读生成的 `/tmp/gwent-lite-src.pack.md`，重点看：
+
+- **[COPY] MANDATORY Term Lock Table** — 锁定术语，必须照抄这些译名
+- **[COPY] Ambiguous Names** — 歧义卡名：按语境线索选版本，用全名
+- **专有名词铁律**（pack 顶部）— 锁表没锁但疑似卡名的词，先查再翻：
+  `python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "<词>" --plain`
+
+短内容的 pack 很小（几 KB），放心读。
 
 ### 第 2 步：翻译
 
-按方向翻译（EN→CN 或 CN→EN）：
+按方向翻译（EN→CN 或 CN→EN），照 pack 的 [COPY] 节译名 + 快速参考表：
 
 - **EN → CN**：B 站玩家口语。短句、主动语态、阿拉伯数字（5点 / 12人口 / R3）、中文括号「（）」
 - **CN → EN**：native player 口气。casual 不书面，英文括号 ( )
-- **术语 / 卡名**：用查到的官方译法（`blue coin` → 蓝币，不是「蓝色的硬币」；`provision` → 人口，不是「费用」）
-- **修辞 / 夸张 / 反讽**：译意图不译字面（`loud design` → 存在感太强 / 喧宾夺主，不是「太大声」；
-  `sweet spot` → 甜点位 / 刚刚好的最佳点，不是「该去的位置」）
+- **修辞 / 夸张 / 反讽**：译意图不译字面（`loud design` → 存在感太强，不是「太大声」）
 - **黑话保留味道**：`bleed` → 逼牌，`brick` → 卡手，`tutor` → 检索——不要书面化
 
-### 第 3 步：自检（轻量，脑内过一遍即可，不跑脚本）
+译完存文件：
 
-输出前确认：
+```bash
+printf '%s\n' "你的译文" > /tmp/gwent-lite-out.md
+```
 
-- 卡名 / 术语都已翻译（中文输出无英文卡名残留；英文输出无中文残留）
-- 数字用阿拉伯数字（不是「五点」「十二人口」）
-- 没有把术语字面直译（`blue coin` → 蓝币 ✓，不是「蓝硬币」✗）
-- 黑话语气保住了（`bleed` → 逼牌 ✓，不是「消耗」✗）
+### 第 3 步：finish --lite（机器核对，修到 PASS 才算完）
 
-**不要跑以下脚本**（这些是完整文章用的，聊天场景太重）：
+```bash
+python3 "$GWENT_SKILL_DIR/scripts/translate.py" finish /tmp/gwent-lite-out.md \
+  --source /tmp/gwent-lite-src.md --lite
+```
 
-- `auto_pipeline.py pre` — 全量术语注入（在 `translate.py prepare` 内运行）；新词学习在 `translate.py finish` 内完成，短内容不需要
-- `completeness_guard.py` — 5 项最终把关
-- `phase_c_check.py` — Phase C 自检
-- `term_enforcer.py` — 需要源文件 lock，聊天场景不适用
-- `learn.py` / `diff_review.py` / `backtranslate.py` — 完整文章流程用
-- `format_skeleton.py` — 独立结构工具（不在 prepare/finish 流水线内），聊天场景不用
+- **PASS** → 把译文发给用户，完成。
+- **BLOCKED** → 每条违规都带官方译法（`「term」 -> 官方译名`），照着改译文文件，重跑第 3 步。
+  最多改 3 轮；仍 BLOCKED 就把违规清单和你的译文一起给用户看，说明哪些词查不到官方译名。
+
+`--lite` 只跑术语 / 残留 / 译名权威核对（聊天内容够用），跳过文章级的风格检查和新词学习。
+
+**不要跑以下脚本**（这些是完整文章用的）：
+
+- `auto_pipeline.py` / `phase_c_check.py` / `term_enforcer.py` / `completeness_guard.py` — 已在 prepare / finish 内部运行，别手动跑
+- `learn.py` / `diff_review.py` / `backtranslate.py` / `format_skeleton.py` — 完整文章流程用
+- finish **不带** `--lite` — 会跑文章级风格检查，对聊天短句误报
 
 ---
 
@@ -134,17 +148,4 @@ python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "siege" --fuzzy --plain
 | Armor abuse (SK) | 互口岛 |
 | enemy boost (NG) | 毒奶 |
 
-> 表里没有的具体卡名 / 冷门术语，调 `lookup.py` 查。
-
----
-
-## 可选校验（通常不需要）
-
-如果译文已存成文件、且想兜底检查术语残留（不强制）：
-
-```bash
-python3 "$GWENT_SKILL_DIR/scripts/check_translation.py" translated.txt
-```
-
-不带 `--source`，只跑基础规则检查（禁用术语、英文残留、中文数字、括号等）。
-聊天场景一般跳过这步，直接输出译文即可。
+> 表里没有的具体卡名 / 冷门术语，调 `lookup.py` 查（第 1 步 prepare 的锁表通常已覆盖）。

@@ -113,9 +113,11 @@ def _t_subsume_guard() -> tuple[str, str]:
     ta = TermAuthority()
 
     def locked(text: str) -> set[str]:
+        # Ambiguous bases lock too (cn empty, variants non-empty) — a bare
+        # "Avallac'h" resolves ambiguous since the base-priority fix.
         keys: set[str] = set()
         for r in ta.get_all_for_text(text):
-            if r.get("cn") and r.get("canonical_en"):
+            if r.get("canonical_en") and (r.get("cn") or r.get("variants")):
                 keys.add(r["term"].lower())
                 keys.add(r["canonical_en"].lower())
         return keys
@@ -140,6 +142,49 @@ def _t_subsume_guard() -> tuple[str, str]:
     if ethereal:
         return ("FAIL", f"Eternal fuzzy-locked to Ethereal: {ethereal}")
     return ("PASS", "Subsume guard: substring-only drops, standalone keeps, no Eternal->Ethereal")
+
+
+def _t_ambiguous_base_priority() -> tuple[str, str]:
+    """Ambiguous bases resolve ambiguous even when the base is itself a card.
+
+    Before the fix, the exact registry won for Regis/Dandelion/Ciri-style
+    bases, pinning the gate to the BASE version and rejecting a
+    context-chosen subtitle version (vampire context -> Regis: Bloodlust).
+    Full names must keep resolving exactly.
+    """
+    ta = TermAuthority()
+
+    for base in ("Regis", "Geralt", "Avallac'h"):
+        r = ta.resolve(base)
+        if not r or r.get("type") != "ambiguous" or not r.get("variants"):
+            return ("FAIL", f"resolve({base!r}) -> {r and r.get('type')} (expected ambiguous with variants)")
+
+    full = ta.resolve("Regis: Bloodlust")
+    if not full or full.get("match_type") == "ambiguous_base" or not full.get("cn"):
+        return ("FAIL", f"full name resolve degraded: {full}")
+
+    # Gate-level: a context-chosen subtitle version satisfies the ambiguous
+    # lock for a bare-base source mention.
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as td:
+        src = Path(td) / "s.md"
+        src.write_text("Regis kept bleeding the opponent.\n", encoding="utf-8")
+        lock_path = build_lock_from_source(src)
+        lock = json.loads(Path(lock_path).read_text(encoding="utf-8"))
+        regis = lock.get("terms", {}).get("Regis") or {}
+        if regis.get("status") != "ambiguous" or len(regis.get("variants", [])) < 2:
+            return ("FAIL", f"lock Regis status={regis.get('status')} variants={len(regis.get('variants', []))}")
+        # The translation renders the context-chosen SUBTITLE version
+        # (blood context -> Regis: Bloodlust). The ambiguous lock must
+        # accept any official variant, not just the base 雷吉斯.
+        out = Path(td) / "out.md"
+        out.write_text("雷吉斯：血欲化身持续给对面挂重伤。\n", encoding="utf-8")
+        res = enforce_terms(out, lock)
+        viol_terms = [v.get("term") for v in res.get("violations", [])]
+        if "Regis" in viol_terms:
+            return ("FAIL", f"context-chosen variant rejected: {res.get('violations')}")
+    return ("PASS", "Ambiguous base priority: bare base ambiguous, full name exact, variant accepted")
 
 
 def _t_format_issue_shapes() -> tuple[str, str]:
@@ -539,6 +584,7 @@ _TESTS = [
     _t_cn_extraction,
     _t_false_lock_guard,
     _t_subsume_guard,
+    _t_ambiguous_base_priority,
     _t_format_issue_shapes,
     _t_lock_terms_filter,
     _t_violations_aggregation,

@@ -154,6 +154,7 @@ def main() -> None:
     parser.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     parser.add_argument("--verbose-terms", action="store_true", help="Emit full violation/term lists (default: counts + top 5)")
+    parser.add_argument("--lite", action="store_true", help="Skip the Phase C style/format self-check (chat-length content): terminology + residue + term authority still gate")
     args = parser.parse_args()
 
     file_path = Path(args.file)
@@ -212,17 +213,21 @@ def main() -> None:
     # Check 2: Terminology check
     terminology_issues: list = []
     terminology_ok = False
+    terminology_crashed = False
     try:
         terminology_ok, count, terminology_issues = run_check_translation(file_path, lock_path, direction)
         checks.append({"name": "terminology", "passed": terminology_ok, "issue_count": count, "issues": terms_summary(terminology_issues, args.verbose_terms), "message": "No terminology issues" if terminology_ok else f"Terminology: {count} issue(s)"})
     except Exception as e:
+        terminology_crashed = True
         checks.append({"name": "terminology", "passed": False, "issue_count": 0, "issues": [], "message": f"Terminology check failed: {e}"})
 
     # Check 3: Residue (English residue for EN->CN, Chinese residue for CN->EN)
     # — derived from check 2's structured issues: check_translation already
     # runs the same residue detectors, so spawning auto_pipeline scan just
-    # re-ran the whole checker to filter one category back out.
-    if not terminology_ok:
+    # re-ran the whole checker to filter one category back out. "Found other
+    # terminology issues" (terminology_ok False, list populated) is NOT a
+    # crash — residue still derives from the issues check 2 did return.
+    if terminology_crashed:
         checks.append({"name": "residue_scan", "passed": False, "issue_count": 0, "issues": [], "message": "Residue not checked (terminology check crashed)"})
     else:
         residue_issues = [
@@ -231,12 +236,17 @@ def main() -> None:
         ]
         checks.append({"name": "residue_scan", "passed": not residue_issues, "issue_count": len(residue_issues), "issues": terms_summary(residue_issues, args.verbose_terms), "message": f"No {residue_lang} residue" if not residue_issues else f"Residue: {len(residue_issues)} untranslated card name(s)"})
 
-    # Check 4: Phase C self-check
-    try:
-        passed, count, failed_items = run_phase_c_check(file_path, lock_path, direction)
-        checks.append({"name": "phase_c", "passed": passed, "issue_count": count, "issues": terms_summary(failed_items, args.verbose_terms), "message": "Phase C checks passed" if passed else f"Phase C: {count} issue(s)"})
-    except Exception as e:
-        checks.append({"name": "phase_c", "passed": False, "issue_count": 0, "issues": [], "message": f"Phase C check failed: {e}"})
+    # Check 4: Phase C self-check (--lite skips it: sentence-style/format rules
+    # are article-grade and misfire on chat-length content; the term gates above
+    # are what a short translation actually needs).
+    if args.lite:
+        checks.append({"name": "phase_c", "passed": True, "issue_count": 0, "issues": [], "status": "skipped", "message": "Phase C skipped (--lite: chat-length content)"})
+    else:
+        try:
+            passed, count, failed_items = run_phase_c_check(file_path, lock_path, direction)
+            checks.append({"name": "phase_c", "passed": passed, "issue_count": count, "issues": terms_summary(failed_items, args.verbose_terms), "message": "Phase C checks passed" if passed else f"Phase C: {count} issue(s)"})
+        except Exception as e:
+            checks.append({"name": "phase_c", "passed": False, "issue_count": 0, "issues": [], "message": f"Phase C check failed: {e}"})
 
     # Check 5: Term authority enforcement (both directions)
     if lock_build_error is not None:

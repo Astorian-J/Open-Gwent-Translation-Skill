@@ -141,6 +141,17 @@
           "name": "--json",
           "required": false,
           "type": "flag"
+        },
+        {
+          "name": "--lite",
+          "required": false,
+          "type": "flag",
+          "description": "chat-length content: skip Phase C style check, learn, effect audit; term/residue/term-authority gates stay"
+        },
+        {
+          "name": "--allow-source-changed",
+          "required": false,
+          "type": "flag"
         }
       ],
       "json_output": [
@@ -153,9 +164,59 @@
         "blocked",
         "block_reason",
         "violations",
-        "learn"
+        "learn",
+        "violations_total"
       ],
-      "on_blocked": "Agent-driven re-translate loop (translate.py calls no LLM and does no find-replace). For each entry in `violations` (term / expected_official / severity / offending_quote), re-render the offending segment in the translation using expected_official, save, then re-run finish. Repeat until all_passed or 3 rounds; if still BLOCKED after 3 rounds, hand off to a human. Never finalize while BLOCKED."
+      "on_blocked": "Agent-driven re-translate loop (translate.py calls no LLM and does no find-replace). For each entry in `violations`: term_authority entries carry term / expected_official / severity / offending_quote — re-render the offending segment using expected_official; terminology / residue / phase_c entries carry category + message with the term and correct rendering inline — apply what the message says. Save, then re-run finish. Repeat until all_passed or 3 rounds; if still BLOCKED after 3 rounds, hand off to a human. Never finalize while BLOCKED."
+    },
+    {
+      "name": "translate run",
+      "script": "scripts/translate.py",
+      "subcommand": "run",
+      "args": [
+        {
+          "name": "source",
+          "required": true,
+          "type": "file_path"
+        },
+        {
+          "name": "--translated",
+          "required": false,
+          "type": "file_path",
+          "description": "existing translation: prepare then gate it in one shot"
+        },
+        {
+          "name": "--date",
+          "required": false,
+          "type": "string",
+          "format": "YYYY-MM"
+        },
+        {
+          "name": "--type",
+          "required": false,
+          "choices": [
+            "meta",
+            "bc-proposal",
+            "card-analysis",
+            "patch-notes",
+            "general"
+          ]
+        },
+        {
+          "name": "--direction",
+          "required": false,
+          "choices": [
+            "encn",
+            "cnen"
+          ]
+        },
+        {
+          "name": "--allow-source-changed",
+          "required": false,
+          "type": "flag"
+        }
+      ],
+      "description": "prepare + (with --translated) finish in one command; without --translated prints the exact finish command with pre-resolved paths"
     },
     {
       "name": "auto_pipeline pre",

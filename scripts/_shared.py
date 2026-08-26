@@ -375,7 +375,12 @@ def _drop_subsumed(results: list[dict], text: str) -> list[dict]:
 
     kept: list[dict] = []
     for r in results:
-        if not r.get("cn") or not r.get("canonical_en"):
+        # Ambiguous bases (cn empty) participate too: a base occurring ONLY
+        # inside a longer locked name ("Avallac'h" within "Avallac'h: Sage")
+        # would otherwise widen the gate to accept ANY version of the base
+        # card, including versions the source never mentioned.
+        is_ambiguous = r.get("type") == "ambiguous" and r.get("variants")
+        if not r.get("canonical_en") or (not r.get("cn") and not is_ambiguous):
             kept.append(r)
             continue
         term_f = _fold_ascii(r["term"])
@@ -794,6 +799,9 @@ class TermAuthority:
         self._cn_corrections: dict[str, str] = {}
         # base name lower -> list of variant dicts
         self._ambiguous: dict[str, list[dict]] = {}
+        # base_lower -> original display name from the header ("Avallac'h",
+        # not the .title() artifact "Avallac'H") for candidate emission.
+        self._ambiguous_display: dict[str, str] = {}
         # en_lower -> canonical_en for enforced category terms (relict, insectoid, ...)
         # Scanned separately: category words usually appear lowercase in prose and
         # the capitalized-phrase extractor would miss them.
@@ -1248,7 +1256,11 @@ class TermAuthority:
                 continue
 
             base_lower = current_base_en.lower()
-            variant = {"en": full_en, "cn": cn}
+            self._ambiguous_display[base_lower] = current_base_en
+            # Column 3 is the context clue (e.g. "Fire/damage context") — it
+            # rides along so the pack can show WHEN to pick this version.
+            clue = parts[2] if len(parts) > 2 else ""
+            variant = {"en": full_en, "cn": cn, "clue": clue}
             self._ambiguous.setdefault(base_lower, []).append(variant)
 
             # Also register the full name as a canonical card if not already present.
@@ -1355,6 +1367,25 @@ class TermAuthority:
         original = term.strip()
         key = original.lower()
 
+        # Ambiguous base name — checked BEFORE the exact registry. Several
+        # bases are themselves cards (Regis, Dandelion, Ciri): an exact hit
+        # on the base used to pin the gate to the BASE version, rejecting a
+        # context-chosen subtitle version (vampire context -> Regis:
+        # Bloodlust) as a violation. Resolving the bare base to ambiguous
+        # lets the gate accept any official version; full names ("Regis:
+        # Bloodlust") still resolve exactly via the registry below.
+        if key in self._ambiguous:
+            return {
+                "canonical_en": original,
+                "cn": "",
+                "source": "ambiguous_names.md",
+                "type": "ambiguous",
+                "aliases": [],
+                "abbrevs": [],
+                "variants": list(self._ambiguous[key]),
+                "match_type": "ambiguous_base",
+            }
+
         # Direct English match.
         if key in self._entries:
             return self._make_result(self._entries[key], "exact")
@@ -1381,19 +1412,6 @@ class TermAuthority:
             corrected = self._cn_corrections[original]
             if corrected in self._cn_entries:
                 return self._make_result(self._cn_entries[corrected], "cn_correction")
-
-        # Ambiguous base name.
-        if key in self._ambiguous:
-            return {
-                "canonical_en": original,
-                "cn": "",
-                "source": "ambiguous_names.md",
-                "type": "ambiguous",
-                "aliases": [],
-                "abbrevs": [],
-                "variants": list(self._ambiguous[key]),
-                "match_type": "ambiguous_base",
-            }
 
         return None
 
@@ -1558,7 +1576,7 @@ class TermAuthority:
         for base_lower, variants in self._ambiguous.items():
             # Match as a whole word to avoid false positives.
             if re.search(rf"\b{re.escape(base_lower)}\b", text_lower):
-                candidates.add(base_lower.title() if base_lower else base_lower)
+                candidates.add(self._ambiguous_display.get(base_lower, base_lower))
 
         # Category terms (relict, insectoid, ...) usually appear lowercase in
         # prose ("GN relicts", "vampire deck") and are missed by the capitalized

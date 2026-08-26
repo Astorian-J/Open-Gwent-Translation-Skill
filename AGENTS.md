@@ -29,6 +29,14 @@ python scripts/translate.py prepare source.md --date 2026-05 --type general --di
 
 # 3. Finish — hard gate; the translation is NOT final until this PASSes
 python scripts/translate.py finish translated.txt --source source.md --direction encn
+
+# One-shot wrappers:
+#   run = prepare + prints the exact finish command (paths pre-resolved);
+#   with --translated it gates the file right after prepare
+python scripts/translate.py run source.md --direction encn
+#   finish --lite = chat-length content gate (skips Phase C style check,
+#   learn, effect audit; terminology/residue/term-authority still gate)
+python scripts/translate.py finish translated.txt --source source.md --lite
 ```
 
 > `translate.py` is the ONLY entry point. `auto_pipeline.py`, `phase_c_check.py`,
@@ -57,7 +65,8 @@ or `completeness_guard` manually — they are internal steps of `translate.py` n
 |------|---------|-------------|
 | 1. Prepare | `translate.py prepare source.md --date YYYY-MM --type general --direction encn` | `translate.py` (deterministic; internally calls `auto_pipeline pre`) |
 | 2. Translate | Agent reads `source.pack.md`, translates the full source, saves to `translated.txt` | Agent (the only LLM step) |
-| 3. Finish | `translate.py finish translated.txt --source source.md --direction encn` | `translate.py` (deterministic gate; internally runs `completeness_guard` + `learn`) |
+| 3. Finish | `translate.py finish translated.txt --source source.md --direction encn` | `translate.py` (deterministic gate; internally runs `completeness_guard` + `learn`; add `--lite` for chat-length content) |
+| 0. (optional) Run | `translate.py run source.md [--translated out.txt]` | `translate.py` (prepare + exact finish command; with `--translated`, prepare + finish in one shot) |
 
 `prepare` snapshots its term lock as `<source>.lock.json` next to the pack;
 `finish` reuses that snapshot (`lock_reused` in the JSON) and BLOCKS if the

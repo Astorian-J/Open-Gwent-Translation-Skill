@@ -54,6 +54,9 @@ and reads like a native Gwent player wrote it. Casual but not stiff.
 > of `translate.py`. The pipeline is the only entry point:
 >
 > ```bash
+> # 0. Optional one-shot wrapper: runs prepare, then prints the exact finish
+> #    command with paths pre-resolved (or, with --translated, gates in one go)
+> python scripts/translate.py run source.md --direction encn
 > # 1. Prepare — build the translation pack (locked terms, official effects, style rules)
 > python scripts/translate.py prepare source.md --date YYYY-MM --type general --direction encn
 > # 2. Translate using the generated source.pack.md  (the only LLM step)
@@ -79,13 +82,22 @@ python scripts/translate.py prepare source.md --date YYYY-MM --type general --di
 This runs all preprocessing and writes **`source.pack.md`** — READ IT before translating.
 It is your single source of truth for this article and contains:
 
-- **MANDATORY Term Lock Table** — card names, terminology, resolved abbreviations/aliases
+- **Section tags** — every pack section is tagged **[COPY 照抄]** (use verbatim, zero
+  creativity: lock table, official effects, card quick reference, ambiguous candidates)
+  or **[JUDGE 判断]** (apply with judgment: style, balance direction, format, slang).
+- **MANDATORY Term Lock Table [COPY]** — card names, terminology, resolved abbreviations/aliases
   (e.g. "OTB" → "Off the Books" → "黑市买卖"). Use these exact Chinese translations.
   **DO NOT translate locked terms literally.**
-- **Ambiguous names** — must use the full subtitle form (e.g. "Geralt: Igni", not just "Geralt").
-- **Pending terms** — not in the reference database; translate by judgment, record if recurring.
-- **Official card effect text** — copy verbatim; do not paraphrase.
-- **Slang hints** — translate by intended register (e.g. "on steroids" → 加强版), not literally.
+- **Term rule (pack top)** — any proper noun that could be a Gwent term uses the official
+  rendering from [COPY] sections or `lookup.py`; **never coin one from memory**. Words you
+  suspect are card names but that the lock missed: verify with
+  `python scripts/lookup.py "<word>" --plain` before translating.
+- **Ambiguous names [COPY]** — each candidate carries a context clue (e.g. "Shield/protection
+  context" → "Geralt: Quen"). Pick the version the source context indicates and use its
+  full subtitle form (not just "Geralt").
+- **Pending terms [JUDGE]** — not in the reference database; translate by judgment, record if recurring.
+- **Official card effect text [COPY]** — copy verbatim; do not paraphrase.
+- **Slang hints [JUDGE]** — translate by intended register (e.g. "on steroids" → 加强版), not literally.
   These are advisory; `finish` will warn if a detected slang was translated literally.
 - **Style rules + Phase C acceptance checklist** for your direction.
 
@@ -159,11 +171,18 @@ genuine PASS it runs `learn.py --auto`, which appends newly discovered terms to
 the gitignored auto buffer `references/pending_terms.auto.md` — nothing else is
 written; `learn.py --commit` later merges the buffer into the tracked
 `pending_terms.md` review inbox.) When it reports `BLOCKED`, the agent
-drives the fix loop from the violation list. Each violation carries `term`,
-`expected_official`, `severity`, and `offending_quote` (the locatable snippet in the
-translation; empty for "missing" — the term was dropped, so add it):
+drives the fix loop from the violation list. Entries come in two shapes:
+**term_authority** entries carry `term`, `expected_official`, `severity`, and
+`offending_quote` (the locatable snippet; empty for "missing" — the term was dropped,
+so add it); **terminology / residue / phase_c** entries carry `category`, `severity`,
+and a `message` that names the term and the correct rendering inline
+(e.g. `English residue: 「Regis: Bloodlust」→ 「雷吉斯：血欲化身」`). Read whichever
+field is present — do not key on `expected_official` alone or you will skip
+residue-class violations.
 
-1. Read `violations` from the `finish` JSON (or the `[BLOCKED]` lines).
+1. Read `violations` from the `finish` JSON (or the `[BLOCKED]` lines). The list is
+   always complete and deduped — one entry per independent problem, each carrying
+   the fix to apply (structured field or inline in `message`).
 2. For each violation, open the translation, jump to `offending_quote`, and re-render
    that segment using `expected_official`.
 3. Save the file and re-run `finish`.

@@ -38,7 +38,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import detect_direction, format_issue, json_output, source_is_chinese, terms_summary
+from _shared import detect_direction, format_issue, json_output, source_is_chinese
 
 SCRIPTS_DIR = Path(__file__).parent
 
@@ -104,7 +104,7 @@ CHECKLIST_CN = [
 # the buff/nerf direction rules inline (Gwent-specific: power/provision may be
 # reversed for disloyal units and leaders). Mirrors style_reference.md.
 PACK_BALANCE_GUIDE = [
-    "## Balance Change Direction（平衡调整增强削弱判断）",
+    "## [JUDGE] Balance Change Direction（平衡调整增强削弱判断）",
     "",
     "翻译平衡调整（patch/buff/nerf）时必须准确判断增强/削弱方向。昆特牌设计特殊，方向不一定按数值直觉。",
     "",
@@ -124,7 +124,7 @@ PACK_BALANCE_GUIDE = [
 # Markdown format preservation guidance — injected into the pack so the agent
 # keeps the source's markdown structure 1:1. Mirrors style_reference.md.
 PACK_FORMAT_GUIDE = [
-    "## Markdown Format Preservation（Markdown 格式保留）",
+    "## [JUDGE] Markdown Format Preservation（Markdown 格式保留）",
     "",
     "原文是 Markdown 时，译文必须 1:1 保留结构与标记，**只译文字不动标记**：",
     "- **逐行对应**：原文每行对应译文一行，不增减行、不合并/拆分、不改换行与空行。",
@@ -160,15 +160,22 @@ def _aggregate_violations(checks: list[dict]) -> list[dict]:
     with its source check so a BLOCKED report can be fixed without
     re-running the checkers by hand.
     """
+    # residue_scan is a strict subset of terminology's issues (derived from the
+    # same detector run) — aggregating it would duplicate every residue entry.
+    # phase_c also re-runs the residue detector, so a further content-level
+    # dedupe by message keeps one entry per independent problem.
     out: list[dict] = []
+    seen: set[str] = set()
     for c in checks:
-        if c.get("passed"):
+        if c.get("passed") or c.get("name") == "residue_scan":
             continue
         for i in (c.get("violations", []) or []) + (c.get("issues", []) or []):
-            if isinstance(i, dict):
-                out.append({**i, "check": c.get("name", "?")})
-            else:
-                out.append({"check": c.get("name", "?"), "message": str(i)})
+            entry = {**i, "check": c.get("name", "?")} if isinstance(i, dict)                 else {"check": c.get("name", "?"), "message": str(i)}
+            key = str(entry.get("message", "")) + "|" + str(entry.get("term", ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(entry)
     return out
 
 
@@ -400,6 +407,15 @@ def build_pack(source_path: Path, direction: str, date: str | None,
     L.append("> Read this pack BEFORE translating. Use locked terms exactly;")
     L.append("> copy official effect text verbatim; do not translate literally.")
     L.append("")
+    L.append("> **分节标记 Section tags** — content sections below are tagged (NEXT STEP 除外):")
+    L.append("> - **[COPY 照抄]** — 现成译文/对照表/官方文本：逐字使用，零创造空间。违反会被 finish 拦下或属事实错误。")
+    L.append("> - **[JUDGE 判断]** — 规则与提示：按引导用自己的判断执行（风格、方向、格式、俚语）。")
+    L.append("")
+    L.append("> **专有名词铁律 Term rule**: 源文里的人名/卡牌名/关键词/机制词/地名，凡疑似昆特牌专有名词，")
+    L.append("> 一律以 [COPY] 节的官方译名为准 — **禁止凭记忆自创译名**（自己「记得」的译名可能错）。")
+    L.append("> 锁表没锁但你怀疑是卡牌名的词，先查证再翻：")
+    L.append(f">   python {SCRIPTS_DIR / 'lookup.py'} \"<词>\" --plain")
+    L.append("")
 
     if not lock_built:
         L.append("> WARNING: context lock failed to build — the MANDATORY term lock")
@@ -415,7 +431,7 @@ def build_pack(source_path: Path, direction: str, date: str | None,
         L.append("")
 
     # Style rules
-    L.append("## Style Rules (风格规则)")
+    L.append("## [JUDGE] Style Rules (风格规则)")
     L.append("")
     L.append("| Dimension | Rule |")
     L.append("|-----------|------|")
@@ -433,7 +449,7 @@ def build_pack(source_path: Path, direction: str, date: str | None,
     full_terms = _load_lock_terms(pre_data.get("lock_path"))
     lock_rows = full_terms if full_terms else locked
     lock_rows = sorted(lock_rows, key=lambda t: (0 if t.get("type") == "card" else 1,))
-    L.append("## MANDATORY Term Lock Table (强制术语锁表 — 卡牌在前，照此译名，勿字面直译)")
+    L.append("## [COPY] MANDATORY Term Lock Table (强制术语锁表 — 卡牌在前，照此译名，勿字面直译)")
     L.append("")
     if lock_rows:
         L.append("| English | Chinese | Aliases | Abbrevs |")
@@ -451,13 +467,19 @@ def build_pack(source_path: Path, direction: str, date: str | None,
 
     # Ambiguous names
     if ambiguous:
-        L.append("## Ambiguous Names (歧义名 — 必须用全副标题，如 Geralt: Igni)")
+        L.append("## [COPY] Ambiguous Names (歧义名 — 按原文语境选一个版本，照抄其全名)")
+        L.append("")
+        L.append("原文只出现基础名时，按语境线索（括号内）判断是哪个版本，译文用全名：")
         L.append("")
         for a in ambiguous:
             en = a.get("canonical_en") or a.get("extracted", "")
             variants = a.get("variants", []) or []
             if variants:
-                vstr = "; ".join(f'{v.get("en", "")}->{v.get("cn", "")}' for v in variants)
+                vstr = "; ".join(
+                    f'{v.get("en", "")}->{v.get("cn", "")}'
+                    + (f'（{v["clue"]}）' if v.get("clue") else "")
+                    for v in variants
+                )
             else:
                 vstr = a.get("type", "")
             L.append(f"- **{en}** — {vstr}")
@@ -465,7 +487,7 @@ def build_pack(source_path: Path, direction: str, date: str | None,
 
     # Pending terms
     if pending:
-        L.append("## Pending Terms (待定词 — 参考库没有，凭判断翻；复现就记入)")
+        L.append("## [JUDGE] Pending Terms (待定词 — 参考库没有，凭判断翻；复现就记入)")
         L.append("")
         for p in pending:
             L.append(f"- {p.get('extracted', '')} ({p.get('status', '')})")
@@ -473,7 +495,7 @@ def build_pack(source_path: Path, direction: str, date: str | None,
 
     # Card quick reference
     if card_refs:
-        L.append("## Card Name Quick Reference (卡名快查)")
+        L.append("## [COPY] Card Name Quick Reference (卡名快查 — 官方译名对照)")
         L.append("")
         L.append("| English | Chinese |")
         L.append("|---------|---------|")
@@ -485,7 +507,7 @@ def build_pack(source_path: Path, direction: str, date: str | None,
     # ([领袖·人口反向]/[间谍单位·战力反向]/[单位]) so the agent applies the
     # Balance Change Direction rule correctly when translating effect text.
     if effects:
-        L.append("## Official Effect Text (官方效果 — 逐字照抄，勿改写)")
+        L.append("## [COPY] Official Effect Text (官方效果 — 逐字照抄，勿改写)")
         L.append("")
         for e in effects:
             en = e.get("english", "")
@@ -500,7 +522,7 @@ def build_pack(source_path: Path, direction: str, date: str | None,
 
     # Slang hints
     if slang:
-        L.append("## Slang / Jargon Hints (俚语提示 — 按意向译，勿字面)")
+        L.append("## [JUDGE] Slang / Jargon Hints (俚语提示 — 按意向译，勿字面)")
         L.append("")
         L.append("| English | Intended CN | Note |")
         L.append("|---------|-------------|------|")
@@ -511,7 +533,7 @@ def build_pack(source_path: Path, direction: str, date: str | None,
         L.append("")
 
     # Phase C acceptance checklist
-    L.append("## Phase C Acceptance Checklist (验收清单 — 翻完逐条自检)")
+    L.append("## [JUDGE] Phase C Acceptance Checklist (验收清单 — 翻完逐条自检)")
     L.append("")
     for item in checklist:
         L.append(f"- [ ] {item}")
@@ -740,8 +762,29 @@ def cmd_finish(args: argparse.Namespace) -> None:
         # from the CURRENT source — that is the documented contract.
     if not lock_reused:
         guard_args.extend(["--source", str(source_path)])
-    if getattr(args, "verbose_terms", False):
-        guard_args.append("--verbose-terms")
+        # No prepare snapshot next to this source. Usually fine (prepare was
+        # run elsewhere / old layout), but the #1 cause is a mistyped or
+        # wrong --source — the gate would then verify against a DIFFERENT
+        # article's terms. Name the snapshots that DO exist nearby so the
+        # caller can spot the mismatch at a glance instead of debugging
+        # weird violations later.
+        siblings = sorted(source_path.parent.glob("*.lock.json"))
+        if siblings and not lock_sidecar.exists():
+            names = ", ".join(s.stem.replace(".lock", "") for s in siblings[:5])
+            print(
+                f"[WARN] no prepare snapshot for this source ({lock_sidecar.name} missing) — "
+                f"the gate rebuilds its lock from the given file. Prepared sources here: {names}. "
+                f"If that list doesn't include this source, fix --source.",
+                file=sys.stderr,
+            )
+    # Always ask guard for the full violation lists. The fix loop consumes
+    # finish's violations to repair the file in one pass — it needs every
+    # entry with its expected_official, not a top-5 sample. Guard's default
+    # top-N is a token guard for humans; machine-to-machine, the full list
+    # is cheaper than a re-run.
+    guard_args.append("--verbose-terms")
+    if args.lite:
+        guard_args.append("--lite")
 
     if block_before_guard:
         data = {
@@ -831,14 +874,17 @@ def cmd_finish(args: argparse.Namespace) -> None:
     # Agent-actionable details of every failed check, top-level, tagged with
     # the source check (see _aggregate_violations).
     violations = _aggregate_violations(checks)
-    # True total per the project convention "counts stay complete, detail
-    # lists get truncated" — the guard truncates each check's issue list for
-    # payload size, so summing the truncated lists would undercount.
-    violations_total = sum(c.get("issue_count", 0) for c in checks if not c.get("passed"))
+    # Independent-problem total: per-check issue_count sums double-count the
+    # same problem across overlapping checks (residue lives in terminology
+    # AND phase_c), so the deduped aggregate is the honest number. The raw
+    # per-check counts stay visible in guard.checks[].
+    violations_total = len(violations)
 
     # Learn only after a genuine PASS; never let it affect the gate.
     learn_result = None
-    if not blocked:
+    if not blocked and not getattr(args, "lite", False):
+        # Lite mode skips learn: chat snippets pollute the pending buffer
+        # (see the BC34 noise rejections) and learn is article-grade.
         _lok, lparsed, _lraw = run_script_json(
             "learn.py", [str(source_path), "--auto"], LEARN_TIMEOUT
         )
@@ -848,21 +894,22 @@ def cmd_finish(args: argparse.Namespace) -> None:
     # Official-effect verbatim check — INFORMATIONAL ONLY, never blocks: tells
     # the agent which locked cards' official ability text was not copied
     # verbatim (the pack asked for verbatim injection; a miss is a quality
-    # signal, not a gate failure). Runs in both PASS and BLOCK paths.
+    # signal, not a gate failure). Runs in both PASS and BLOCK paths; skipped
+    # in lite mode (chat snippets rarely quote effects verbatim).
     effect_check = None
-    _eok, eparsed, _eraw = run_script_json(
-        "effect_verifier.py", [str(source_path), str(translated_path)], EFFECT_TIMEOUT
-    )
-    if eparsed and isinstance(eparsed.get("data"), dict):
-        ed = eparsed["data"]
-        effect_check = {
-            "checked": ed.get("checked", 0),
-            "not_found_count": len(ed.get("not_found", []) or []),
-            "not_found_terms": terms_summary(
-                [i.get("english", "?") for i in ed.get("not_found", []) or []],
-                args.verbose_terms,
-            ),
-        }
+    if not args.lite:
+        _eok, eparsed, _eraw = run_script_json(
+            "effect_verifier.py", [str(source_path), str(translated_path)], EFFECT_TIMEOUT
+        )
+        if eparsed and isinstance(eparsed.get("data"), dict):
+            ed = eparsed["data"]
+            effect_check = {
+                "checked": ed.get("checked", 0),
+                "not_found_count": len(ed.get("not_found", []) or []),
+                # Bounded by the pack's OFFICIAL_EFFECTS_CAP (~20); emit in full —
+                # an agent auditing effect fidelity wants the complete list.
+                "not_found_terms": [i.get("english", "?") for i in ed.get("not_found", []) or []],
+            }
 
     data = {
         "command": "finish",
@@ -877,7 +924,7 @@ def cmd_finish(args: argparse.Namespace) -> None:
         "guard": guard_data,
         "blocked": blocked,
         "block_reason": block_reason,
-        "violations": terms_summary(violations, args.verbose_terms),
+        "violations": violations,
         "violations_total": len(violations),
         "learn": learn_result,
         "effect_check": effect_check,
@@ -900,14 +947,15 @@ def cmd_finish(args: argparse.Namespace) -> None:
     print("")
 
     if not blocked:
-        learned = 0
-        if learn_result and isinstance(learn_result, dict):
-            learned = learn_result.get("added_to_buffer", 0)
         print("[PASS] Guard: all checks passed.")
         if lock_reused:
             print("       Lock: reused the prepare-time snapshot (pack/gate in sync).")
-        print(f"       Learn: recorded {learned} new term(s) to the auto buffer"
-              " (merge with: python scripts/learn.py --commit).")
+        if learn_result is not None:
+            learned = learn_result.get("added_to_buffer", 0) if isinstance(learn_result, dict) else 0
+            print(f"       Learn: recorded {learned} new term(s) to the auto buffer"
+                  " (merge with: python scripts/learn.py --commit).")
+        elif args.lite:
+            print("       Learn: skipped (--lite: chat-length content).")
         if effect_check and effect_check["not_found_count"]:
             print(f"       Effect: {effect_check['not_found_count']} official effect(s)"
                   " not verbatim (informational — see JSON effect_check).")
@@ -924,9 +972,9 @@ def cmd_finish(args: argparse.Namespace) -> None:
             print("[BLOCKED] Guard reported PASS, BUT term authority was not actually checked")
             print("          (context lock could not be built from source).")
         if violations or violations_total:
-            shown = violations if args.verbose_terms else violations[:5]
+            shown = violations[:20]
             print("")
-            print(f"Violations ({violations_total} total, showing {len(shown)} detail items; --verbose-terms for full lists):")
+            print(f"Violations ({violations_total} total, showing {len(shown)}; full list in --json output):")
             for v in shown:
                 print(f"   - [{v.get('check', '?')}] {format_issue(v)}")
         print("")
@@ -935,6 +983,78 @@ def cmd_finish(args: argparse.Namespace) -> None:
               f"--source {source_path.resolve()} --direction {direction}")
 
     sys.exit(exit_code)
+
+
+def cmd_run(args: argparse.Namespace) -> None:
+    """One-shot orchestration around the two deterministic stages.
+
+    Shells out to prepare/finish as sibling processes (same pattern as
+    finish -> guard): each stage keeps its own output and exit semantics
+    untouched, so run is pure glue.
+
+    - Without --translated: run prepare, then print the exact finish command
+      with paths pre-resolved — the copy-paste answer to hand-assembled
+      paths (the #1 friction dsh reported).
+    - With --translated: prepare + finish back to back — re-gating an
+      existing translation (e.g. after a source edit) in one command.
+    """
+    source_path = Path(args.source)
+    self_py = (SCRIPTS_DIR / "translate.py").resolve()
+
+    prep_cmd = [sys.executable, str(self_py), "prepare", str(source_path)]
+    if args.date:
+        prep_cmd.extend(["--date", args.date])
+    prep_cmd.extend(["--type", args.type])
+    if args.direction:
+        prep_cmd.extend(["--direction", args.direction])
+
+    print("=" * 60)
+    print("TRANSLATE — RUN (stage 1/2: prepare)")
+    print("=" * 60)
+    prep_rc = subprocess.run(prep_cmd).returncode
+    if prep_rc != 0:
+        print("\n[RUN] prepare failed — fix the reported problem and re-run.")
+        sys.exit(prep_rc)
+
+    # Same auto-detect rule prepare uses (Chinese source -> cnen), so the
+    # printed finish command carries an explicit, trustworthy direction.
+    direction = args.direction or (
+        "cnen" if source_is_chinese(source_path.read_text(encoding="utf-8")) else "encn"
+    )
+
+    translated_path = Path(args.translated) if args.translated else None
+    if translated_path is None:
+        print()
+        print("=" * 60)
+        print("TRANSLATE — RUN (stage 2 is YOURS: translate)")
+        print("=" * 60)
+        print("")
+        print("[RUN] Pack ready. Read the pack, translate the full source, save it,")
+        print("then run EXACTLY this command (paths pre-resolved):")
+        print("")
+        print(f"  python {self_py} finish <translated> --source {source_path.resolve()} --direction {direction}")
+        print("")
+        print("With the translation already saved, the whole gate in one command:")
+        print(f"  python {self_py} run {source_path.resolve()} --translated <translated> --direction {direction}")
+        sys.exit(0)
+
+    if not translated_path.exists():
+        print(f"\n[RUN] translated file not found: {translated_path}")
+        sys.exit(1)
+
+    print()
+    print("=" * 60)
+    print("TRANSLATE — RUN (stage 2/2: finish gate)")
+    print("=" * 60)
+    fin_cmd = [
+        sys.executable, str(self_py), "finish", str(translated_path),
+        "--source", str(source_path.resolve()), "--direction", direction,
+    ]
+    if args.allow_source_changed:
+        fin_cmd.append("--allow-source-changed")
+    if args.lite:
+        fin_cmd.append("--lite")
+    sys.exit(subprocess.run(fin_cmd).returncode)
 
 
 def main() -> None:
@@ -966,16 +1086,43 @@ def main() -> None:
     )
     fin.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
     fin.add_argument("--json", action="store_true", help="Output structured JSON")
-    fin.add_argument("--verbose-terms", action="store_true", help="Emit full violation/term lists (default: counts + top 5)")
     fin.add_argument("--allow-source-changed", action="store_true",
                      help="Gate against a freshly rebuilt lock even when the source changed "
                           "after prepare (default: BLOCK until prepare is re-run)")
+    fin.add_argument("--lite", action="store_true",
+                     help="Lite mode (chat-length content): skips the Phase C style/format rules "
+                          "(incl. bare-N费 provision wording, passive voice, Chinese numerals, brackets), "
+                          "learn, and the effect audit — term locks/residue/term-authority still gate")
+
+    runp = subparsers.add_parser(
+        "run",
+        help="prepare, then (with --translated) finish in one shot; without it, print the exact finish command",
+    )
+    runp.add_argument("source", help="Source file to translate")
+    runp.add_argument("--translated", help="Existing translation file: gate it right after prepare")
+    runp.add_argument("--date", help="Article date (YYYY-MM)")
+    runp.add_argument(
+        "--type",
+        choices=["meta", "bc-proposal", "card-analysis", "patch-notes", "general"],
+        default="general",
+        help="Article type (default: general)",
+    )
+    runp.add_argument(
+        "--direction", choices=["encn", "cnen"],
+        help="Direction for the pack banner + style table (default: auto-detected from source)",
+    )
+    runp.add_argument("--allow-source-changed", action="store_true",
+                     help="Forwarded to finish when --translated is given")
+    runp.add_argument("--lite", action="store_true",
+                      help="Forwarded to finish when --translated is given (chat-length gate)")
 
     args = parser.parse_args()
     if args.command == "prepare":
         cmd_prepare(args)
     elif args.command == "finish":
         cmd_finish(args)
+    elif args.command == "run":
+        cmd_run(args)
 
 
 if __name__ == "__main__":
