@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-08-26（二）— 小写 competitive 短语锁定 + 弯撇号卡名提取（blue coin 类聊天术语漏锁根治）
+
+- **根因**（部署实测发现）：散文/聊天里小写 "blue coin" 完全不进锁——锁表只认大写
+  提取器抓到的词，大写"Blue Coin"被强制、小写漏网纯属运气差异；"蓝色的硬币"这类
+  字面乱翻（用户 lite 问题的典型形态）门禁抓不到
+- **修复 1**：`competitive` 多词短语（blue coin / dry pass / tall punish…）进
+  `_game_terms` 小写扫描（词边界精确短语匹配）；**单词暂不进**——warrior/dragon/
+  move 这类极易撞卡组缩写（PF Warriors）和卡名子串，实测全为假阳性，等撇号提取
+  与卡组缩写数据补齐再开；deck_name 维持排除（宽松卡组词汇，防过度锁定意译）
+- **修复 2**：弯撇号卡名提取根治——`get_all_for_text` 入口 `_QUOTE_NORM` 归一化
+  （位置保持 1:1）+ 三个卡名提取器词模式允许撇号组（`Dragon's`）+ `resolve()`
+  所有格回退（`Schirru's`→`Schirru`）。此前 "Dragon’s Dream/Necromancer’s
+  Tome/Cleaver’s Muscle" 这类真卡名整体漏提取，只有子串被锁
+- **验证**：blue coin 小写锁定✓、Dragon’s Dream→龙之梦✓、Schirru's→希鲁✓、
+  warrior/dragon/move 假阳性清零✓
+- **samples 基线 18→22**：+4 全部逐条核实为真违规（tall punish 缺大怪惩罚；
+  Necromancer’s Tome 译文写自创名「死灵术之书」实为邪灵法典；Cleaver’s Muscle
+  译文插引号改写官方名；Nature’s Gift Midrange 缺破烂小叶子卡组）——老样本的
+  陈年错误因提取覆盖扩大而现形，非误报
+- test_rebuild 21 / health_check 71 不变
+
 ## 2026-08-26 — dsh 3 条可用性反馈 + 用户实测两问题：歧义消歧链修复 + lite 强制门禁
 
 - **歧义卡名消歧链修复**（用户实测问题①，核心修复）：`resolve()` 里精确匹配

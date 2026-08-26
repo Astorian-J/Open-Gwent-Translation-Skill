@@ -174,8 +174,8 @@ def parse_ta_envelope(parsed) -> tuple[bool, int, list[dict], str | None]:
 # --- Regex patterns ---
 
 CARD_NAME_PATTERN = re.compile(
-    r'\b([A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){0,2}:\s*(?:The\s+)?'
-    r'[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){0,2})\b'
+    r'\b([A-Z][a-zA-Z]*(?:\'[a-zA-Z]+)?(?:\s+[A-Z][a-zA-Z]*(?:\'[a-zA-Z]+)?){0,2}:\s*(?:The\s+)?'
+    r'[A-Z][a-zA-Z]*(?:\'[a-zA-Z]+)?(?:\s+[A-Z][a-zA-Z]*(?:\'[a-zA-Z]+)?){0,2})\b'
 )
 
 ABBREVIATION_PATTERN = re.compile(r'\b([A-Z]{2,5})\b')
@@ -536,7 +536,7 @@ def extract_card_names_no_colon(
     func_pattern = '|'.join(re.escape(w) for w in FUNCTION_WORDS)
     # Match: CapitalizedWord + (space + (function_word | CapitalizedWord)) repeated
     pattern = re.compile(
-        rf'\b([A-Z][a-zA-Z]*(?:\s+(?:{func_pattern}|[A-Z][a-zA-Z]*))'
+        rf'\b([A-Z][a-zA-Z]*(?:\'[a-zA-Z]+)?(?:\s+(?:{func_pattern}|[A-Z][a-zA-Z]*(?:\'[a-zA-Z]+)?))'
         rf'{{1,{max_words}}})\b'
     )
     for match in pattern.finditer(text):
@@ -592,7 +592,7 @@ def extract_capitalized_phrases(
         skip_words = SKIP_WORDS_MINIMAL
 
     pattern = re.compile(
-        rf'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){{1,{max_words}}})\b'
+        rf'\b([A-Z][a-z]+(?:\'[a-zA-Z]+)?(?:\s+[A-Z][a-z]+(?:\'[a-zA-Z]+)?){{1,{max_words}}})\b'
     )
     for match in pattern.finditer(text):
         name = match.group(1).strip()
@@ -915,13 +915,20 @@ class TermAuthority:
             lst = self._cn_to_ens.setdefault(cn, [])
             if en not in lst:
                 lst.append(en)
-        # Track core game-mechanic terms (keywords / terminology) for the EN->CN
-        # direct scan in get_all_for_text. Competitive terms and deck names are
-        # excluded: they are looser meta vocabulary / long multi-word phrases that
-        # are already caught by the capitalized card-name extractors, and
-        # force-locking them (then requiring their exact CN) would over-flag
-        # legitimately paraphrased translations.
-        if term_type in ("keyword", "terminology"):
+        # Track core game-mechanic terms (keywords / terminology / multi-word
+        # competitive phrases) for the EN->CN direct scan in get_all_for_text.
+        # These have fixed official renderings and routinely appear LOWERCASE
+        # in prose/chat ("on blue coin"), which the capitalized extractors
+        # never see — capitalization luck must not decide whether a term is
+        # enforced. Single-word competitive terms stay OUT for now: they are
+        # the ones that recur inside card names and deck shorthands
+        # ("PF Warriors", "Eist Warriors"), so a bare lock over-flags until
+        # those longer forms are themselves reliably extracted. Deck names
+        # stay excluded too: loose archetype vocabulary where forcing one
+        # exact CN would over-flag legitimately paraphrased translations.
+        if term_type in ("keyword", "terminology") or (
+            term_type == "competitive" and " " in en_lower
+        ):
             self._game_terms.setdefault(en_lower, en)
 
     def _add_alias(self, alias: str, canonical_en: str) -> None:
@@ -1413,6 +1420,13 @@ class TermAuthority:
             if corrected in self._cn_entries:
                 return self._make_result(self._cn_entries[corrected], "cn_correction")
 
+        # Possessive fallback: "Schirru's" -> "Schirru". Full-name forms
+        # ("Dragon's Dream") already matched exactly above; only a trailing
+        # possessive that failed every path retries without it.
+        if key.endswith("'s") and len(key) > 4:
+            stripped = self.resolve(original[:-2])
+            if stripped:
+                return stripped
         return None
 
     def _make_result(self, entry: dict, match_type: str) -> dict:
@@ -1551,6 +1565,11 @@ class TermAuthority:
         return results
 
     def get_all_for_text(self, text: str) -> list[dict]:
+        # Typographic apostrophes/quotes -> ASCII (position-preserving 1:1
+        # translate): sources write "Dragon’s Dream" while card data uses
+        # "Dragon's Dream" — without this fold the phrase extractors miss the
+        # real card and only its substrings get locked.
+        text = text.translate(_QUOTE_NORM)
         """Extract and resolve all known terms from a source text.
 
         Fully-subsumed entries are dropped: a term whose every occurrence sits
