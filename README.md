@@ -37,7 +37,7 @@ A two-command deterministic pipeline — `translate.py` — wraps every automate
 
 `auto_pipeline.py`, `phase_c_check.py`, `term_enforcer.py`, and `completeness_guard.py` are now **internal steps** of `translate.py` — do not run them manually.
 
-Card data is **locked, not suggested**: if a card name or official effect appears in the source, the translation must use the official Chinese form. New community terms go through a review buffer (`pending_terms.md`) before permanent adoption.
+Card data is **locked, not suggested**: if a card name or official effect appears in the source, the translation must use the official Chinese form. New community terms go through a review buffer (`pending_terms.md`) before permanent adoption. The buffer is local user data: installing or updating the skill never resets it.
 
 ## Lite Version (Chat Translation)
 
@@ -120,7 +120,8 @@ gwent-translation-style/
 │   ├── version_map.md           # Version-specific terms
 │   ├── phase_c_checklist.md     # Self-check rules
 │   ├── translation_workflow.md  # Workflow reference
-│   ├── pending_terms.md         # Terms awaiting review (runtime data)
+│   ├── pending_terms.md         # Terms awaiting review (runtime data, gitignored)
+│   ├── pending_terms.template.md # Tracked template; installs seed the buffer from it
 │   └── changelog.md             # Update history
 ├── scripts/                 # 15 Python scripts
 │   ├── translate.py             # Main entry: prepare→translate→finish pipeline

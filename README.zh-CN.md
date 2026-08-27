@@ -37,7 +37,7 @@
 
 `auto_pipeline.py`、`phase_c_check.py`、`term_enforcer.py`、`completeness_guard.py` 现在是 `translate.py` 的**内部步骤**——不要手动单独跑。
 
-卡牌数据是**锁定而非建议**：源文里出现的卡牌名或官方效果，译文必须用官方中文形式。新社区术语需经审核缓冲区（`pending_terms.md`）才能正式采纳。
+卡牌数据是**锁定而非建议**：源文里出现的卡牌名或官方效果，译文必须用官方中文形式。新社区术语需经审核缓冲区（`pending_terms.md`）才能正式采纳。缓冲区是本地用户数据，安装或更新 skill 不会重置它。
 
 ## 精简版（聊天翻译）
 
@@ -120,7 +120,8 @@ gwent-translation-style/
 │   ├── version_map.md           # 版本特定术语
 │   ├── phase_c_checklist.md     # 自检规则
 │   ├── translation_workflow.md  # 工作流参考
-│   ├── pending_terms.md         # 待审核术语（运行时数据）
+│   ├── pending_terms.md         # 待审核术语（运行时数据，不入库）
+│   ├── pending_terms.template.md # 模板（入库）；安装时由它初始化缓冲区
 │   └── changelog.md             # 更新历史
 ├── scripts/                 # 15 个 Python 脚本
 │   ├── translate.py             # 主入口：prepare→翻译→finish 流水线

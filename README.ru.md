@@ -41,7 +41,7 @@
 
 `auto_pipeline.py`, `phase_c_check.py`, `term_enforcer.py` и `completeness_guard.py` теперь **внутренние шаги** `translate.py` — не запускайте их вручную.
 
-Данные карт **блокируются, а не предлагаются**: если название карты или официальный эффект встречается в источнике, перевод должен использовать официальную китайскую форму. Новые термины сообщества проходят через буфер проверки (`pending_terms.md`) перед окончательным принятием.
+Данные карт **блокируются, а не предлагаются**: если название карты или официальный эффект встречается в источнике, перевод должен использовать официальную китайскую форму. Новые термины сообщества проходят через буфер проверки (`pending_terms.md`) перед окончательным принятием. Буфер — локальные данные пользователя: установка или обновление skill никогда его не сбрасывает.
 
 ## Облегчённая версия (перевод чата)
 
@@ -124,7 +124,8 @@ gwent-translation-style/
 │   ├── version_map.md           # Version-specific terms
 │   ├── phase_c_checklist.md     # Self-check rules
 │   ├── translation_workflow.md  # Workflow reference
-│   ├── pending_terms.md         # Terms awaiting review (runtime data)
+│   ├── pending_terms.md         # Terms awaiting review (runtime data, gitignored)
+│   ├── pending_terms.template.md # Tracked template; installs seed the buffer from it
 │   └── changelog.md             # Update history
 ├── scripts/                 # 15 Python scripts
 │   ├── translate.py             # Main entry: prepare→translate→finish pipeline

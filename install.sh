@@ -26,11 +26,18 @@ if [ -d "$SKILL_DIR" ]; then
         fi
     fi
     if [ "$NEEDS_CLONE" = "1" ]; then
-        # Preserve user data before re-cloning
-        if [ -f "$SKILL_DIR/references/pending_terms.md" ]; then
-            PENDING_BACKUP=$(mktemp)
-            cp "$SKILL_DIR/references/pending_terms.md" "$PENDING_BACKUP"
-            echo "Backed up pending_terms.md"
+        # Preserve user data before re-cloning: the review inbox and the
+        # uncommitted auto buffer are both gitignored runtime data.
+        if [ -f "$SKILL_DIR/references/pending_terms.md" ] || [ -f "$SKILL_DIR/references/pending_terms.auto.md" ]; then
+            PENDING_BACKUP_DIR=$(mktemp -d)
+            if [ -f "$SKILL_DIR/references/pending_terms.md" ]; then
+                cp "$SKILL_DIR/references/pending_terms.md" "$PENDING_BACKUP_DIR/pending_terms.md"
+                echo "Backed up pending_terms.md"
+            fi
+            if [ -f "$SKILL_DIR/references/pending_terms.auto.md" ]; then
+                cp "$SKILL_DIR/references/pending_terms.auto.md" "$PENDING_BACKUP_DIR/pending_terms.auto.md"
+                echo "Backed up pending_terms.auto.md"
+            fi
         fi
         rm -rf "$SKILL_DIR"
     fi
@@ -41,9 +48,28 @@ if [ "$NEEDS_CLONE" = "1" ]; then
     git clone --depth 1 "$REPO_URL" "$SKILL_DIR"
 fi
 
-if [ -n "$PENDING_BACKUP" ] && [ -f "$PENDING_BACKUP" ]; then
-    mv "$PENDING_BACKUP" "$SKILL_DIR/references/pending_terms.md"
-    echo "Restored pending_terms.md"
+if [ -n "$PENDING_BACKUP_DIR" ]; then
+    if [ -f "$PENDING_BACKUP_DIR/pending_terms.md" ]; then
+        mv "$PENDING_BACKUP_DIR/pending_terms.md" "$SKILL_DIR/references/pending_terms.md"
+        echo "Restored pending_terms.md"
+    fi
+    if [ -f "$PENDING_BACKUP_DIR/pending_terms.auto.md" ]; then
+        mv "$PENDING_BACKUP_DIR/pending_terms.auto.md" "$SKILL_DIR/references/pending_terms.auto.md"
+        echo "Restored pending_terms.auto.md"
+    fi
+    rmdir "$PENDING_BACKUP_DIR" 2>/dev/null || true
+fi
+
+# Initialize pending_terms.md from the tracked template on fresh installs.
+# The live file is gitignored runtime data (learn.py review inbox) — updates
+# never touch it; only a brand-new install (no backup to restore) needs this.
+if [ ! -f "$SKILL_DIR/references/pending_terms.md" ]; then
+    if [ -f "$SKILL_DIR/references/pending_terms.template.md" ]; then
+        cp "$SKILL_DIR/references/pending_terms.template.md" "$SKILL_DIR/references/pending_terms.md"
+        echo "Initialized pending_terms.md from template"
+    else
+        echo "WARNING: pending_terms.template.md missing; skipping review-inbox seed."
+    fi
 fi
 
 # Build effect_text.json (CDPR official card ability text; NOT committed — see NOTICE).

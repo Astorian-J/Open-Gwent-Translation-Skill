@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-08-27 — pending_terms 模板/数据分离（学习记录更新不重置）
+
+- **背景**（用户实测 NR/GN→尼弗迦德误译排查后提出）：pending_terms.md（learn.py
+  人审收件箱）原被 git 跟踪，与 skill 其他文件同命运——远端更新该文件时 pull 会被
+  本地学习记录挡住，部署排障时的 `git checkout -- .` 会把学到的词全部洗掉
+- **改动**：仓库只跟踪模板 `pending_terms.template.md`（原文件 git mv 改名）；
+  `pending_terms.md` 加入 .gitignore 成为纯本地运行时数据，pull/重装/checkout
+  物理上碰不到它；install.sh 新装时从模板初始化（有备份恢复优先）；
+  health_check 加模板存在性检查；learn.py / translation_workflow.md 的
+  "tracked inbox" 措辞同步；README 四语种目录树 + 缓冲区"更新不重置"说明
+- **迁移注意**：tracked→untracked 切换的这一次更新，副本需走 install.sh
+  （备份→拉取→恢复），本地文件有学习记录时裸 pull 会被 git 直接拒绝
+  （local changes would be overwritten）；hanako 非 git archive 部署
+  天然不受影响（archive 里不再含 pending_terms.md）
+- 回归：test_rebuild 21 / health_check 71→72（+模板检查）/ samples 22 不变
+
 ## 2026-08-26（三）— 禁用破折号规则进全部提示词入口
 
 - 用户要求：翻译不用破折号表达文字（「——」引出/补充是典型 AI 味）

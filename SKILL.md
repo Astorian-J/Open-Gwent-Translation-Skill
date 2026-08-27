@@ -171,7 +171,7 @@ The machine-checkable rules behind `finish` live in `references/phase_c_checklis
 `finish` calls **no LLM** and never touches your translation file. (After a
 genuine PASS it runs `learn.py --auto`, which appends newly discovered terms to
 the gitignored auto buffer `references/pending_terms.auto.md` — nothing else is
-written; `learn.py --commit` later merges the buffer into the tracked
+written; `learn.py --commit` later merges the buffer into the local
 `pending_terms.md` review inbox.) When it reports `BLOCKED`, the agent
 drives the fix loop from the violation list. Entries come in two shapes:
 **term_authority** entries carry `term`, `expected_official`, `severity`, and

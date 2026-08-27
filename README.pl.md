@@ -41,7 +41,7 @@ Deterministyczny potok dwuetapowy — `translate.py` — otacza każdy zautomaty
 
 `auto_pipeline.py`, `phase_c_check.py`, `term_enforcer.py` i `completeness_guard.py` są teraz **wewnętrznymi krokami** `translate.py` — nie uruchamiaj ich ręcznie.
 
-Dane kart są **zablokowane, nie sugerowane**: jeśli nazwa karty lub oficjalny efekt pojawia się w źródle, tłumaczenie musi użyć oficjalnej formy chińskiej. Nowe terminy społeczności przechodzą przez bufor weryfikacji (`pending_terms.md`) przed trwałym przyjęciem.
+Dane kart są **zablokowane, nie sugerowane**: jeśli nazwa karty lub oficjalny efekt pojawia się w źródle, tłumaczenie musi użyć oficjalnej formy chińskiej. Nowe terminy społeczności przechodzą przez bufor weryfikacji (`pending_terms.md`) przed trwałym przyjęciem. Bufor to lokalne dane użytkownika: instalacja lub aktualizacja skillu nigdy go nie resetuje.
 
 ## Wersja Lite (tłumaczenie czatu)
 
@@ -124,7 +124,8 @@ gwent-translation-style/
 │   ├── version_map.md           # Version-specific terms
 │   ├── phase_c_checklist.md     # Self-check rules
 │   ├── translation_workflow.md  # Workflow reference
-│   ├── pending_terms.md         # Terms awaiting review (runtime data)
+│   ├── pending_terms.md         # Terms awaiting review (runtime data, gitignored)
+│   ├── pending_terms.template.md # Tracked template; installs seed the buffer from it
 │   └── changelog.md             # Update history
 ├── lite/                    # Wersja lite — tłumaczenie czatu
 │   ├── SKILL.md                 # Umiejętność lite (tłumaczenie czatu)

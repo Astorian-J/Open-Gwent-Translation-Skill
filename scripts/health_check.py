@@ -65,7 +65,7 @@ def check_reference_files(ref_dir: Path) -> list[tuple[str, str]]:
         ("version_map.md", "Version map"),
         ("style_fingerprint.md", "Style fingerprint"),
         ("cn_fuzzy_fixes.md", "Chinese fuzzy fixes"),
-        ("pending_terms.md", "Pending terms buffer"),
+        ("pending_terms.template.md", "Pending terms template (tracked; install.sh seeds the buffer from it)"),
         ("changelog.md", "Changelog"),
         ("phase_c_checklist.md", "Phase C checklist"),
         ("slang_map.md", "Slang & jargon map"),
@@ -184,12 +184,16 @@ def check_data_integrity(ref_dir: Path) -> list[tuple[str, str]]:
         table_count = len(rows)
         results.append(("PASS", f"terminology_map.md: {table_count} rows found"))
 
-    # Check pending_terms.md is not too large
+    # pending_terms.md is gitignored runtime data (learn.py review inbox);
+    # legitimate to be missing (fresh install pending seed, git-archive deploys),
+    # so presence is INFO/WARN, never a required FAIL.
     pending_file = ref_dir / "pending_terms.md"
     if pending_file.exists():
         lines = pending_file.read_text(encoding="utf-8").split("\n")
         pending_count = sum(1 for l in lines if l.startswith("### "))
         results.append(("INFO", f"pending_terms.md: {pending_count} terms pending review"))
+    else:
+        results.append(("WARN", "pending_terms.md missing (runtime data; seeded from template by install.sh)"))
 
     # Check changelog has entries
     changelog = ref_dir / "changelog.md"

@@ -11,8 +11,9 @@ Usage:
     source_file:      English source text
     --auto:           Write discoveries to the gitignored auto buffer
                       (references/pending_terms.auto.md, default: preview only)
-    --commit:         Merge the auto buffer into the tracked pending_terms.md
-                      (the human review inbox) and delete the buffer
+    --commit:         Merge the auto buffer into the local pending_terms.md
+                      (the human review inbox, gitignored runtime data)
+                      and delete the buffer
     --json:           Output structured JSON for agent consumption
 """
 
@@ -96,7 +97,7 @@ def load_all_terms() -> dict[str, str]:
 
 
 def load_pending_terms(path: Path | None = None) -> list[dict]:
-    """Load terms already in a pending file (tracked inbox or auto buffer)."""
+    """Load terms already in a pending file (local review inbox or auto buffer)."""
     pending = path or _get_ref_path("pending_terms.md")
     if not pending.exists():
         return []
@@ -301,11 +302,12 @@ AUTO_BUFFER_NAME = "pending_terms.auto.md"
 
 
 def add_to_pending(terms: list[dict], buffer: bool = False) -> tuple[int, Path]:
-    """Append terms to the tracked pending inbox or the auto buffer.
+    """Append terms to the local pending inbox or the auto buffer.
 
-    --auto discovery writes to the gitignored auto buffer (never dirties a
-    deployed copy's tracked file, so `git pull --ff-only` keeps working);
-    --commit later merges the buffer into the tracked inbox for human review.
+    Both files are gitignored runtime data — installs and updates never
+    touch them. --auto discovery writes to the auto buffer so findings
+    batch up; --commit later merges the buffer into the review inbox
+    for human review.
 
     Returns (count_added, path_written).
     Uses atomic write (temp file + rename) to avoid corruption
@@ -369,10 +371,10 @@ def add_to_pending(terms: list[dict], buffer: bool = False) -> tuple[int, Path]:
 
 
 def commit_buffer() -> tuple[int, int]:
-    """Merge the auto buffer into the tracked pending inbox.
+    """Merge the auto buffer into the local pending review inbox.
 
     Returns (merged, dropped_duplicates). The buffer file is physically
-    removed afterwards — committed entries live in the tracked inbox, and
+    removed afterwards — committed entries live in the review inbox, and
     an emptied buffer would only invite double-merges.
     """
     buffer_path = _get_ref_path(AUTO_BUFFER_NAME)
@@ -395,7 +397,7 @@ def main():
     parser.add_argument("--auto", action="store_true",
                         help="Write discoveries to the gitignored auto buffer (pending_terms.auto.md)")
     parser.add_argument("--commit", action="store_true",
-                        help="Merge the auto buffer into the tracked pending_terms.md (human review inbox)")
+                        help="Merge the auto buffer into the local pending_terms.md (human review inbox)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     args = parser.parse_args()
 
@@ -441,7 +443,7 @@ def main():
 
     if args.auto:
         print(f"Added {added} term(s) to the auto buffer ({buffer_path.name})")
-        print("Review and merge into the tracked inbox with: python scripts/learn.py --commit")
+        print("Review and merge into the review inbox with: python scripts/learn.py --commit")
     else:
         print("Preview mode. Run with --auto to write to the auto buffer")
         print("Or manually add confirmed terms to the appropriate reference file.")

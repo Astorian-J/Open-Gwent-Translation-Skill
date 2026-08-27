@@ -150,9 +150,10 @@ our reference database:
 
 3. **Record to pending buffer**:
    - `learn.py --auto` writes discoveries to the gitignored auto buffer
-     `references/pending_terms.auto.md` (never the tracked inbox directly)
-   - `python scripts/learn.py --commit` merges the buffer into the tracked
-     `references/pending_terms.md` review inbox
+     `references/pending_terms.auto.md` (never the review inbox directly)
+   - `python scripts/learn.py --commit` merges the buffer into the local
+     `references/pending_terms.md` review inbox (gitignored runtime data;
+     installs/updates never touch it)
    - Format: the entry template in that file's header
    - Mark confidence as `low` until verified
 
@@ -168,7 +169,7 @@ into the confirmed reference files.
 Only run the learning script manually if the pipeline was skipped:
 ```bash
 python scripts/learn.py source.txt --auto   # discover → auto buffer
-python scripts/learn.py --commit            # buffer → tracked review inbox
+python scripts/learn.py --commit            # buffer → local review inbox
 ```
 
 ## Special Modes

@@ -427,8 +427,9 @@ All translation rules and data live in `references/`:
   manual warnings may still require review.
 - After a PASS, `translate.py finish` runs `learn.py --auto`, which appends
   new terms to the gitignored auto buffer `references/pending_terms.auto.md`.
-  `learn.py --commit` merges the buffer into the tracked
-  `references/pending_terms.md` review inbox; committed entries are intended
+  `learn.py --commit` merges the buffer into the local
+  `references/pending_terms.md` review inbox (gitignored runtime data);
+  committed entries are intended
   for verification and should not be silently promoted to reference files.
 - The default (non-JSON) output is formatted for readability in terminals and
   logs; use `--json` when building deterministic tool pipelines.
