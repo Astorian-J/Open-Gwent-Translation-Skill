@@ -27,7 +27,9 @@ without explicit instruction, default to translating it.
 - "translate this line" / "what does this chat mean" requests
 
 **Do not use lite** for long articles or content requiring strict terminology
-locking, format skeleton, or full validation — use the main skill.
+locking, format skeleton, or full validation — use the main skill. For
+fast-paced live chat where even the two-command flow is too slow and the user
+accepts NO verification, `gwent-translation-flash` translates in a single pass.
 
 ## Term rule (the one that matters most)
 

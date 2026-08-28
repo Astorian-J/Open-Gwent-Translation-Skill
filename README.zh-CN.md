@@ -53,8 +53,9 @@
 |---------|-------|
 | 长文章（meta 报告、BC 提案、卡牌分析） | `gwent-translation-style`（完整流水线） |
 | 聊天消息、评论、单句 | `gwent-translation-lite`（聊天级门禁） |
+| 直播聊天抢速度，不要核对 | `gwent-translation-flash`（单轮直翻，无脚本） |
 
-两个 skill 由 `install.sh` 一起安装。精简版 agent 接口：[`lite/AGENTS.md`](lite/AGENTS.md)。
+三个层级由 `install.sh` 一起安装。精简版 agent 接口：[`lite/AGENTS.md`](lite/AGENTS.md)。
 
 ## 关于 token 消耗
 

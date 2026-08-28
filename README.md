@@ -53,8 +53,9 @@ A source with no suspected proper nouns ("gg wp") can skip prepare and go straig
 |---------|-------|
 | Long articles (meta reports, BC proposals, card analysis) | `gwent-translation-style` (full pipeline) |
 | Chat messages, comments, single sentences | `gwent-translation-lite` (chat-length gate) |
+| Live chat at full speed — no verification | `gwent-translation-flash` (single pass, no scripts) |
 
-Both skills install together via `install.sh`. Lite agent interface: [`lite/AGENTS.md`](lite/AGENTS.md).
+All three tiers install together via `install.sh`. Lite agent interface: [`lite/AGENTS.md`](lite/AGENTS.md).
 
 ## A note on token usage
 
