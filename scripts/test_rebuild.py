@@ -471,6 +471,42 @@ def _t_lite_pack() -> tuple[str, str]:
     return ("PASS", "lite pack: article sections dropped, lock intact; plain pack unchanged")
 
 
+def _t_lookup_card_db() -> tuple[str, str]:
+    """lookup.py must search the 1381-card DB (plain card names live ONLY there).
+
+    The markdown reference tables carry terms/slang/keywords but not plain card
+    names; without the card-DB search a lookup for a plain card name finds
+    nothing — which made the "look up suspicious proper nouns" rule weaker than
+    advertised (flash's table-first fallback and lite's term rule both lean on it).
+    """
+    if not (SCRIPT_DIR.parent / "references" / "card_names_4lang.json").exists():
+        return ("FAIL", "card DB missing in this checkout — build first: "
+                "python scripts/build_card_names_reference.py --src ~/gwent-card-db "
+                "(or run install.sh)")
+
+    def lookup(q: str, *extra: str) -> dict:
+        r = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "lookup.py"), q, "--json", *extra],
+            capture_output=True, text=True, timeout=60)
+        return json.loads(r.stdout)
+
+    exact = lookup("Villentretenmerth")
+    cards = [x for x in exact["data"]["results"] if x["file"] == "card_names_4lang.json"]
+    if exact["exit_code"] != 0 or not cards:
+        return ("FAIL", "exact EN card name not found in card DB")
+    if cards[0]["row"].get("cn") != "维伦特瑞坦梅斯":
+        return ("FAIL", f"wrong CN rendering: {cards[0]['row'].get('cn')}")
+
+    cn = lookup("希里")
+    cards = [x for x in cn["data"]["results"] if x["file"] == "card_names_4lang.json"]
+    if not cards or cards[0]["score"] != 1.0 or cards[0]["row"].get("en") != "Ciri":
+        return ("FAIL", "CN query did not exact-match Ciri in card DB")
+    # merged sources: a CN query must hit BOTH the md tables and the card DB
+    if not any(x["file"] == "ambiguous_names.md" for x in cn["data"]["results"]):
+        return ("FAIL", "card DB hits crowded out markdown-table hits (merge broken)")
+    return ("PASS", "lookup card DB: exact EN + CN queries hit the 1381-card corpus, md+DB merged")
+
+
 def _t_block_encn() -> tuple[str, str]:
     wrong = _enforce("Ciri and Scorch are strong.", "这张卡很强，没提任何卡名。")
     right = _enforce("Ciri and Scorch are strong.", "希里和烧灼都很强。")
@@ -685,6 +721,7 @@ _TESTS = [
     _t_block_cnen,
     _t_cjk_absorb,
     _t_true_unknown,
+    _t_lookup_card_db,
     _t_h1_guard_fail_closed,
     _t_h1_guard_fail_closed_phase_c,
     _t_h2_fix_keeps_ta,

@@ -1,13 +1,15 @@
 ---
 name: gwent-translation-flash
 description: |
-  Gwent (昆特牌) FASTEST translation for live chat — single pass, ZERO scripts,
-  ZERO verification. One turn: read the message, translate, reply. For fast-paced
-  chat where waiting a minute means missing the conversation.
+  Gwent (昆特牌) FASTEST translation for live chat — single pass by default,
+  ZERO result verification. Quick reference table first; ONLY when a suspected
+  proper noun is NOT in the table, run one full-corpus lookup (1381 cards +
+  term tables) before translating. For fast-paced chat where waiting a minute
+  means missing the conversation.
   Triggered by: 昆特秒翻, 昆特极速翻译, 昆特快翻, gwent flash translate, translate fast.
-  Trade-off: card names come from model memory with NO machine check. When the
-  content matters or has unfamiliar card names, use gwent-translation-lite (adds
-  a machine term gate). For full articles, use gwent-translation-style.
+  Trade-off: no machine gate on the result. When the content matters or has
+  many unfamiliar names, use gwent-translation-lite (adds a machine term gate).
+  For full articles, use gwent-translation-style.
 agent_created: true
 ---
 
@@ -15,20 +17,32 @@ agent_created: true
 
 > 三层速查：完整文章用 `gwent-translation-style`（全量门禁）；
 > 聊天要保底用 `gwent-translation-lite`（prepare + finish --lite 机器核对）；
-> **本 skill = 聊天抢速度：一轮直翻，不跑任何脚本，不核对。**
+> **本 skill = 聊天抢速度：默认一轮直翻，不跑任何校验。**
 
 ## 你现在的任务
 
 **本 skill 一被调用 = 你现在要做昆特牌翻译。** 不是聊天、不是分析。
-拿到内容 → 判断方向（EN↔CN）→ **直接翻译，立刻回复译文**。
-不存文件、不跑脚本、不查库、不自我验证流程——一轮完成。
+拿到内容 → 判断方向（EN↔CN）→ 按下方流程翻译后立刻回复译文。
+不存文件、不跑 prepare / finish / 任何校验——查库是唯一例外（见下）。
 
-## 何时用 / 何时不用
+## 主 skill 目录（仅 lookup 查库时需要）
 
-- **用**：直播聊天、群消息连发、别人已经刷屏的场景，用户催速度
-- **不用**：不确定的卡名 / 正式内容 / 用户没催速度——用 `gwent-translation-lite`（多一轮机器核对，防翻错卡名）
+本 skill 唯一可能用到的脚本是主 skill 的 `lookup.py`。主 skill 在**本文件
+所在目录的兄弟目录** `gwent-translation-style`（标准 install 布局，适用于
+`~/.claude`、`~/.kimi`、`~/.agents`、`~/.hanako` 等所有安装位置）；设过
+`GWENT_SKILL_DIR` 环境变量时以环境变量为准。下文 `$SK` 替换为解析出的实际路径。
 
----
+## 流程：表优先，查不到才查库
+
+1. **对照下方速查表**：源文里的专名/术语/黑话，表里有的照表翻。
+2. **全部在表内 / 没有专名 → 直接翻**（1 轮，最快路径）。
+3. **表里没有的疑似专有名词 → 先查全库再翻**（每个词一轮）：
+
+   ```bash
+   python3 "$SK/scripts/lookup.py" "<词>" --plain
+   ```
+
+   查的是完整库：1381 张卡牌全名 + 术语/黑话/关键词全部词表。拿不准拼写加 `--fuzzy`。
 
 ## 翻译规则
 
@@ -38,12 +52,14 @@ agent_created: true
 - **修辞 / 夸张 / 反讽**：译意图不译字面（`loud design` → 存在感太强，不是「太大声」）
 - **黑话保留味道**：`bleed` → 逼牌，`brick` → 卡手，`tutor` → 检索
 
-## 专有名词规则（无核对版，凭记忆要稳）
+## 专有名词规则（无核对版，凭查证要稳）
 
-- 卡名 / 人名用你记忆里**最通行的官方译名**，禁止自创新译名
-- **阵营缩写别搞反**：NG = 尼弗迦德（Nilfgaard），NR = 北方领域（Northern Realms），字形近但完全两个阵营
-- 没把握的冷门名，照官方名最接近的写法翻，宁可保留原味也别造词
-- 翻完直接发。**本版本不核对**——发现翻错了，下一条消息更正即可
+- **怎么判断哪些词算昆特专名**：结合上下文语境——出现在卡组、对局、机制、平衡讨论里的词都按昆特专名对待（哪怕是日常词，如 weather / shield / consume 出现在对局语境时）；明显日常语义的不查
+- **不要盲信记忆**：拿不准是不是专名、记不准译名的，一律按专名处理先查库对照。多查一次只多一轮，翻错要返工还丢人
+- 表里有的：照表翻，零创造空间
+- 表里没有的：先 lookup 查全库，用查到的官方译名，禁止自创新译名
+- **查不到的**（lookup 无结果）：照官方名最接近的写法翻，宁可保留原味也别造词
+- 翻完直接发。**结果不核对**——发现翻错了，下一条消息更正即可
 
 ---
 
@@ -89,4 +105,5 @@ agent_created: true
 | Armor abuse (SK) | 互口岛 |
 | enemy boost (NG) | 毒奶 |
 
-> 表里没有的词凭记忆翻。这条消息发出后对话还在继续，错了下一轮更正——速度优先。
+> 表里没有的疑似专名查库（lookup.py），查不到的按最接近官方写法翻。
+> 速度优先：这条消息发出后对话还在继续，错了下一轮更正。

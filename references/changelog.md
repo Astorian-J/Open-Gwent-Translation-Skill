@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-08-28（三）— lookup 接上 1381 卡全库 + flash 条件查库 + 专名判断引导
+
+- **存量缺口**：lookup.py 只搜 12 张术语/黑话 markdown 表，不含卡牌全名（全名在
+  gitignored 的 card_names_4lang.json，仅 TermAuthority 加载）——lite 铁律
+  「疑似卡名先 lookup 查证」实际查不到普通卡名
+- **lookup.py**：新增 search_card_db（精确>子串>fuzzy，仅 en/cn 字段；子串 1.0 与
+  md 表对齐），结果与 markdown 表命中合并按分数排序，format_result 加卡牌分支
+  （en → cn [card_id]）；**slang_map.md 补进搜索范围**（此前宣传查黑话实际查不到，
+  审查 I-2）；库缺失/损坏 stderr 分开 WARN + 构建指引含本地镜像；空查询拒绝
+  （原会子串命中全表+1381 卡）
+- **flash/SKILL.md**：「零脚本」改「表优先、查不到才查库」——表内有/无专名 1 轮
+  直翻不变，表外疑似专名先 lookup（每词 1 轮）再翻；新增主 skill 目录定位节；
+  description 同步；opencode /gwent-flash 同步
+- **专名判断引导（用户提出）**：三处同步加两句话——「结合上下文判断哪些词算昆特
+  专名（对局/卡组/机制/平衡讨论里的词都算，日常词在该语境也算）」+「不要盲信记忆，
+  拿不准就按专名处理先查库」。落点：flash 专有名词规则、lite 铁律、lite/AGENTS.md
+  term rule、translate.py pack 术语铁律（两种 pack 共用）
+- **收益外溢**：lite 铁律的 lookup 查证与 flash 兜底从此都是真全库
+- test_rebuild 加 _t_lookup_card_db（23 用例，含 md+卡库合并断言与缺库守卫）；
+  pragmatic 审查 0C/2I/5M：I-1 部署未做（本轮部署解决）、I-2 slang_map 缺失（已修）、
+  M-1/M-3/M-4/M-5 已修，M-2 fuzzy 微调接受不改（目标卡在 top-5 内）；deploy 4 副本
+
 ## 2026-08-28（二）— flash 极速版（三层体系补齐）
 
 - **背景**（用户实测反馈）：用千问 app 翻译几秒出结果，走 skill 要 1 分钟到几分钟

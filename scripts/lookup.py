@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -44,6 +45,7 @@ def search_references(query: str, ref_dir: Path, fuzzy: bool = False) -> list[di
         "style_fingerprint.md",
         "version_map.md",
         "cn_fuzzy_fixes.md",
+        "slang_map.md",
     ]
 
     for fname in ref_files:
@@ -109,6 +111,70 @@ def search_references(query: str, ref_dir: Path, fuzzy: bool = False) -> list[di
     return deduped
 
 
+CARD_DB_FILE = "card_names_4lang.json"
+
+
+def search_card_db(query: str, ref_dir: Path, fuzzy: bool = False) -> list[dict] | None:
+    """Search the build-time card-name DB (1381 cards, EN<->CN).
+
+    The markdown reference tables carry terms/slang/keywords but NOT plain card
+    names — the full EN/CN mapping lives only in card_names_4lang.json (a
+    gitignored build artifact loaded by TermAuthority). Without this search a
+    lookup for e.g. "Villentretenmerth" finds nothing even though the card DB
+    knows it. Returns None when the DB is missing (not built yet) so the caller
+    can warn instead of silently pretending the full corpus was searched.
+
+    Result dicts match search_references' shape (file/score/field/value/row) so
+    merging, sorting, and formatting stay shared. Only EN/CN are searched — this
+    tool is EN<->CN; ru/pl fields are ignored.
+    """
+    fpath = ref_dir / CARD_DB_FILE
+    if not fpath.exists():
+        return None
+    try:
+        cards = json.loads(fpath.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    query_lower = query.lower()
+    results = []
+    for entry in cards.values() if isinstance(cards, dict) else cards:
+        if not isinstance(entry, dict):
+            continue
+        en = str(entry.get("en", "") or "")
+        cn = str(entry.get("cn", "") or "")
+        en_lower = en.lower()
+        score = 0.0
+        field = ""
+        value = ""
+        if query_lower == en_lower or query == cn:
+            score, field, value = 1.0, "en" if query_lower == en_lower else "cn", en or cn
+        elif query_lower in en_lower or query in cn:
+            # Substring scores 1.0, same as the markdown tables' substring hit —
+            # cross-source ordering then follows insertion order (md first) instead
+            # of an arbitrary penalty on card hits.
+            score, field, value = 1.0, ("en" if query_lower in en_lower else "cn"), (en or cn)
+        elif fuzzy and len(query) >= 2:
+            best = 0.0
+            for word in en_lower.split():
+                if len(word) >= 2:
+                    sim = similarity(query_lower, word)
+                    if sim > best:
+                        best = sim
+            if best > 0.6:
+                score, field, value = best, "en", en
+        if score > 0:
+            results.append({
+                "file": CARD_DB_FILE,
+                "score": score,
+                "field": field,
+                "value": value,
+                "row": entry,
+            })
+    results.sort(key=lambda r: r["score"], reverse=True)
+    return results
+
+
 def format_result(r: dict) -> str:
     """Format a single search result."""
     lines = []
@@ -119,7 +185,20 @@ def format_result(r: dict) -> str:
     lines.append(f"  [{file}]")
 
     # Extract relevant fields based on file type
-    if file == "terminology_map.md":
+    if file == CARD_DB_FILE:
+        en = row.get("en", "")
+        cn = row.get("cn", "")
+        cid = row.get("card_id", "")
+        parts = []
+        if en:
+            parts.append(en)
+        if cn:
+            parts.append(f"→ {cn}")
+        if cid:
+            parts.append(f"[{cid}]")
+        lines.append(f"    {' '.join(parts)}")
+
+    elif file == "terminology_map.md":
         en = row.get("english", row.get("forbidden", ""))
         cn = row.get("chinese", row.get("must_use", row.get("slang", "")))
         notes = row.get("notes", "")
@@ -185,6 +264,19 @@ def format_result(r: dict) -> str:
         if notes:
             lines.append(f"    {notes}")
 
+    elif file == "slang_map.md":
+        en = row.get("english", "")
+        cn = row.get("intended_cn", "")
+        note = row.get("note", "")
+        parts = []
+        if en:
+            parts.append(en)
+        if cn:
+            parts.append(f"→ {cn}")
+        lines.append(f"    {' '.join(parts)}")
+        if note:
+            lines.append(f"    Notes: {note}")
+
     elif file == "ambiguous_names.md":
         en = row.get("full_name", "")
         cn = row.get("chinese", "")
@@ -231,8 +323,34 @@ def main():
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     args = parser.parse_args()
 
+    # An empty query substring-matches EVERY row in every table (plus all 1381
+    # cards) — refuse instead of flooding the caller.
+    if not args.query.strip():
+        print("Error: empty query", file=sys.stderr)
+        sys.exit(1)
+
     ref_dir = Path(__file__).parent.parent / "references"
     results = search_references(args.query, ref_dir, args.fuzzy)
+
+    # Card-name DB: the markdown tables carry terms/slang but not plain card
+    # names; merge DB hits so one lookup covers the full corpus. A missing or
+    # corrupted DB (build artifact, not in git) must warn — silence would read
+    # as "not found in the full corpus" when only the md tables were searched.
+    card_results = search_card_db(args.query, ref_dir, args.fuzzy)
+    if card_results is None:
+        if (ref_dir / CARD_DB_FILE).exists():
+            reason, hint = "found but failed to parse (corrupted?)", "Rebuild it"
+        else:
+            reason, hint = "not built", "Build it once"
+        print(
+            f"[WARN] {CARD_DB_FILE} {reason} — card NAMES not searched (terms/slang only). "
+            f"{hint}: python3 scripts/build_card_names_reference.py "
+            "--src ~/gwent-card-db (offline) or --fetch",
+            file=sys.stderr,
+        )
+    else:
+        results.extend(card_results)
+        results.sort(key=lambda r: r["score"], reverse=True)
 
     if args.json:
         data = {

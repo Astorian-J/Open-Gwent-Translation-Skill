@@ -39,6 +39,12 @@ prepare lock table or a `lookup.py` result. **Never coin a translation from
 memory**: your "remembered" rendering may be wrong; that is exactly what the
 machine gate exists to catch.
 
+How to judge "could be": use context — words appearing in deck / match /
+mechanic / balance discussion count as Gwent terms even when they are everyday
+words (weather, shield, consume in a match context). **When unsure, treat it
+as a term and look it up** — one extra lookup is cheaper than a wrong
+translation.
+
 ## Prerequisite
 
 The **main skill** (`gwent-translation-style`) must be installed — lite reuses

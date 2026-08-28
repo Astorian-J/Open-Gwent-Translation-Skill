@@ -57,7 +57,7 @@ W przypadku **krótkich treści czatu** — wiadomości grupowych, komentarzy na
 |---------|-------|
 | Długie artykuły (raporty meta, propozycje BC, analizy kart) | `gwent-translation-style` (pełny potok) |
 | Wiadomości czatu, komentarze, pojedyncze zdania | `gwent-translation-lite` (bramka czatowa) |
-| Czat na żywo, pełna prędkość — bez weryfikacji | `gwent-translation-flash` (jedno przejście, bez skryptów) |
+| Czat na żywo, pełna prędkość — bez weryfikacji wyniku | `gwent-translation-flash` (najpierw tabela; lookup pełnego korpusu tylko dla nieznanych nazw) |
 
 Wszystkie trzy poziomy instalują się razem przez `install.sh`. Interfejs agenta Lite: [`lite/AGENTS.md`](lite/AGENTS.md).
 

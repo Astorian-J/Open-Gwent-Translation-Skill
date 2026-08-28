@@ -439,6 +439,7 @@ def build_pack(source_path: Path, direction: str, date: str | None,
     L.append("")
     L.append("> **专有名词铁律 Term rule**: 源文里的人名/卡牌名/关键词/机制词/地名，凡疑似昆特牌专有名词，")
     L.append("> 一律以 [COPY] 节的官方译名为准 — **禁止凭记忆自创译名**（自己「记得」的译名可能错）。")
+    L.append("> 判断「疑似」看语境：对局/卡组/机制/平衡讨论里的词都算（日常词如 weather/shield/consume 在对局语境也算）；拿不准就按专名处理先查，别赌记忆。")
     L.append("> 锁表没锁但你怀疑是卡牌名的词，先查证再翻：")
     L.append(f">   python {SCRIPTS_DIR / 'lookup.py'} \"<词>\" --plain")
     L.append("")
