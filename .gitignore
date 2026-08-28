@@ -24,3 +24,4 @@ references/pending_terms.auto.md
 # pending_terms.md：运行时用户数据（learn.py 学习缓冲区），不入库。
 # 仓库只跟踪模板 pending_terms.template.md，install.sh 初始化时复制。
 references/pending_terms.md
+/*.gate.json

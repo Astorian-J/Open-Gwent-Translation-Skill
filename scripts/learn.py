@@ -5,12 +5,16 @@ Analyzes the source text to discover new terms not in references.
 Outputs suggested additions to pending_terms.md for verification.
 
 Usage:
-    python learn.py <source_file> [--auto] [--json]
+    python learn.py <source_file> [--auto] [--from-lock <lock.json>] [--json]
     python learn.py --commit [--json]
 
     source_file:      English source text
     --auto:           Write discoveries to the gitignored auto buffer
                       (references/pending_terms.auto.md, default: preview only)
+    --from-lock:      Also feed the lock's status=pending entries (machine-
+                      extracted terms with no official match) into the same
+                      buffer — the precise candidates prepare identified, not
+                      just a fresh source-wide scan
     --commit:         Merge the auto buffer into the local pending_terms.md
                       (the human review inbox, gitignored runtime data)
                       and delete the buffer
@@ -396,6 +400,9 @@ def main():
     parser.add_argument("source", nargs="?", help="English source file (not needed for --commit)")
     parser.add_argument("--auto", action="store_true",
                         help="Write discoveries to the gitignored auto buffer (pending_terms.auto.md)")
+    parser.add_argument("--from-lock", metavar="LOCK_JSON",
+                        help="Also feed status=pending entries from a context lock JSON into "
+                             "the candidate list (precise machine-extracted unknowns)")
     parser.add_argument("--commit", action="store_true",
                         help="Merge the auto buffer into the local pending_terms.md (human review inbox)")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
@@ -424,6 +431,38 @@ def main():
 
     unknown = preview_new_terms(source_text, silent=args.json)
 
+    # Lock-pending entries: prepare already singled out machine-extracted terms
+    # with no official match ("translate by judgment; if recurring, record").
+    # Recycling them here turns the human review from "think of candidate
+    # words" into "tick or reject the pre-collected list" — same buffer, same
+    # gitignored local file, deduped against existing entries by add_to_pending.
+    lock_candidates: list[dict] = []
+    if args.from_lock:
+        lock_path = Path(args.from_lock)
+        if lock_path.exists():
+            try:
+                lock_data = json.loads(lock_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError, ValueError):
+                lock_data = None
+            if isinstance(lock_data, dict):
+                for term, info in (lock_data.get("terms") or {}).items():
+                    if isinstance(info, dict) and info.get("status") == "pending":
+                        lock_candidates.append({
+                            "source": term,
+                            "type": "unknown",
+                            "confidence": "medium (lock-pending: machine-extracted, no official match)",
+                        })
+            if not args.json:
+                print(f"Lock-pending candidates from {lock_path.name}: {len(lock_candidates)}")
+        else:
+            print(f"[WARN] --from-lock file not found, skipped: {args.from_lock}",
+                  file=sys.stderr)
+        seen = {t["source"].lower() for t in unknown}
+        for cand in lock_candidates:
+            if cand["source"].lower() not in seen:
+                unknown.append(cand)
+                seen.add(cand["source"].lower())
+
     added, buffer_path = 0, _get_ref_path(AUTO_BUFFER_NAME)
     if unknown and args.auto:
         added, buffer_path = add_to_pending(unknown, buffer=True)
@@ -431,6 +470,7 @@ def main():
     if args.json:
         data = {
             "new_terms_found": len(unknown),
+            "from_lock_candidates": len(lock_candidates),
             "auto_write": args.auto,
             "added_to_buffer": added,
             "buffer_path": str(buffer_path),

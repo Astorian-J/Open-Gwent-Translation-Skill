@@ -163,6 +163,12 @@
           "name": "--allow-source-changed",
           "required": false,
           "type": "flag"
+        },
+        {
+          "name": "--fresh",
+          "required": false,
+          "type": "flag",
+          "description": "ignore the previous round's violation baseline for repair-regression tracking (use after a full rewrite)"
         }
       ],
       "json_output": [
@@ -180,6 +186,7 @@
         "block_reason",
         "violations",
         "violations_total",
+        "repair_tracking",
         "learn",
         "effect_check"
       ],
@@ -705,6 +712,18 @@
           "type": "flag"
         },
         {
+          "name": "--from-lock",
+          "required": false,
+          "type": "file_path",
+          "description": "also feed the lock's status=pending entries into the candidate list"
+        },
+        {
+          "name": "--commit",
+          "required": false,
+          "type": "flag",
+          "description": "merge the auto buffer into pending_terms.md (human review inbox) and delete the buffer"
+        },
+        {
           "name": "--json",
           "required": false,
           "type": "flag"
@@ -712,8 +731,10 @@
       ],
       "json_output": [
         "new_terms_found",
+        "from_lock_candidates",
         "auto_write",
-        "added_to_pending",
+        "added_to_buffer",
+        "buffer_path",
         "terms"
       ]
     },

@@ -68,6 +68,16 @@ or `completeness_guard` manually — they are internal steps of `translate.py` n
 | 3. Finish | `translate.py finish translated.txt --source source.md --direction encn` | `translate.py` (deterministic gate; internally runs `completeness_guard` + `learn`; add `--lite` for chat-length content) |
 | 0. (optional) Run | `translate.py run source.md [--translated out.txt]` | `translate.py` (prepare + exact finish command; with `--translated`, prepare + finish in one shot) |
 
+### Finish extras (repair-loop tracking)
+
+Each BLOCKED round is fingerprinted to `<source>.gate.json`; the next BLOCKED
+round against the same source reports `repair_tracking` (`fixed_count` /
+`regressed_count` + the regressed entries). A `[REGRESS]` section means the edit
+introduced violations absent last round — fix or revert those first. `--fresh`
+starts a new baseline (use after a full rewrite). PASS clears the baseline.
+Baseline tracking keys on the source and the gate mode (`full` vs `lite`), so
+renamed outputs and mixed modes never compare against the wrong round.
+
 `prepare` snapshots its term lock as `<source>.lock.json` next to the pack;
 `finish` reuses that snapshot (`lock_reused` in the JSON) and BLOCKS if the
 source changed since `prepare` (`--allow-source-changed` rebuilds instead).
@@ -425,8 +435,11 @@ All translation rules and data live in `references/`:
   mandatory translation reference; never translate those terms literally.
 - `phase_c_check.py` returns `ready: true` when automated checks pass, but
   manual warnings may still require review.
-- After a PASS, `translate.py finish` runs `learn.py --auto`, which appends
-  new terms to the gitignored auto buffer `references/pending_terms.auto.md`.
+- After a PASS, `translate.py finish` runs `learn.py --auto` (with
+  `--from-lock <lock>` when the prepare snapshot was reused), which appends
+  new terms — source-scan discoveries plus the lock's status=pending machine
+  candidates (`from_lock_candidates`) — to the gitignored auto buffer
+  `references/pending_terms.auto.md`.
   `learn.py --commit` merges the buffer into the local
   `references/pending_terms.md` review inbox (gitignored runtime data);
   committed entries are intended

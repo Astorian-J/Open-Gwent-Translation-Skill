@@ -112,7 +112,7 @@ def _require_all_cards(out: dict) -> None:
         sys.exit(1)
 
 
-def build(src_dir: Path) -> None:
+def build(src_dir: Path, check: bool = False) -> dict:
     """Offline build from a local gwent-card-db mirror
     (tables/cards_{en,cn,ru,pl}.json).
 
@@ -161,8 +161,10 @@ def build(src_dir: Path) -> None:
         }
 
     _require_all_cards(out)
-    _write_out(out)
-    _report_counts(out, skipped, f"offline {src_dir}")
+    if not check:
+        _write_out(out)
+        _report_counts(out, skipped, f"offline {src_dir}")
+    return out
 
 
 def _fetch_lang(lang: str, version: str, timeout: int) -> dict[int, str]:
@@ -212,7 +214,7 @@ def _fetch_lang(lang: str, version: str, timeout: int) -> dict[int, str]:
     return out
 
 
-def build_fetch(version: str = API_VERSION) -> None:
+def build_fetch(version: str = API_VERSION, check: bool = False) -> dict:
     """Online build: pull en/cn/ru/pl single-language payloads from
     api.gwent.one, join by card_id, emit card_names_4lang.json with the same
     schema as the offline build."""
@@ -237,8 +239,58 @@ def build_fetch(version: str = API_VERSION) -> None:
         }
 
     _require_all_cards(out)
-    _write_out(out)
-    _report_counts(out, skipped, f"online api.gwent.one v{version}")
+    if not check:
+        _write_out(out)
+        _report_counts(out, skipped, f"online api.gwent.one v{version}")
+    return out
+
+
+def _run_check(new_out: dict) -> None:
+    """Diff a freshly built table against the installed one without writing.
+
+    The HearthstoneJSON-style refresh discipline: a game patch should surface
+    as an explicit added/removed/renamed diff, never as a silent overwrite of
+    the lock table the whole pipeline leans on. Exit 1 when anything differs so
+    automation can detect "new patch landed" from the exit code alone."""
+    if not OUT.exists():
+        print("现有 card_names_4lang.json 不存在——先完整构建一次再 --check。",
+              file=sys.stderr)
+        sys.exit(2)
+    try:
+        old = json.loads(OUT.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"现有 card_names_4lang.json 无法解析（{type(exc).__name__}）——"
+              "重跑不带 --check 的构建命令重建。", file=sys.stderr)
+        sys.exit(2)
+    added = sorted(set(new_out) - set(old))
+    removed = sorted(set(old) - set(new_out))
+    changed = []
+    for cid in sorted(set(old) & set(new_out)):
+        diffs = [
+            f"{lang}: 「{old[cid].get(lang, '')}」→「{new_out[cid].get(lang, '')}」"
+            for lang in LANGS if old[cid].get(lang) != new_out[cid].get(lang)
+        ]
+        if diffs:
+            changed.append(f"  {cid} ({new_out[cid].get('en', '?')}): " + "; ".join(diffs))
+
+    print(f"对比结果: 新增 {len(added)} / 移除 {len(removed)} / 改名 {len(changed)}"
+          f"（现有 {len(old)} 张, 新表 {len(new_out)} 张）")
+    for label, items in (("新增", added), ("移除", removed)):
+        for cid in items[:10]:
+            # added 只在 new_out 里, removed 只在 old 里 — 任一侧缺失时落到另一侧
+            name = (new_out.get(cid) or old.get(cid) or {}).get("en", "?")
+            print(f"  [{label}] {cid}: {name}")
+        if len(items) > 10:
+            print(f"  [{label}] ... 还有 {len(items) - 10} 条")
+    for line in changed[:20]:
+        print(f"  [改名] {line}")
+    if len(changed) > 20:
+        print(f"  [改名] ... 还有 {len(changed) - 20} 条")
+
+    if added or removed or changed:
+        print("\n有差异（未写库）。确认后重跑不带 --check 的构建命令应用更新。")
+        sys.exit(1)
+    print("无差异，现有卡库已是最新。")
 
 
 def main() -> None:
@@ -252,20 +304,25 @@ def main() -> None:
         default=os.environ.get("GWENT_CARD_DB", str(DEFAULT_SRC)),
         help="本地 card-db 根目录（离线模式，默认 $GWENT_CARD_DB 或 ~/gwent-card-db）",
     )
+    ap.add_argument("--check", action="store_true",
+                    help="只对比不写库：构建新表并与现有 card_names_4lang.json diff"
+                         "（新增/移除/改名）；exit 0=无差异, 1=有差异, 2=现有库缺失/损坏")
     args = ap.parse_args()
 
-    if args.fetch:
-        try:
-            build_fetch(args.version)
-        except (RuntimeError, KeyError, TypeError, AttributeError, ValueError) as exc:
-            print(f"错误：card_names_4lang.json 构建失败 "
-                  f"({type(exc).__name__}: {exc})", file=sys.stderr)
-            print("（card_names_4lang.json 未生成）", file=sys.stderr)
-            print("       可重试：python3 scripts/build_card_names_reference.py --fetch",
-                  file=sys.stderr)
-            sys.exit(1)
-    else:
-        build(Path(args.src))
+    try:
+        if args.fetch:
+            new_out = build_fetch(args.version, check=args.check)
+        else:
+            new_out = build(Path(args.src), check=args.check)
+    except (RuntimeError, KeyError, TypeError, AttributeError, ValueError) as exc:
+        print(f"错误：card_names_4lang.json 构建失败 "
+              f"({type(exc).__name__}: {exc})", file=sys.stderr)
+        print("（card_names_4lang.json 未生成）", file=sys.stderr)
+        print("       可重试：python3 scripts/build_card_names_reference.py --fetch",
+              file=sys.stderr)
+        sys.exit(1)
+    if args.check:
+        _run_check(new_out)
 
 
 if __name__ == "__main__":

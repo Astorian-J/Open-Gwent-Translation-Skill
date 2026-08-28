@@ -191,6 +191,11 @@ residue-class violations.
 4. Repeat until `all_passed`, **up to 3 rounds**. If still `BLOCKED` after 3 rounds,
    stop and hand the translation to a human — **never finalize while `BLOCKED`**.
 
+`finish` compares each BLOCKED round against the previous one (baseline next to
+the source: `<source>.gate.json`). A `[REGRESS]` section means the edit introduced
+violations that were not there before — fix or revert those first. After a full
+rewrite rather than a spot fix, re-run with `--fresh` to start a new baseline.
+
 `translate.py` is deterministic glue; all re-translation is done by the agent / human.
 
 ---

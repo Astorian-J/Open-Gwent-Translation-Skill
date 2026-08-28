@@ -94,6 +94,7 @@ python3 "$SK/scripts/translate.py" finish /tmp/gwent-lite-out.md \
 
 - **PASS** → 把译文发给用户，完成。
 - **BLOCKED** → 每条违规都带官方译法（`「term」 -> 官方译名`），照着改译文文件，重跑同一条命令。
+  finish 会对比上一轮违规：修复不得引入新违规（出现 `[REGRESS]` 先修新引入的）。
   最多改 3 轮；仍 BLOCKED 就把违规清单和你的译文一起给用户看，说明哪些词查不到官方译名。
 
 `--lite` 只跑术语 / 残留 / 译名权威核对（聊天内容够用），跳过文章级的风格检查和新词学习。

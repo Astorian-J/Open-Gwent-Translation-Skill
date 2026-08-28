@@ -35,6 +35,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -790,7 +791,11 @@ def cmd_finish(args: argparse.Namespace) -> None:
     lock_reused = False
     source_changed = False
     block_before_guard = None
-    guard_args = [str(translated_path), "--direction", direction]
+    # --source is ALWAYS forwarded (alongside --lock when a snapshot exists):
+    # the guard's terminology check uses the lock, but check_translation's
+    # source-aware structural checks (protected tokens, marker loss,
+    # completeness) need the source text itself.
+    guard_args = [str(translated_path), "--direction", direction, "--source", str(source_path)]
     if lock_sidecar.exists():
         try:
             sidecar_meta = json.loads(lock_sidecar.read_text(encoding="utf-8")).get("_prepare_meta", {})
@@ -812,7 +817,6 @@ def cmd_finish(args: argparse.Namespace) -> None:
         # only bypasses the BLOCK above, and the gate then rebuilds its lock
         # from the CURRENT source — that is the documented contract.
     if not lock_reused:
-        guard_args.extend(["--source", str(source_path)])
         # No prepare snapshot next to this source. Usually fine (prepare was
         # run elsewhere / old layout), but the #1 cause is a mistyped or
         # wrong --source — the gate would then verify against a DIFFERENT
@@ -931,13 +935,83 @@ def cmd_finish(args: argparse.Namespace) -> None:
     # per-check counts stay visible in guard.checks[].
     violations_total = len(violations)
 
+    # --- Repair-loop regression tracking (strict-subset guard) ---
+    # The repair loop is agent-driven: finish BLOCKS, the agent edits, re-runs.
+    # A sloppy repair can fix some violations while introducing new ones, and a
+    # per-run report alone cannot show that. Persist this run's violation
+    # fingerprints next to the SOURCE; on the next BLOCKED run against the same
+    # source, surface regressions (violations absent last round) and progress.
+    # PASS clears the baseline. The acceptance rule is still fail-closed (any
+    # violation blocks) — this adds regression VISIBILITY so the loop cannot
+    # silently churn (llm-translation-poc's strict-subset idea). Keyed to the
+    # SOURCE (sibling of pack/lock sidecars), not the translated file: the
+    # baseline tracks "this article's repair history", so an agent saving round
+    # 2 under a new filename still gets regression detection.
+    gate_sidecar = source_path.with_name(source_path.stem + ".gate.json")
+    current_keys = sorted(
+        f"{v.get('check', '?')}|{v.get('term', '')}|{v.get('message', '')}"
+        for v in violations
+    )
+    source_sha = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    # Comparability needs only the source hash + gate mode: the term lock is a
+    # deterministic function of the source (rebuilt or reused alike), a
+    # re-prepare after a source edit changes source_sha (invalidating the
+    # baseline on its own), and a lite round after a full round legitimately
+    # runs fewer checks — only same-mode rounds are comparable.
+    gate_mode = "lite" if args.lite else "full"
+    repair_tracking = None
+    if blocked:
+        prev = None
+        if not args.fresh:
+            try:
+                prev = json.loads(gate_sidecar.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError, ValueError):
+                prev = None
+        if (prev and prev.get("source_sha256") == source_sha
+                and prev.get("mode") == gate_mode
+                and isinstance(prev.get("keys"), list)):
+            old_keys = set(prev["keys"])
+            new_keys = set(current_keys)
+            regressed = sorted(new_keys - old_keys)
+            repair_tracking = {
+                "previous_violations": len(old_keys),
+                "current_violations": len(new_keys),
+                "fixed_count": len(old_keys - new_keys),
+                "regressed_count": len(regressed),
+                "regressed": regressed[:10],
+            }
+        try:
+            # Atomic write (repo convention): a half-written baseline must not
+            # become a corrupted comparison source.
+            fd, tmp = tempfile.mkstemp(dir=str(gate_sidecar.parent), suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(
+                        {"source_sha256": source_sha, "mode": gate_mode, "keys": current_keys},
+                        f, ensure_ascii=False,
+                    )
+                os.replace(tmp, gate_sidecar)
+            except BaseException:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+                raise
+        except OSError:
+            pass  # tracking is advisory; never fail the gate over it
+    else:
+        gate_sidecar.unlink(missing_ok=True)
+
     # Learn only after a genuine PASS; never let it affect the gate.
     learn_result = None
     if not blocked and not getattr(args, "lite", False):
         # Lite mode skips learn: chat snippets pollute the pending buffer
         # (see the BC34 noise rejections) and learn is article-grade.
+        learn_args = [str(source_path), "--auto"]
+        if lock_reused:
+            learn_args.extend(["--from-lock", str(lock_sidecar)])
         _lok, lparsed, _lraw = run_script_json(
-            "learn.py", [str(source_path), "--auto"], LEARN_TIMEOUT
+            "learn.py", learn_args, LEARN_TIMEOUT
         )
         if lparsed and "data" in lparsed:
             learn_result = lparsed["data"]
@@ -977,6 +1051,7 @@ def cmd_finish(args: argparse.Namespace) -> None:
         "block_reason": block_reason,
         "violations": violations,
         "violations_total": len(violations),
+        "repair_tracking": repair_tracking,
         "learn": learn_result,
         "effect_check": effect_check,
     }
@@ -1028,6 +1103,17 @@ def cmd_finish(args: argparse.Namespace) -> None:
             print(f"Violations ({violations_total} total, showing {len(shown)}; full list in --json output):")
             for v in shown:
                 print(f"   - [{v.get('check', '?')}] {format_issue(v)}")
+        if repair_tracking:
+            if repair_tracking["regressed_count"]:
+                print("")
+                print(f"[REGRESS] 本轮引入了 {repair_tracking['regressed_count']} 个上轮没有的新违规 — "
+                      "先修掉或回退这些改动（strict-subset: 修复不得弄坏别处）:")
+                for r in repair_tracking["regressed"][:5]:
+                    print(f"   + {r}")
+            if repair_tracking["fixed_count"]:
+                print("")
+                print(f"[FIXED] 已解决上轮 {repair_tracking['fixed_count']}"
+                      f"/{repair_tracking['previous_violations']} 个违规，继续。")
         print("")
         print("[BLOCKED] DO NOT FINALIZE. Fix the issue(s) above and re-run:")
         print(f"  python {(SCRIPTS_DIR / 'translate.py').resolve()} finish {translated_path} "
@@ -1148,6 +1234,9 @@ def main() -> None:
     fin.add_argument("--allow-source-changed", action="store_true",
                      help="Gate against a freshly rebuilt lock even when the source changed "
                           "after prepare (default: BLOCK until prepare is re-run)")
+    fin.add_argument("--fresh", action="store_true",
+                     help="Ignore the previous round's violation baseline for repair-regression "
+                          "tracking (use after a full rewrite rather than a spot fix)")
     fin.add_argument("--lite", action="store_true",
                      help="Lite mode (chat-length content): skips the Phase C style/format rules "
                           "(incl. bare-N费 provision wording, passive voice, Chinese numerals, brackets), "

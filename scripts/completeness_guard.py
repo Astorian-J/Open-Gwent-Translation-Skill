@@ -57,21 +57,27 @@ def run_script_json(script_name: str, args: list[str]) -> tuple[bool, dict | Non
     return result.returncode == 0, parsed, output
 
 
-def run_check_translation(file_path: Path, lock_path: Path | None, direction: str) -> tuple[bool, int, list]:
+def run_check_translation(file_path: Path, lock_path: Path | None, direction: str,
+                          source_path: Path | None = None) -> tuple[bool, int, list]:
     """Run check_translation.py; return (pass, issue_count, structured issues).
 
     Always speaks --json to the sub-script and parses its envelope — no
     human-text scraping. Runs with --skip-ta: within the guard, term
     authority is executed ONCE by check 5 (this used to run it three times
     across checks 2/4/5); check_translation's own inline TA pass remains for
-    standalone invocations. A failed parse degrades to (ok, 0, []): counts
-    read 0 but `passed` still carries the sub-script's exit code, so a broken
-    checker can never fake a PASS here (the caller's except guard and the
-    finish-level status checks back this up).
+    standalone invocations. source_path is forwarded when the caller has it so
+    the source-aware structural checks (protected tokens, bold-marker loss,
+    completeness) can run — with --lock alone those checks are unreachable.
+    A failed parse degrades to (ok, 0, []): counts read 0 but `passed` still
+    carries the sub-script's exit code, so a broken checker can never fake a
+    PASS here (the caller's except guard and the finish-level status checks
+    back this up).
     """
     args = [str(file_path), "--direction", direction, "--skip-ta"]
     if lock_path:
         args.extend(["--lock", str(lock_path)])
+    if source_path:
+        args.extend(["--source", str(source_path)])
     ok, parsed, _ = run_script_json("check_translation.py", args)
     if parsed and isinstance(parsed.get("data"), dict):
         d = parsed["data"]
@@ -215,7 +221,9 @@ def main() -> None:
     terminology_ok = False
     terminology_crashed = False
     try:
-        terminology_ok, count, terminology_issues = run_check_translation(file_path, lock_path, direction)
+        terminology_ok, count, terminology_issues = run_check_translation(
+            file_path, lock_path, direction, source_path=source_path
+        )
         checks.append({"name": "terminology", "passed": terminology_ok, "issue_count": count, "issues": terms_summary(terminology_issues, args.verbose_terms), "message": "No terminology issues" if terminology_ok else f"Terminology: {count} issue(s)"})
     except Exception as e:
         terminology_crashed = True

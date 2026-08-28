@@ -1,5 +1,8 @@
 # Competitive & Community Terms
 
+> 争议裁决与定名理由统一记录在 [term_decisions.md](term_decisions.md)；
+> 修改本表前先查该文件，新裁决必须先补记录再改表。
+
 ## From Blog Glossary (https://cngwentbd.top/glossary/)
 
 ### 机制 (Mechanics)

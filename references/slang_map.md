@@ -3,6 +3,11 @@
 Community balance/podcast slang that reads as gibberish if translated literally.
 Each row: English slang → intended CN register (slash-separated alternatives) | literal-forbidden (never translate this way) | note.
 
+来源口径：本表全部为**社区**俚语。官方译名（含官方自带的口语化译名，如
+Shupe → 店店）以卡牌库为准，不进本表——「官方译名即黑话」与「社区自造黑话」
+的区分见 term_decisions.md；争议裁决一律记录在
+[term_decisions.md](term_decisions.md)。
+
 Used by `auto_pipeline.py pre` (`slang_hints` injection) and `check_translation.py`
 (reverse-scan warn). **Not a term-lock** — slang is register guidance, not hard
 enforcement. Loaded into `TermAuthority._slang` (kept out of the enforced lock on purpose).

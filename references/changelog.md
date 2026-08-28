@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-08-29 — 开源调研落地的七项增强（四批）
+
+背景：三路开源调研（翻译 skill 生态/术语强制工作流/游戏社区翻译工具，全文见
+auto-memory gwent-translation-open-source-survey）确认我们的核心机制无同类，
+但散落着可借鉴设计；用户拍板七条全做。学习类写入全部走 gitignored 本地缓冲
+（pending_terms.auto.md），更新永不覆盖学习记录（8-27 已建立的机制）。
+
+**批A 门禁增强（translate.py + check_translation.py）**
+- finish 修复回归追踪（strict-subset 借鉴）：BLOCKED 时把违规指纹基线落盘
+  `<source>.gate.json`（源文件哈希绑定；挂在源文件而非译文文件——换文件名重存
+  不断链），下一轮对比出 [REGRESS]（新引入的违规）与 [FIXED]（已解决数）；
+  PASS 清基线；--fresh 逃生口（整篇重写后用）。violations JSON 加 repair_tracking。
+  同源必同锁，无需锁指纹（实测推演后简化）
+- 校验清单对表（Weblate/zotero 经验）：新四查——protected token（链接/行内代码
+  原样保留）、粗体 ** 全丢、completeness（≥4 行非空且译文不足一半=疑似整段漏译）、
+  empty（空译文）；ISSUE_CATEGORIES 加 format/protected_token/empty_translation/
+  completeness，注释对齐 MQM 类目口径
+**批B 学习整合（learn.py）**
+- --from-lock：把锁表里 status=pending 的机器提取未知词（prepare 精挑的候选）
+  并入同一 gitignored 自动缓冲，人审从「想词」变「勾词」；finish PASS 后带
+  --from-lock 调 learn；JSON 加 from_lock_candidates
+**批C 数据治理**
+- 新建 references/term_decisions.md 术语裁决记录：改动术语表前必须先补裁决
+  （日期+裁决+来源+理由），回填 12 条历史争议（GN≠NG、seize→抓捕、Common→普通、
+  店店=官方简中自带口语译名等）；slang_map/competitive_terms 头部挂裁决记录指针
+  与来源口径（官方/社区/官方+社区 二分）
+**批D 卡库管道（build_card_names_reference.py）**
+- --check 只对比不写库：构建新表 diff 现有库（新增/移除/改名，exit 1=有差异），
+  游戏补丁以显式 diff 呈现而非静默覆盖（HearthstoneJSON 模式借鉴）
+- 测试：test_rebuild 加 _t_repair_tracking + _t_new_format_checks（25 用例）
+
 ## 2026-08-28（三）— lookup 接上 1381 卡全库 + flash 条件查库 + 专名判断引导
 
 - **存量缺口**：lookup.py 只搜 12 张术语/黑话 markdown 表，不含卡牌全名（全名在

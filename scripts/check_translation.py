@@ -375,6 +375,10 @@ def check_translation(
     direction = direction or detect_direction(text)
 
     issues = []
+    # 空译文: 任何方向都不该出现 (guard 消费为 blocking issue)
+    if not text.strip():
+        issues.append("empty: 译文为空 — 没有任何可交付内容")
+
     # 格式门禁: 分割线 --- 数量必须与原文一致 (双向都要; AI 易丢末尾 --- 当元数据扔掉)
     if source_text:
         hr_src = sum(1 for l in source_text.split("\n") if l.strip() == "---")
@@ -383,6 +387,37 @@ def check_translation(
             issues.append(
                 f"format: 分割线 --- 数量不一致 (原文 {hr_src} vs 译文 {hr_txt}), "
                 f"必须按原文数量原样补回所有 --- 分割线, 不能删"
+            )
+
+        # 受保护 token (对照 Weblate/zotero 校验清单): 链接与行内代码是不翻译的
+        # 原样保留物, 译文里必须逐字存在。格式规则本就要求代码内容不译。
+        # 尾部标点剥离: 正则会把紧随 URL 的逗号/句号吃进 token, 而忠实译文里
+        # URL 后接的是全角标点, 不剥会误判「链接丢失」。
+        for raw_url in set(re.findall(r"https?://[^\s)\]>\"']+", source_text)):
+            url = raw_url.rstrip(".,;:!?'\"，。；：！？、）」』")
+            if url and url not in text:
+                issues.append(
+                    f"protected token: 链接丢失/被改动 — 译文必须原样保留 {url}"
+                )
+        src_code = re.findall(r"`[^`\n]+`", source_text)
+        if src_code and not re.findall(r"`[^`\n]+`", text):
+            issues.append(
+                f"protected token: 行内代码全部丢失 (原文 {len(src_code)} 处, 译文 0 处) — "
+                f"代码内容不译, 原样保留 `...` 标记"
+            )
+
+        # 标记全丢: 粗体/代码标记允许随译文重排, 但一处不剩说明格式被剥掉
+        if source_text.count("**") >= 2 and text.count("**") == 0:
+            issues.append("format: 粗体 ** 标记全部丢失 — 按原文在对应文字上保留 ** 标记")
+
+        # 严重漏译: 非空行数骤减 (原文 >=4 行且译文不足一半)。行级 1:1 是格式
+        # 规则的要求, 这里只拦"砍掉近半内容"级别的遗漏, 不做逐行计数误报。
+        src_lines = sum(1 for l in source_text.split("\n") if l.strip())
+        txt_lines = sum(1 for l in text.split("\n") if l.strip())
+        if src_lines >= 4 and txt_lines < src_lines // 2:
+            issues.append(
+                f"completeness: 非空行数骤减 (原文 {src_lines} 行 vs 译文 {txt_lines} 行) — "
+                f"疑似整段/整表漏译, 逐段核对"
             )
 
     # CN->EN output: the only term-level residue is Chinese card names that
@@ -788,6 +823,10 @@ def check_term_authority_violations(
 
 
 # Issue prefixes used to derive structured categories for --json output.
+# Category taxonomy aligns with MQM (GEMBA-MQM): terminology/accuracy classes
+# (provision_mix, forbidden_term, residue, term_authority, ...) map to MQM
+# terminology-accuracy; format/protected_token/completeness map to MQM style/
+# omission. Severity stays the binary error/warning contract — see AGENTS.md.
 ISSUE_CATEGORIES = {
     "provision mix:": "provision_mix",
     "identical numbers:": "identical_numbers",
@@ -806,6 +845,10 @@ ISSUE_CATEGORIES = {
     "Chinese residue:": "chinese_residue",
     "term authority:": "term_authority_violation",
     "slang not preserved:": "slang_not_preserved",
+    "format:": "format",
+    "protected token:": "protected_token",
+    "empty:": "empty_translation",
+    "completeness:": "completeness",
 }
 
 
@@ -848,11 +891,15 @@ def main():
         lock_path = Path(args.lock)
         if lock_path.exists():
             locked_phrases = load_locked_phrases_from_lock(lock_path)
-    elif args.source:
+    # Independent of --lock: the guard passes BOTH (lock for the enforced term
+    # set, source for the structural checks). Only when no lock exists does the
+    # source backfill locked_phrases.
+    if args.source:
         source_path = Path(args.source)
         if source_path.exists():
-            locked_phrases = load_locked_phrases_from_source(source_path)
             source_text = source_path.read_text(encoding="utf-8")
+            if not locked_phrases:
+                locked_phrases = load_locked_phrases_from_source(source_path)
 
     issues, warnings = check_translation(text, locked_phrases, direction, source_text=source_text)
 

@@ -507,6 +507,78 @@ def _t_lookup_card_db() -> tuple[str, str]:
     return ("PASS", "lookup card DB: exact EN + CN queries hit the 1381-card corpus, md+DB merged")
 
 
+def _t_repair_tracking() -> tuple[str, str]:
+    """finish repair-regression tracking: baseline -> REGRESS across renamed
+    output -> PASS clears the baseline.
+
+    The strict-subset borrow (llm-translation-poc): a sloppy repair that fixes
+    some violations while introducing new ones must be VISIBLE, and the
+    baseline must key on the SOURCE so round 2 saved under a new filename is
+    still tracked."""
+    import os
+    source_md = "Ciri and Scorch are strong. Iorveth sees play.\n"
+    with tempfile.TemporaryDirectory() as td:
+        repo = Path(td) / "skill"
+        shutil.copytree(
+            SCRIPT_DIR.parent, repo,
+            ignore=shutil.ignore_patterns(".git", ".scratch", "__pycache__", "*.pyc"),
+        )
+        env = {**os.environ, "GWENT_CARD_DB": str(Path(td) / "unused")}
+        src = repo / "repair_source.md"
+        src.write_text(source_md, encoding="utf-8")
+
+        def run(args_):
+            return subprocess.run(
+                [sys.executable, str(repo / "scripts" / "translate.py"), *args_],
+                capture_output=True, text=True, timeout=300, env=env, cwd=str(repo),
+            )
+
+        if run(["prepare", str(src)]).returncode != 0:
+            return ("FAIL", "prepare failed")
+        # R1: everything untranslated -> BLOCKED, baseline written
+        bad1 = repo / "r1.md"
+        bad1.write_text("这张卡很强。\n", encoding="utf-8")
+        r = run(["finish", str(bad1), "--source", str(src), "--direction", "encn", "--json"])
+        d1 = json.loads(r.stdout)["data"]
+        if not d1["blocked"] or d1["repair_tracking"] is not None:
+            return ("FAIL", f"R1 must BLOCK with no tracking: {d1.get('violations_total')}")
+        if not (repo / "repair_source.gate.json").exists():
+            return ("FAIL", "R1 did not write the gate baseline")
+        # R2: fixed two names but introduced a new untranslated one -> REGRESS
+        bad2 = repo / "r2.md"
+        bad2.write_text("希里和烧灼都很强。Vernon Roche 很强。\n", encoding="utf-8")
+        r = run(["finish", str(bad2), "--source", str(src), "--direction", "encn", "--json"])
+        t = json.loads(r.stdout)["data"]["repair_tracking"]
+        if not t or t["regressed_count"] < 1 or t["fixed_count"] < 1:
+            return ("FAIL", f"R2 must show fixed+regressed across renamed file: {t}")
+        # R3: fully correct -> PASS, baseline cleared
+        good = repo / "r3.md"
+        good.write_text("希里和烧灼都很强。伊欧菲斯能上场。\n", encoding="utf-8")
+        r = run(["finish", str(good), "--source", str(src), "--json"])
+        d3 = json.loads(r.stdout)["data"]
+        if d3["blocked"] or (repo / "repair_source.gate.json").exists():
+            return ("FAIL", "R3 must PASS and clear the gate baseline")
+    return ("PASS", "repair tracking: baseline -> REGRESS (renamed file) -> PASS clears")
+
+
+def _t_new_format_checks() -> tuple[str, str]:
+    """Source-aware structural checks: protected tokens (URL/code), bold total
+    loss, severe omission; empty translation without a source."""
+    from check_translation import check_translation
+    src = ("Geralt: Igni costs 12 provisions. See https://example.com/a and `Deploy:`.\n"
+           "\n**Balance** changed twice.\n\nLine three content here.\nLine four content here.\n")
+    lossy = "这张卡很强，没提任何东西。"
+    issues, _ = check_translation(lossy, direction="encn", source_text=src)
+    cats = {i.split(":")[0] for i in issues}
+    for need in ("protected token", "format", "completeness"):
+        if need not in cats:
+            return ("FAIL", f"lossy translation missed {need}: {sorted(cats)}")
+    empty_issues, _ = check_translation("   \n", direction="encn")
+    if not any(i.startswith("empty:") for i in empty_issues):
+        return ("FAIL", f"empty translation not flagged: {empty_issues}")
+    return ("PASS", "format checks: protected token / bold loss / omission / empty all fire")
+
+
 def _t_block_encn() -> tuple[str, str]:
     wrong = _enforce("Ciri and Scorch are strong.", "这张卡很强，没提任何卡名。")
     right = _enforce("Ciri and Scorch are strong.", "希里和烧灼都很强。")
@@ -722,6 +794,8 @@ _TESTS = [
     _t_cjk_absorb,
     _t_true_unknown,
     _t_lookup_card_db,
+    _t_repair_tracking,
+    _t_new_format_checks,
     _t_h1_guard_fail_closed,
     _t_h1_guard_fail_closed_phase_c,
     _t_h2_fix_keeps_ta,
