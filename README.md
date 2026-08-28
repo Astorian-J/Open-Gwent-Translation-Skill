@@ -41,18 +41,18 @@ Card data is **locked, not suggested**: if a card name or official effect appear
 
 ## Lite Version (Chat Translation)
 
-For **short chat content** — group messages, Discord / QQ / Kook comments, single sentences — the full pipeline is overkill. The **lite** skill (`gwent-translation-lite`) streamlines translation to three steps:
+For **short chat content** — group messages, Discord / QQ / Kook comments, single sentences — the full pipeline is overkill. The **lite** skill (`gwent-translation-lite`) runs the same pipeline in a chat-length form: **two commands around one translation pass**.
 
-1. **Look up on demand** — query card names and terms via `lookup.py` only when they appear in the source; no full term-table preload.
+1. **`prepare --lite`** — save the source and build the chat-length pack (term locks plus ambiguity and slang guidance; article-grade sections dropped). The lock table prints straight to the command output.
 2. **Translate** — same Bilibili-player / native-player tone, official card and term renderings.
-3. **Self-check** — a mental pass; no validation scripts.
+3. **`finish --lite`** — save the translation and gate it: terminology / residue / term-authority checks only, and every violation carries the official rendering to apply.
 
-No `pre` injection, no `completeness_guard`, no `term_enforcer`. Lite reuses the main skill's `scripts/` and `references/` (zero data duplication) via the `$GWENT_SKILL_DIR` variable, so it works across Claude Code, hermes, opencode, and other agents.
+A source with no suspected proper nouns ("gg wp") can skip prepare and go straight to `finish --lite`. Lite reuses the main skill's `scripts/` and `references/` (zero data duplication), so it works across Claude Code, opencode, and other agents.
 
 | Content | Skill |
 |---------|-------|
 | Long articles (meta reports, BC proposals, card analysis) | `gwent-translation-style` (full pipeline) |
-| Chat messages, comments, single sentences | `gwent-translation-lite` (3-step) |
+| Chat messages, comments, single sentences | `gwent-translation-lite` (chat-length gate) |
 
 Both skills install together via `install.sh`. Lite agent interface: [`lite/AGENTS.md`](lite/AGENTS.md).
 

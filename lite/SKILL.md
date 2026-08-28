@@ -2,8 +2,8 @@
 name: gwent-translation-lite
 description: |
   Gwent (昆特牌) lightweight translation for short chat content — group messages,
-  Discord/QQ comments, single sentences, brief remarks. 3-step flow with a
-  lightweight machine term gate (prepare -> translate -> finish --lite).
+  Discord/QQ comments, single sentences, brief remarks. 2-command flow with a
+  lightweight machine term gate (prepare --lite -> translate -> finish --lite).
   Triggered by: 昆特聊天翻译, 昆特群消息翻译, 昆特短句翻译, Gwent chat translation, quick Gwent translate.
   For full articles (meta reports, BC proposals, card analysis), use gwent-translation-style instead.
 agent_created: true
@@ -17,7 +17,7 @@ agent_created: true
 ## 你现在的任务
 
 **本 skill 一被调用 = 你现在要做昆特牌翻译。** 不是聊天、不是分析。
-立刻：拿到要翻的内容 → 判断方向（EN↔CN）→ 按下方 3 步走。
+立刻：拿到要翻的内容 → 判断方向（EN↔CN）→ 按下方流程走。
 用户贴了昆特牌中/英文没明说「翻译」，默认就是要翻译，直接翻。
 
 ## 何时用
@@ -38,41 +38,42 @@ agent_created: true
 
 ---
 
-## 流程（3 步：prepare → 翻译 → finish --lite 机器核对）
+## 主 skill 目录（先定位一次）
 
-先定位主 skill 目录（首次使用时跑一次，后续命令复用 `$GWENT_SKILL_DIR`）：
+lite 没有自己的脚本，复用主 skill。主 skill 在**本文件所在目录的兄弟目录**
+`gwent-translation-style`（标准 install 布局，适用于 `~/.claude`、`~/.kimi`、
+`~/.agents`、`~/.hanako` 等所有安装位置）；设过 `GWENT_SKILL_DIR` 环境变量时以
+环境变量为准。下文命令里的 `$SK` 一律替换为你解析出的主 skill 绝对路径。
 
-```bash
-# 三选一：环境变量 > Claude Code 默认 > hermes 默认
-GWENT_SKILL_DIR="${GWENT_SKILL_DIR:-$HOME/.claude/skills/gwent-translation-style}"
-[ -d "$GWENT_SKILL_DIR" ] || GWENT_SKILL_DIR="$HOME/.hermes/skills/gwent-translation-style"
-```
+## 流程（标准 3 步 = 2 条命令 + 1 次翻译）
 
-> **两条默认路径都不存在时**（自定义 INSTALL_DIR 装的，如 `~/.agents/skills/`）：
-> 主 skill 就在本 lite 目录的上一级的兄弟目录——`<本文件所在目录>/../gwent-translation-style`
-> （install.sh 的标准布局）。按你读到本文件的实际路径推算后 `export GWENT_SKILL_DIR=<该路径>`。
-
-### 第 1 步：prepare（存文件 + 拿锁表）
-
-把要翻的内容存成临时文件，跑 prepare 生成术语锁表 pack：
+### 第 1 步：存源文 + prepare --lite（一条命令，锁表直接看输出）
 
 ```bash
-printf '%s\n' "要翻译的内容" > /tmp/gwent-lite-src.md
-python3 "$GWENT_SKILL_DIR/scripts/translate.py" prepare /tmp/gwent-lite-src.md
+printf '%s\n' "要翻译的内容" > /tmp/gwent-lite-src.md && \
+python3 "$SK/scripts/translate.py" prepare /tmp/gwent-lite-src.md --lite && \
+cat /tmp/gwent-lite-src.pack.md
 ```
 
-读生成的 `/tmp/gwent-lite-src.pack.md`，重点看：
+内容含引号或多行时用 heredoc 存文件，其余不变：
+
+```bash
+cat > /tmp/gwent-lite-src.md <<'EOF'
+要翻译的内容（可多行）
+EOF
+python3 "$SK/scripts/translate.py" prepare /tmp/gwent-lite-src.md --lite && cat /tmp/gwent-lite-src.pack.md
+```
+
+命令输出里就有翻译要用的全部内容，不用再单独打开 pack 文件：
 
 - **[COPY] MANDATORY Term Lock Table** — 锁定术语，必须照抄这些译名
 - **[COPY] Ambiguous Names** — 歧义卡名：按语境线索选版本，用全名
 - **专有名词铁律**（pack 顶部）— 锁表没锁但疑似卡名的词，先查再翻：
-  `python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "<词>" --plain`
+  `python3 "$SK/scripts/lookup.py" "<词>" --plain`
 
-短内容的 pack 很小（几 KB），放心读。
+### 第 2 步：翻译（不跑任何工具）
 
-### 第 2 步：翻译
-
-按方向翻译（EN→CN 或 CN→EN），照 pack 的 [COPY] 节译名 + 快速参考表：
+按方向翻译（EN→CN 或 CN→EN），照锁表 [COPY] 节译名 + 下方快速参考表：
 
 - **EN → CN**：B 站玩家口语。短句、主动语态、阿拉伯数字（5点 / 12人口 / R3）、中文括号「（）」
 - **CN → EN**：native player 口气。casual 不书面，英文括号 ( )
@@ -80,26 +81,40 @@ python3 "$GWENT_SKILL_DIR/scripts/translate.py" prepare /tmp/gwent-lite-src.md
 - **修辞 / 夸张 / 反讽**：译意图不译字面（`loud design` → 存在感太强，不是「太大声」）
 - **黑话保留味道**：`bleed` → 逼牌，`brick` → 卡手，`tutor` → 检索——不要书面化
 
-译完存文件：
+### 第 3 步：存译文 + finish --lite（一条命令，修到 PASS 才算完）
 
 ```bash
-printf '%s\n' "你的译文" > /tmp/gwent-lite-out.md
-```
-
-### 第 3 步：finish --lite（机器核对，修到 PASS 才算完）
-
-```bash
-python3 "$GWENT_SKILL_DIR/scripts/translate.py" finish /tmp/gwent-lite-out.md \
+printf '%s\n' "你的译文" > /tmp/gwent-lite-out.md && \
+python3 "$SK/scripts/translate.py" finish /tmp/gwent-lite-out.md \
   --source /tmp/gwent-lite-src.md --lite
 ```
 
 - **PASS** → 把译文发给用户，完成。
-- **BLOCKED** → 每条违规都带官方译法（`「term」 -> 官方译名`），照着改译文文件，重跑第 3 步。
+- **BLOCKED** → 每条违规都带官方译法（`「term」 -> 官方译名`），照着改译文文件，重跑同一条命令。
   最多改 3 轮；仍 BLOCKED 就把违规清单和你的译文一起给用户看，说明哪些词查不到官方译名。
 
 `--lite` 只跑术语 / 残留 / 译名权威核对（聊天内容够用），跳过文章级的风格检查和新词学习。
 
-**不要跑以下脚本**（这些是完整文章用的）：
+## 快车道（源文明显没有专有名词时，1 条命令搞定）
+
+整句纯情绪 / 寒暄 / 闲聊，**没有任何疑似卡名 / 关键词 / 派系缩写 / 机制词**
+（如 "gg wp"、"this patch is trash lol"、"稳了稳了"）→ 可跳过 prepare，直接翻译，
+然后一条命令存两个文件并核对：
+
+```bash
+printf '%s\n' "原文" > /tmp/gwent-lite-fast-src.md && \
+printf '%s\n' "你的译文" > /tmp/gwent-lite-fast-out.md && \
+python3 "$SK/scripts/translate.py" finish /tmp/gwent-lite-fast-out.md \
+  --source /tmp/gwent-lite-fast-src.md --lite
+```
+
+finish 会从源文现算术语锁兜底，翻错的名词照样被拦（违规带官方译法）。
+**拿不准有没有专名就走标准 3 步，别赌。**
+（快车道固定用 `-fast-` 文件名，避免撞上标准路径残留的旧锁文件。）
+
+---
+
+## 不要跑以下脚本（这些是完整文章用的）
 
 - `auto_pipeline.py` / `phase_c_check.py` / `term_enforcer.py` / `completeness_guard.py` — 已在 prepare / finish 内部运行，别手动跑
 - `learn.py` / `diff_review.py` / `backtranslate.py` / `format_skeleton.py` — 完整文章流程用

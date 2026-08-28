@@ -19,7 +19,8 @@
         "optional_args": {
           "date": "YYYY-MM",
           "type": "meta | bc-proposal | card-analysis | patch-notes | general",
-          "direction": "encn | cnen (default encn)"
+          "direction": "encn | cnen (auto-detected from source if omitted)",
+          "lite": "chat-length pack (article-grade sections dropped); pairs with finish --lite"
         },
         "state_outputs": [
           "pack_path",
@@ -94,6 +95,12 @@
           ]
         },
         {
+          "name": "--lite",
+          "required": false,
+          "type": "flag",
+          "description": "chat-length pack: drops article-grade sections (balance direction, markdown format, official effect text, Phase C checklist) and filters the style table; term lock content identical. Pairs with finish --lite"
+        },
+        {
           "name": "--json",
           "required": false,
           "type": "flag"
@@ -106,12 +113,16 @@
         "direction_auto_detected",
         "date",
         "type",
+        "lite",
         "pack_path",
         "pre_exit_code",
         "lock_built",
-        "skeleton_extracted",
+        "lock_sidecar",
+        "source_sha256",
         "term_counts",
-        "ready"
+        "ready",
+        "cards_ready",
+        "card_db_count"
       ]
     },
     {
@@ -159,13 +170,18 @@
         "translated",
         "source",
         "direction",
+        "direction_warning",
         "guard_exit_code",
         "guard_all_passed",
+        "lock_reused",
+        "source_changed",
+        "guard",
         "blocked",
         "block_reason",
         "violations",
+        "violations_total",
         "learn",
-        "violations_total"
+        "effect_check"
       ],
       "on_blocked": "Agent-driven re-translate loop (translate.py calls no LLM and does no find-replace). For each entry in `violations`: term_authority entries carry term / expected_official / severity / offending_quote — re-render the offending segment using expected_official; terminology / residue / phase_c entries carry category + message with the term and correct rendering inline — apply what the message says. Save, then re-run finish. Repeat until all_passed or 3 rounds; if still BLOCKED after 3 rounds, hand off to a human. Never finalize while BLOCKED."
     },
@@ -209,6 +225,12 @@
             "encn",
             "cnen"
           ]
+        },
+        {
+          "name": "--lite",
+          "required": false,
+          "type": "flag",
+          "description": "forwarded to prepare AND finish (chat-length pack + chat-length gate)"
         },
         {
           "name": "--allow-source-changed",
@@ -256,12 +278,12 @@
         "source",
         "date",
         "type",
-        "skeleton_extracted",
-        "skeleton_path",
         "lock_built",
         "lock_path",
         "card_references_found",
         "card_references",
+        "official_effects",
+        "official_effects_total",
         "slang_hints",
         "slang_hints_total",
         "term_authority"

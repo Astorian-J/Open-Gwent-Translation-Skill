@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-08-28 — lite 提速：聊天级 pack + 3 轮往返流程 + 无专名快车道
+
+- **背景**（用户反馈 lite 不够轻、流程慢）：实测脚本本身仅 0.34s（prepare 0.17s +
+  finish --lite 0.17s），瓶颈在 agent 工具调用往返（每轮 5-20s，标准流程约 7 轮）
+  与 pack 内容——聊天一句也生成 5.5KB pack，其中平衡方向/Markdown 格式/Phase C
+  清单全是文章级 padding（且 finish --lite 不跑 Phase C，清单纯误导）
+- **prepare --lite（translate.py）**：新增 lite pack 模式——砍掉 PACK_BALANCE_GUIDE /
+  PACK_FORMAT_GUIDE / 官方效果注入 / Phase C 验收清单（finish --lite 不 gate 的
+  全部裁掉），风格表按行标签过滤（LITE_STYLE_ENC/CN），头部与 NEXT STEP 精简
+  （finish 命令带 --lite）；实测 pack 5476→2671 字节（-51%），完整版 pack 不变；
+  `run --lite` 同时透传 prepare 与 finish
+- **lite 入口流程重写（lite/SKILL.md + lite/AGENTS.md）**：标准流程 7 轮往返 → 3 轮
+  （①存源+prepare --lite+cat pack 一条命令 ②翻译不跑工具 ③存译文+finish 一条
+  命令）；新增快车道——源文明显无专有名词（"gg wp" 类）跳过 prepare，存两文件 +
+  finish --lite 一条命令（finish 从源文现算锁兜底），固定 `-fast-` 文件名避免撞
+  标准路径残留 sidecar；目录定位改兄弟目录单一规则（删 hermes 死默认路径）
+- **文档同步**：README 四语种 Lite 段重写（原描述还停留在更早的"脑内自检"版）；
+  agent.json prepare/run 补 --lite 参数 + json_output 对齐实际字段
+  （修 skeleton_extracted 等陈年幽灵字段）
+- 安全门不变：术语 / 残留 / 译名权威三道门在 lite 下全保留，精度不降
+
 ## 2026-08-27 — pending_terms 模板/数据分离（学习记录更新不重置）
 
 - **背景**（用户实测 NR/GN→尼弗迦德误译排查后提出）：pending_terms.md（learn.py

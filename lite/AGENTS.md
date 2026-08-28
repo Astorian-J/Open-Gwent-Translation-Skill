@@ -15,9 +15,9 @@ without explicit instruction, default to translating it.
 
 > For **full-article** translation (meta reports, BC proposals, card analysis),
 > use the main skill `gwent-translation-style` instead — see the AGENTS.md in the
-> main skill directory (resolve it the same way as `$GWENT_SKILL_DIR` in the
-> "Locate the shared scripts" section below) for its `translate.py` three-step
-> pipeline with pre-injection and completeness guard.
+> main skill directory (the sibling `gwent-translation-style` directory, as
+> resolved in the "Locate the shared scripts" section below) for its
+> `translate.py` three-step pipeline with pre-injection and completeness guard.
 
 ## When to use lite
 
@@ -45,88 +45,89 @@ its `scripts/` and `references/` without copying them. Install both via
 
 ## Locate the shared scripts
 
-Lite ships no scripts of its own. Resolve the main skill directory once, then
-reuse `$GWENT_SKILL_DIR`:
+Lite ships no scripts of its own. The **main skill** sits as a sibling of this
+lite directory — `<this file's directory>/../gwent-translation-style` (the
+standard install.sh layout; holds for `~/.claude`, `~/.kimi`, `~/.agents`,
+`~/.hanako` and any custom `INSTALL_DIR`). If the `GWENT_SKILL_DIR` environment
+variable is set, it wins. In the commands below, replace `$SK` with the resolved
+absolute path of the main skill directory.
+
+## Workflow (standard: 2 commands + 1 translation pass)
+
+### 1. prepare --lite — save the content, get the lock table (one command)
+
+The lock table is printed to stdout via `cat`; no separate pack read needed:
 
 ```bash
-# Precedence: env var > Claude Code default > hermes default
-GWENT_SKILL_DIR="${GWENT_SKILL_DIR:-$HOME/.claude/skills/gwent-translation-style}"
-[ -d "$GWENT_SKILL_DIR" ] || GWENT_SKILL_DIR="$HOME/.hermes/skills/gwent-translation-style"
+printf '%s\n' "content to translate" > /tmp/gwent-lite-src.md && \
+python3 "$SK/scripts/translate.py" prepare /tmp/gwent-lite-src.md --lite && \
+cat /tmp/gwent-lite-src.pack.md
 ```
 
-> **When neither default exists** (custom `INSTALL_DIR` layout, e.g. `~/.agents/skills/`):
-> the main skill sits as a sibling of this lite directory —
-> `<this file's directory>/../gwent-translation-style` (the standard install.sh
-> layout). Derive it from the actual path you read this file from and
-> `export GWENT_SKILL_DIR=<that path>`.
-
-For other environments (opencode, custom install paths), set the env var
-explicitly:
+For multi-line or quote-heavy content, save with a heredoc instead of `printf`,
+then run the same prepare + cat. `--lite` builds the chat-length pack (article
+grade sections dropped; term lock content identical). Focus on the **[COPY]**
+sections in the output (locked term table, ambiguous names with context clues).
+`lookup.py` remains available for one-off interactive queries:
 
 ```bash
-export GWENT_SKILL_DIR=/path/to/gwent-translation-style
-```
-
-## Workflow (3 steps: prepare -> translate -> finish --lite)
-
-### 1. prepare — save the content, get the lock table
-
-Save the chat content to a temp file and build the term-lock pack:
-
-```bash
-printf '%s\n' "content to translate" > /tmp/gwent-lite-src.md
-python3 "$GWENT_SKILL_DIR/scripts/translate.py" prepare /tmp/gwent-lite-src.md
-```
-
-Read the generated `/tmp/gwent-lite-src.pack.md` — focus on the **[COPY]**
-sections (locked term table, ambiguous names with context clues). The pack for
-chat-length content is small (a few KB). `lookup.py` remains available for
-one-off interactive queries:
-
-```bash
-python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "Geralt" --plain
-python3 "$GWENT_SKILL_DIR/scripts/lookup.py" "siege" --fuzzy --plain  # rough spelling
+python3 "$SK/scripts/lookup.py" "Geralt" --plain
+python3 "$SK/scripts/lookup.py" "siege" --fuzzy --plain  # rough spelling
 ```
 
 `--json` on any script follows the shared envelope `{success, exit_code, data, errors}`.
 
 ### 2. Translate
 
-Translate per direction (EN→CN or CN→EN):
+Translate per direction (EN→CN or CN→EN), no tool calls in this step:
 
 - **EN→CN**: Bilibili-player register — short sentences, active voice, Arabic
   numerals (5点 / 12人口 / R3), Chinese brackets 「（）」
 - **CN→EN**: native-player register — casual, not academic, English parens ()
 - No dashes: never use 「——」 (or — in English output) to introduce or pad text;
   rewrite with commas, periods, or brackets, even when the source uses em-dashes
-- Use official renderings from the pack's [COPY] tables (`blue coin` → 蓝币,
+- Use official renderings from the lock table (`blue coin` → 蓝币,
   not "蓝色的硬币"; `provision` → 人口, not "费用")
 - Preserve rhetoric / hyperbole / irony — translate intent, not literal
   (`loud design` → 存在感太强, not "too loud")
 - Keep slang flavor (`bleed` → 逼牌, `brick` → 卡手, `tutor` → 检索)
 
-Save the translation:
+### 3. finish --lite — save the translation + machine term gate (one command)
 
 ```bash
-printf '%s\n' "your translation" > /tmp/gwent-lite-out.md
-```
-
-### 3. finish --lite — machine term gate (fix until PASS)
-
-```bash
-python3 "$GWENT_SKILL_DIR/scripts/translate.py" finish /tmp/gwent-lite-out.md \
+printf '%s\n' "your translation" > /tmp/gwent-lite-out.md && \
+python3 "$SK/scripts/translate.py" finish /tmp/gwent-lite-out.md \
   --source /tmp/gwent-lite-src.md --lite
 ```
 
 - **PASS** → deliver the translation to the user. Done.
 - **BLOCKED** → every violation carries the official rendering
-  (`「term」 -> official`); apply it to the translation file and re-run step 3.
-  Up to 3 fix rounds; still BLOCKED, hand the violation list + translation to
-  the user and say which terms have no official rendering.
+  (`「term」 -> official`); apply it to the translation file and re-run the same
+  command. Up to 3 fix rounds; still BLOCKED, hand the violation list +
+  translation to the user and say which terms have no official rendering.
 
 `--lite` runs the terminology / residue / term-authority gates only (right-sized
 for chat) and skips the article-grade Phase C style check, learn, and the
 effect audit.
+
+## Fast path (only when the source clearly has NO proper nouns)
+
+Pure emotion / greeting / banter with **no suspected card names, keywords,
+faction abbreviations, or mechanic terms** ("gg wp", "this patch is trash lol")
+→ skip prepare, translate directly, then save both files and gate in ONE
+command:
+
+```bash
+printf '%s\n' "source text" > /tmp/gwent-lite-fast-src.md && \
+printf '%s\n' "your translation" > /tmp/gwent-lite-fast-out.md && \
+python3 "$SK/scripts/translate.py" finish /tmp/gwent-lite-fast-out.md \
+  --source /tmp/gwent-lite-fast-src.md --lite
+```
+
+finish rebuilds the term lock from the source on the fly and still blocks a
+wrongly translated name (violations carry the official rendering). **When in
+doubt, use the standard 3 steps.** (The fast path uses fixed `-fast-` filenames
+so it cannot collide with a stale lock snapshot on the standard paths.)
 
 ## Do NOT run (article-grade, not for chat)
 
@@ -186,10 +187,10 @@ For anything not listed, run `lookup.py`.
 ## Notes for agent implementers
 
 - Lite is a **documentation-only** skill (this file + `SKILL.md`). It has no
-  scripts of its own — everything is reused from the main skill via
-  `$GWENT_SKILL_DIR`.
-- If `$GWENT_SKILL_DIR` is unset and neither default path exists, the main
-  skill is not installed; run `install.sh` first.
+  scripts of its own — everything is reused from the main skill (`$SK`, the
+  sibling `gwent-translation-style` directory).
+- If that sibling directory does not exist, the main skill is not installed;
+  run `install.sh` first.
 - All scripts' `--json` output follows the same envelope as the main skill
   (`{success, exit_code, data, errors}`), so lite composes cleanly into
   deterministic JSON tool pipelines. `finish --lite --json` reports the same

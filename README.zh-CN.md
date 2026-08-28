@@ -41,18 +41,18 @@
 
 ## 精简版（聊天翻译）
 
-对于**短聊天内容**——群消息、Discord / QQ / Kook 评论、单句翻译——完整流水线就太重了。**精简版** skill（`gwent-translation-lite`）把翻译精简为三步：
+对于**短聊天内容**——群消息、Discord / QQ / Kook 评论、单句翻译——完整流水线就太重了。**精简版** skill（`gwent-translation-lite`）用聊天级形态跑同一条流水线：**两条命令夹一次翻译**。
 
-1. **按需查询** —— 仅在源文出现卡牌名/术语时才通过 `lookup.py` 查询；不做全量术语表预加载。
+1. **`prepare --lite`** —— 存源文并生成聊天级 pack（术语锁表 + 歧义/俚语引导，文章级章节全部裁掉）；锁表直接打印在命令输出里。
 2. **翻译** —— 同样的 Bilibili 玩家 / 原生玩家口吻，官方卡牌和术语译法。
-3. **自检** —— 译后心里过一遍；不跑校验脚本。
+3. **`finish --lite`** —— 存译文并跑门禁：只核对术语 / 残留 / 译名权威，每条违规都带官方译法。
 
-没有 `pre` 注入、没有 `completeness_guard`、没有 `term_enforcer`。精简版通过 `$GWENT_SKILL_DIR` 变量复用主 skill 的 `scripts/` 和 `references/`（零数据重复），因此在 Claude Code、hermes、opencode 等任意 agent 上都能用。
+源文明显没有专有名词（如 "gg wp"）时可跳过 prepare，直接 `finish --lite`。精简版复用主 skill 的 `scripts/` 和 `references/`（零数据重复），因此在 Claude Code、opencode 等任意 agent 上都能用。
 
 | 内容 | Skill |
 |---------|-------|
 | 长文章（meta 报告、BC 提案、卡牌分析） | `gwent-translation-style`（完整流水线） |
-| 聊天消息、评论、单句 | `gwent-translation-lite`（3 步） |
+| 聊天消息、评论、单句 | `gwent-translation-lite`（聊天级门禁） |
 
 两个 skill 由 `install.sh` 一起安装。精简版 agent 接口：[`lite/AGENTS.md`](lite/AGENTS.md)。
 

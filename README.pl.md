@@ -45,18 +45,18 @@ Dane kart są **zablokowane, nie sugerowane**: jeśli nazwa karty lub oficjalny 
 
 ## Wersja Lite (tłumaczenie czatu)
 
-W przypadku **krótkich treści czatu** — wiadomości grupowych, komentarzy na Discord / QQ / Kook, pojedynczych zdań — pełny potok to przesada. Umiejętność **lite** (`gwent-translation-lite`) upraszcza tłumaczenie do trzech kroków:
+W przypadku **krótkich treści czatu** — wiadomości grupowych, komentarzy na Discord / QQ / Kook, pojedynczych zdań — pełny potok to przesada. Umiejętność **lite** (`gwent-translation-lite`) uruchamia ten sam potok w wersji czatowej: **dwa polecenia wokół jednego przebiegu tłumaczenia**.
 
-1. **Wyszukiwanie na żądanie** — wyszukuje nazwy kart i terminy przez `lookup.py` tylko wtedy, gdy pojawią się w źródle; bez pełnego wstępnego ładowania tabeli terminów.
+1. **`prepare --lite`** — zapisuje źródło i buduje pakiet wersji czatowej (blokady terminów oraz wskazówki dotyczące niejednoznaczności i slangu; sekcje artykułowe usunięte). Tabela blokad trafia bezpośrednio do wyniku polecenia.
 2. **Tłumaczenie** — ten sam ton graczy Bilibili / native-player, oficjalne renderowanie kart i terminów.
-3. **Autokontrolla** — przebieg mentalny; bez skryptów weryfikacyjnych.
+3. **`finish --lite`** — zapisuje tłumaczenie i uruchamia bramkę: tylko terminy / pozostałości / autorytet terminów, a każde naruszenie zawiera oficjalny renderring.
 
-Bez wstrzykiwania `pre`, bez `completeness_guard`, bez `term_enforcer`. Lite ponownie wykorzystuje `scripts/` i `references/` głównej umiejętności (zero duplikacji danych) za pośrednictwem zmiennej `$GWENT_SKILL_DIR`, więc działa w Claude Code, hermes, opencode i innych agentach.
+Źródło bez podejrzanych nazw własnych ("gg wp") może pominąć prepare i przejść od razu do `finish --lite`. Lite ponownie wykorzystuje `scripts/` i `references/` głównej umiejętności (zero duplikacji danych), więc działa w Claude Code, opencode i innych agentach.
 
 | Treść | Umiejętność |
 |---------|-------|
 | Długie artykuły (raporty meta, propozycje BC, analizy kart) | `gwent-translation-style` (pełny potok) |
-| Wiadomości czatu, komentarze, pojedyncze zdania | `gwent-translation-lite` (3 kroki) |
+| Wiadomości czatu, komentarze, pojedyncze zdania | `gwent-translation-lite` (bramka czatowa) |
 
 Obie umiejętności instalują się razem przez `install.sh`. Interfejs agenta Lite: [`lite/AGENTS.md`](lite/AGENTS.md).
 

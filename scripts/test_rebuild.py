@@ -382,6 +382,95 @@ def _t_pipeline() -> tuple[str, str]:
     return ("PASS", "pipeline: prepare pack shape, good PASS, bad BLOCKED w/ detail, DB-missing fail-closed")
 
 
+def _t_lite_pack() -> tuple[str, str]:
+    """prepare --lite: the chat pack drops article-grade sections; plain prepare keeps them.
+
+    finish --lite never gates on balance direction / markdown format / official
+    effect text / Phase C — a lite pack carrying them only pads what the model
+    reads (and the Phase C checklist would ask the agent to self-check gates
+    that never fire). The term lock content must be identical in both packs.
+    """
+    import os
+    # Filter consistency: every LITE_STYLE label must exist in the full table
+    # (a typo in a label would silently drop a style row from the lite pack),
+    # and no label may repeat.
+    for lite_labels, full_rows, name in (
+        (translate.LITE_STYLE_ENC, translate.STYLE_ENC, "ENC"),
+        (translate.LITE_STYLE_CN, translate.STYLE_CN, "CN"),
+    ):
+        full = {label for label, _ in full_rows}
+        missing = [label for label in lite_labels if label not in full]
+        if missing:
+            return ("FAIL", f"LITE_STYLE_{name} label not in full style table: {missing}")
+        if len(set(lite_labels)) != len(lite_labels):
+            return ("FAIL", f"LITE_STYLE_{name} has duplicate labels")
+    source_md = "Syndicate with double crossbreed is griefing, blue coin is unplayable into NG\n"
+    with tempfile.TemporaryDirectory() as td:
+        repo = Path(td) / "skill"
+        shutil.copytree(
+            SCRIPT_DIR.parent, repo,
+            ignore=shutil.ignore_patterns(".git", ".scratch", "__pycache__", "*.pyc"),
+        )
+        offline_db = Path(td) / "empty-card-db"
+        offline_db.mkdir()
+        env = {**os.environ, "GWENT_CARD_DB": str(offline_db)}
+        src = repo / "chat_source.md"
+        src.write_text(source_md, encoding="utf-8")
+
+        def run(args_: list[str]) -> subprocess.CompletedProcess:
+            return subprocess.run(
+                [sys.executable, str(repo / "scripts" / "translate.py"), *args_],
+                capture_output=True, text=True, timeout=300, env=env, cwd=str(repo),
+            )
+
+        if not (repo / "references" / "card_names_4lang.json").exists():
+            return ("FAIL", "card DB missing in this checkout — build first: "
+                    "python scripts/build_card_names_reference.py --src ~/gwent-card-db "
+                    "(or run install.sh)")
+
+        # 1) lite prepare: ready, lite flag on, article sections gone, essentials kept
+        r = run(["prepare", str(src), "--lite", "--json"])
+        if r.returncode != 0:
+            return ("FAIL", f"prepare --lite exit {r.returncode}: {r.stdout[-200:]}")
+        pdata = json.loads(r.stdout)["data"]
+        if not pdata.get("ready"):
+            return ("FAIL", f"lite prepare not ready: {pdata.get('card_db_count')} cards")
+        if not pdata.get("lite"):
+            return ("FAIL", "prepare --lite JSON missing lite=true")
+        lite_pack = (repo / "chat_source.pack.md").read_text(encoding="utf-8")
+        for gone in ("Balance Change Direction", "Markdown Format Preservation",
+                     "Phase C Acceptance Checklist", "Official Effect Text"):
+            if gone in lite_pack:
+                return ("FAIL", f"lite pack still carries article-grade section: {gone}")
+        for need in ("MANDATORY Term Lock Table", "blue coin", "NEXT STEP", "--lite"):
+            if need not in lite_pack:
+                return ("FAIL", f"lite pack missing essential: {need}")
+        # style table is the filtered subset: chat rows present, article rows gone
+        for label in ("Tone", "Dash", "Rhetoric"):
+            if f"| {label} |" not in lite_pack:
+                return ("FAIL", f"lite pack style table missing row: {label}")
+        for label in ("Sentence length", "Style"):
+            if f"| {label} |" in lite_pack:
+                return ("FAIL", f"lite pack style table kept article-grade row: {label}")
+
+        # 2) plain prepare on the same source keeps the article-grade sections
+        r = run(["prepare", str(src), "--json"])
+        if r.returncode != 0:
+            return ("FAIL", f"plain prepare exit {r.returncode}: {r.stdout[-200:]}")
+        if json.loads(r.stdout)["data"].get("lite"):
+            return ("FAIL", "plain prepare must not set lite=true")
+        full_pack = (repo / "chat_source.pack.md").read_text(encoding="utf-8")
+        for keep in ("Balance Change Direction", "Markdown Format Preservation",
+                     "Phase C Acceptance Checklist", "| Sentence length |"):
+            if keep not in full_pack:
+                return ("FAIL", f"plain pack lost article-grade section: {keep}")
+        # the lite trim must not touch the lock: the same terms stay mandatory
+        for term in ("blue coin", "Syndicate", "Nilfgaard"):
+            if term not in lite_pack:
+                return ("FAIL", f"lite pack lost locked term: {term}")
+    return ("PASS", "lite pack: article sections dropped, lock intact; plain pack unchanged")
+
+
 def _t_block_encn() -> tuple[str, str]:
     wrong = _enforce("Ciri and Scorch are strong.", "这张卡很强，没提任何卡名。")
     right = _enforce("Ciri and Scorch are strong.", "希里和烧灼都很强。")
@@ -591,6 +680,7 @@ _TESTS = [
     _t_card_db_cache,
     _t_parse_ta_envelope,
     _t_pipeline,
+    _t_lite_pack,
     _t_block_encn,
     _t_block_cnen,
     _t_cjk_absorb,
