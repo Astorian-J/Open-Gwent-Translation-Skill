@@ -32,6 +32,7 @@
 |---------|---------|---------------|-------|
 | Off the Books | 黑市买卖 | OTB | SY leader |
 | Redanian Secret Service | 瑞达尼亚情报处 | RSS | Card / faction reference |
+| Saov Ainmhi'dh | 鹿灵 | Saov | ST card / chat short form（裁决见 term_decisions 2026-08-29） |
 
 ### 派系术语 (Faction Terms)
 
