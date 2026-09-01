@@ -16,7 +16,6 @@ Exit code:
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -27,6 +26,7 @@ from _shared import (
     format_issue,
     json_output,
     parse_ta_envelope,
+    run_utf8,
     terms_summary,
 )
 
@@ -37,10 +37,8 @@ def run_script_json(script_name: str, args: list[str]) -> tuple[bool, dict | Non
     if not script.exists():
         return False, None, f"{script_name} not found"
 
-    result = subprocess.run(
+    result = run_utf8(
         [sys.executable, str(script), *args, "--json"],
-        capture_output=True,
-        text=True,
         timeout=60,
     )
     output = result.stdout.strip()

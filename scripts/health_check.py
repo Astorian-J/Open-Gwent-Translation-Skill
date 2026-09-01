@@ -11,14 +11,13 @@ import ast
 import argparse
 import os
 import re
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import json_output, parse_markdown_table
+from _shared import json_output, parse_markdown_table, run_utf8
 
 
 _no_color = False
@@ -673,11 +672,9 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
                 tf.write(test_content)
                 test_file = Path(tf.name)
             try:
-                result = subprocess.run(
+                result = run_utf8(
                     [sys.executable, str(check_script), str(test_file),
                      "--direction", "encn", "--json"],
-                    capture_output=True,
-                    text=True,
                     timeout=10,
                 )
                 # Assert on the JSON envelope (exit code + parsed issue list),
@@ -720,10 +717,8 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
                 tf.write(test_content)
                 test_file = Path(tf.name)
             try:
-                result = subprocess.run(
+                result = run_utf8(
                     [sys.executable, str(check_script), str(test_file)],
-                    capture_output=True,
-                    text=True,
                     timeout=10,
                 )
                 if "English residue" in result.stdout:
@@ -750,11 +745,9 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", encoding="utf-8", delete=False) as tf:
                 tf.write("This English output intentionally omits the locked card name.\n")
                 test_file = Path(tf.name)
-            result = subprocess.run(
+            result = run_utf8(
                 [sys.executable, str(guard_script), str(test_file),
                  "--source", str(src_file), "--direction", "cnen", "--json"],
-                capture_output=True,
-                text=True,
                 timeout=30,
             )
             if ('"status": "ran"' in result.stdout
@@ -782,10 +775,10 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
                 tf.write("这张卡破碎了。")
                 tr_file = Path(tf.name)
             try:
-                result = subprocess.run(
+                result = run_utf8(
                     [sys.executable, str(check_script), str(tr_file),
                      "--source", str(src_file), "--direction", "encn"],
-                    capture_output=True, text=True, timeout=15,
+                    timeout=15,
                 )
                 # literal "破碎了" for "broken" should warn (non-blocking, exit 0)
                 if "slang not preserved" in result.stdout and result.returncode == 0:

@@ -730,6 +730,42 @@ def load_lock_file(lock_path: "Path | str") -> dict:
     return json.loads(Path(lock_path).read_text(encoding="utf-8"))
 
 
+def run_utf8(
+    cmd: list[str],
+    timeout: float | None = None,
+    env: dict[str, str] | None = None,
+    cwd: str | None = None,
+):
+    """subprocess.run with UTF-8 pinned on BOTH sides (Windows-safe).
+
+    capture_output + text=True alone decodes child stdout with the platform
+    locale — GBK on Chinese Windows — while every script here emits UTF-8
+    (Chinese reference data, JSON envelopes). That mismatch raised
+    UnicodeDecodeError and bricked prepare/finish on Windows (2026-09-01
+    user report). The parent decodes UTF-8 (errors="replace" keeps
+    diagnostics alive on stray bytes instead of crashing), and children are
+    forced to EMIT UTF-8 via PYTHONIOENCODING — fixing only the parent side
+    would silently turn child GBK output into mojibake, so both ends move
+    together. `env` (when given) is layered on top of os.environ — caller
+    keys win, PATH/SystemRoot survive — with PYTHONIOENCODING forced last.
+    """
+    import os
+    import subprocess
+
+    child_env = {**os.environ, **(env or {}),
+                 "PYTHONIOENCODING": "utf-8"}
+    return subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        env=child_env,
+        cwd=cwd,
+    )
+
+
 def build_lock_from_source(source_path: "Path | str") -> Path:
     """Build a context lock from a source file by shelling out to context_lock.py.
 
@@ -737,18 +773,15 @@ def build_lock_from_source(source_path: "Path | str") -> Path:
     responsible for cleaning up. Raises RuntimeError on build failure so callers
     can decide whether to degrade or abort, instead of silently masking errors.
     """
-    import subprocess
     import tempfile
 
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", prefix="gwent_lock_", delete=False
     ) as tmp:
         lock_file = Path(tmp.name)
-    result = subprocess.run(
+    result = run_utf8(
         [sys.executable, str(Path(__file__).parent / "context_lock.py"),
          "build", str(source_path), "--output", str(lock_file)],
-        capture_output=True,
-        text=True,
         timeout=120,
     )
     if result.returncode != 0:

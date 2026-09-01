@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-09-01 — Windows GBK 编码崩溃修复：run_utf8 统一子进程调用
+
+- **背景**：用户在 Windows 实测报 `translate.py prepare --lite` / `finish --lite`
+  崩 `UnicodeDecodeError: 'gbk' codec can't decode byte 0xa5/0x83`——
+  `subprocess.run(capture_output=True, text=True)` 在中文 Windows 上用平台
+  locale（GBK/cp936）解码子进程 stdout，而 auto_pipeline / completeness_guard
+  输出含 UTF-8 中文（effect_text.json 等），流水线在 Windows 完全不可用
+- **修复**：`_shared.py` 新增 `run_utf8()`（cmd/timeout/env/cwd 参数）——
+  父进程 `encoding="utf-8", errors="replace"` 解码（脏字节降级为替换符不崩，
+  诊断信息保活），子进程经 `PYTHONIOENCODING=utf-8` 强制输出 UTF-8。
+  **两侧必须一起钉死**：只修父进程会把子进程 GBK 输出变成静默乱码。
+  env 参数叠加在 os.environ 之上（测试隔离变量存活）
+- **全仓 20 处 capture+text 调用统一换用**：_shared（context_lock build）/
+  translate（run_script_json JSON runner、卡库 auto-build）/ completeness_guard
+  （run_script_json）/ auto_pipeline（pre）/ check_translation（锁构建、
+  term_enforcer）/ phase_c_check / diff_review / health_check ×4 / test_rebuild ×7。
+  translate `run` 子命令的两处无捕获控制台透传不动（无解码路径）
+- **回归**：+`_t_subprocess_utf8`（子进程直写 UTF-8 字节使父进程解码成为
+  唯一变量，跨平台可复现；print 子进程验证 PYTHONIOENCODING 强制 + env
+  叠加）；test_rebuild 26→27、health_check 77→78、samples 22 不变；
+  prepare --lite 端到端实测 PASS
+- **诚实边界**：`run` 子命令的控制台透传不经过 run_utf8 的捕获逻辑——交互式
+  GBK 控制台上属显示层问题（现代 Python 控制台走 Unicode IO，退出码不受影响）；
+  但外层工具若用**管道捕获** `run` 的输出，Windows 子进程仍按 GBK 字节写入管道
+  （需要时外层自设 PYTHONIOENCODING=utf-8 或改走 prepare/finish 捕获路径）。
+  本修复覆盖所有「捕获并解码」路径
+
 ## 2026-09-01 — 歧义名单全表重建：罗契双卡陷阱根治 + 21 组新登 + 机器不变量
 
 - **背景**：用户报「罗契：冷酷之心和弗农·罗契还是搞混」（BC35/VK 案同型）。

@@ -39,7 +39,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import detect_direction, format_issue, json_output, source_is_chinese
+from _shared import detect_direction, format_issue, json_output, run_utf8, source_is_chinese
 
 SCRIPTS_DIR = Path(__file__).parent
 
@@ -200,10 +200,8 @@ def run_script_json(script_name: str, args: list[str], timeout: int) -> tuple[bo
         return False, None, f"{script_name} not found"
 
     try:
-        result = subprocess.run(
+        result = run_utf8(
             [sys.executable, str(script), *args, "--json"],
-            capture_output=True,
-            text=True,
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as e:
@@ -366,9 +364,9 @@ def _ensure_card_db() -> tuple[int, bool]:
         build_args = ["--fetch"]
         print("[AUTO] No local card-db found; fetching from api.gwent.one ...", file=sys.stderr)
     try:
-        result = subprocess.run(
+        result = run_utf8(
             [sys.executable, str(build_script), *build_args],
-            capture_output=True, text=True, timeout=300,
+            timeout=300,
         )
     except subprocess.TimeoutExpired:
         print("[WARN] Auto-build timed out (5 min). Build manually:", file=sys.stderr)

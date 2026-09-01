@@ -10,7 +10,6 @@ Usage:
 import argparse
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -20,6 +19,7 @@ from _shared import (
     extract_capitalized_phrases,
     extract_card_names,
     json_output,
+    run_utf8,
 )
 from check_translation import load_forbidden_terms
 
@@ -137,7 +137,7 @@ def run_full_checker(translation_file: str) -> list[dict]:
         }]
 
     cmd = [sys.executable, str(script), translation_file, "--json"]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    result = run_utf8(cmd, timeout=60)
 
     try:
         parsed = json.loads(result.stdout)

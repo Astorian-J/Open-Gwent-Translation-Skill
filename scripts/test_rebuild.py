@@ -33,7 +33,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _shared import TermAuthority, build_lock_from_source, format_issue, parse_ta_envelope  # noqa: E402
+from _shared import TermAuthority, build_lock_from_source, format_issue, parse_ta_envelope, run_utf8  # noqa: E402
 from check_translation import check_term_authority_violations  # noqa: E402
 import translate  # noqa: E402
 from translate import _aggregate_violations, _card_db_status, _load_lock_terms  # noqa: E402
@@ -306,9 +306,9 @@ def _t_pipeline() -> tuple[str, str]:
         src.write_text(source_md, encoding="utf-8")
 
         def run(args_: list[str]) -> subprocess.CompletedProcess:
-            return subprocess.run(
+            return run_utf8(
                 [sys.executable, str(repo / "scripts" / "translate.py"), *args_],
-                capture_output=True, text=True, timeout=300, env=env, cwd=str(repo),
+                timeout=300, env=env, cwd=str(repo),
             )
 
         # The copy carries this machine's gitignored card DB; a bare clone
@@ -438,6 +438,39 @@ def _t_ambiguous_rebuild() -> tuple[str, str]:
     return ("PASS", "Ambiguous rebuild: Roche both-variant resolve + accented extract + CN bare-name gate")
 
 
+def _t_subprocess_utf8() -> tuple[str, str]:
+    """run_utf8 pins UTF-8 on both sides of every child-process pipe.
+
+    Windows regression (2026-09-01 user report): capture_output + text=True
+    alone decodes child stdout with the platform locale — GBK on Chinese
+    Windows — while our scripts emit UTF-8 (Chinese reference data, JSON
+    envelopes), so prepare/finish crashed with UnicodeDecodeError. The
+    first child writes raw UTF-8 bytes straight to the buffer, making the
+    parent's decode choice the only variable (meaningful on any platform);
+    the second asserts both halves of the env contract directly — the
+    caller's env key survives layering AND the child's stdout encoding is
+    forced to UTF-8 (reported by the child itself, so the assertion holds
+    on GBK Windows and UTF-8 POSIX alike).
+    """
+    child_raw = "import sys; sys.stdout.buffer.write('中文锁定术语'.encode('utf-8'))"
+    r = run_utf8([sys.executable, "-c", child_raw], timeout=30)
+    if "中文锁定术语" not in (r.stdout or ""):
+        return ("FAIL", f"parent decode not UTF-8: {r.stdout!r}")
+
+    import os
+    child_print = ("import os, sys; "
+                   "print(os.environ.get('GWENT_TEST_MARKER', 'MISSING'), "
+                   "sys.stdout.encoding)")
+    custom_env = {**os.environ, "GWENT_TEST_MARKER": "1"}
+    r2 = run_utf8([sys.executable, "-c", child_print], timeout=30, env=custom_env)
+    out = (r2.stdout or "").strip()
+    if "MISSING" in out or not out.startswith("1 "):
+        return ("FAIL", f"caller env var lost under layering: {out!r}")
+    if "utf-8" not in out.lower():
+        return ("FAIL", f"child stdout encoding not forced: {out!r}")
+    return ("PASS", "run_utf8: parent decodes UTF-8, child emits UTF-8 (env layered)")
+
+
 def _t_lite_pack() -> tuple[str, str]:
     """prepare --lite: the chat pack drops article-grade sections; plain prepare keeps them.
 
@@ -474,9 +507,9 @@ def _t_lite_pack() -> tuple[str, str]:
         src.write_text(source_md, encoding="utf-8")
 
         def run(args_: list[str]) -> subprocess.CompletedProcess:
-            return subprocess.run(
+            return run_utf8(
                 [sys.executable, str(repo / "scripts" / "translate.py"), *args_],
-                capture_output=True, text=True, timeout=300, env=env, cwd=str(repo),
+                timeout=300, env=env, cwd=str(repo),
             )
 
         if not (repo / "references" / "card_names_4lang.json").exists():
@@ -541,9 +574,9 @@ def _t_lookup_card_db() -> tuple[str, str]:
                 "(or run install.sh)")
 
     def lookup(q: str, *extra: str) -> dict:
-        r = subprocess.run(
+        r = run_utf8(
             [sys.executable, str(SCRIPT_DIR / "lookup.py"), q, "--json", *extra],
-            capture_output=True, text=True, timeout=60)
+            timeout=60)
         return json.loads(r.stdout)
 
     exact = lookup("Villentretenmerth")
@@ -584,9 +617,9 @@ def _t_repair_tracking() -> tuple[str, str]:
         src.write_text(source_md, encoding="utf-8")
 
         def run(args_):
-            return subprocess.run(
+            return run_utf8(
                 [sys.executable, str(repo / "scripts" / "translate.py"), *args_],
-                capture_output=True, text=True, timeout=300, env=env, cwd=str(repo),
+                timeout=300, env=env, cwd=str(repo),
             )
 
         if run(["prepare", str(src)]).returncode != 0:
@@ -735,10 +768,10 @@ def _t_h2_fix_keeps_ta() -> tuple[str, str]:
         src.write_text("Ciri is a strong gold card.\n", encoding="utf-8")
         trans = Path(td) / "translated.txt"
         trans.write_text("这张12费换8战力的卡很多人带。\n", encoding="utf-8")
-        r = subprocess.run(
+        r = run_utf8(
             [sys.executable, str(SCRIPT_DIR / "check_translation.py"),
              str(trans), "--source", str(src), "--fix", "--direction", "encn"],
-            capture_output=True, text=True, timeout=60)
+            timeout=60)
     if "Auto-fixed" not in r.stdout:
         return ("FAIL", f"--fix did not apply: {r.stdout[:200]}")
     if "term authority" not in r.stdout or r.returncode != 1:
@@ -753,10 +786,10 @@ def _t_m9_guard_lock_build_fail() -> tuple[str, str]:
         trans.write_text("这张卡很强。\n", encoding="utf-8")
         bad_source = Path(td) / "a_directory.md"  # a directory: lock build must fail
         bad_source.mkdir()
-        r = subprocess.run(
+        r = run_utf8(
             [sys.executable, str(SCRIPT_DIR / "completeness_guard.py"),
              str(trans), "--source", str(bad_source), "--direction", "encn", "--json"],
-            capture_output=True, text=True, timeout=120)
+            timeout=120)
         try:
             data = json.loads(r.stdout)["data"]
         except (json.JSONDecodeError, KeyError) as e:
@@ -816,10 +849,10 @@ def _t_m5_consumer_propagation() -> tuple[str, str]:
         tp.write_text("这张卡很强。\n", encoding="utf-8")
         lp = root / "lock.json"
         lp.write_text(json.dumps(lock, ensure_ascii=False), encoding="utf-8")
-        r = subprocess.run(
+        r = run_utf8(
             [sys.executable, str(root / "scripts" / "check_translation.py"),
              str(tp), "--lock", str(lp), "--direction", "encn", "--json"],
-            capture_output=True, text=True, timeout=60)
+            timeout=60)
     try:
         envelope = json.loads(r.stdout)
         issues = envelope["data"]["issues"]
@@ -839,6 +872,7 @@ _TESTS = [
     _t_subsume_guard,
     _t_ambiguous_base_priority,
     _t_ambiguous_rebuild,
+    _t_subprocess_utf8,
     _t_format_issue_shapes,
     _t_lock_terms_filter,
     _t_violations_aggregation,

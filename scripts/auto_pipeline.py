@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import detect_direction, json_output, terms_summary, TermAuthority
+from _shared import detect_direction, json_output, run_utf8, terms_summary, TermAuthority
 
 
 # Scripts that already support --json in Phase 1.
@@ -205,7 +205,7 @@ def run_script(name: str, args: list[str], json_mode: bool = False) -> tuple[boo
     if json_mode and name in JSON_CAPABLE_SCRIPTS:
         cmd.append("--json")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        result = run_utf8(cmd, timeout=120)
     except subprocess.TimeoutExpired as e:
         output = e.stdout or ""
         if e.stderr:

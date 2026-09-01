@@ -16,12 +16,11 @@ Exit code:
 import argparse
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import detect_direction, json_output, parse_markdown_table, parse_ta_envelope
+from _shared import detect_direction, json_output, parse_markdown_table, parse_ta_envelope, run_utf8
 from check_translation import check_chinese_residue, check_english_residue
 
 
@@ -134,10 +133,8 @@ def check_context_lock_terms(
         flag, ref = "--lock", str(lock_path)
     else:
         flag, ref = "--source", str(source_path)
-    result = subprocess.run(
+    result = run_utf8(
         [sys.executable, str(script), str(translated_path), flag, ref, "--json"],
-        capture_output=True,
-        text=True,
         timeout=60,
     )
     # No early-return on returncode==0: the envelope can still carry degraded

@@ -34,6 +34,7 @@ from _shared import (
     json_output,
     load_lock_file,
     parse_ta_envelope,
+    run_utf8,
 )
 
 # --- Load rules from references ---
@@ -106,10 +107,8 @@ def load_locked_phrases_from_source(source_path: Path) -> set[str]:
     os.close(tmp_fd)
 
     try:
-        result = subprocess.run(
+        result = run_utf8(
             [sys.executable, str(script), "build", str(source_path), "--output", str(tmp_path)],
-            capture_output=True,
-            text=True,
             timeout=60,
         )
         if result.returncode != 0:
@@ -789,10 +788,8 @@ def check_term_authority_violations(
         flag, ref = "--lock", str(lock_path)
     else:
         flag, ref = "--source", str(source_path)
-    result = subprocess.run(
+    result = run_utf8(
         [sys.executable, str(script), str(translated_path), flag, ref, "--json"],
-        capture_output=True,
-        text=True,
         timeout=60,
     )
     # No early-return on returncode==0: a rc-0 run can still carry degraded
