@@ -173,9 +173,17 @@ def parse_ta_envelope(parsed) -> tuple[bool, int, list[dict], str | None]:
 
 # --- Regex patterns ---
 
+# Word classes cover the Latin-1 accented letters — excluding the ×(U+00D7)
+# and ÷(U+00F7) sign codepoints that sit inside the raw À-ÿ range — so names
+# like "Dana Méadbh", "Eithné: Mother" and accent-initial "Éibhear Hattori"
+# extract exactly like ASCII names.
+_ACC_UPPER = "A-ZÀ-ÖØ-Þ"       # word-initial capitals (incl. É, À, Ø...)
+_ACC_LOWER = "a-zà-öø-ÿ"       # lowercase (incl. é, à, ø...)
+_ACC_ANY = "A-Za-zÀ-ÖØ-öø-ÿ"   # any-case letters
+
 CARD_NAME_PATTERN = re.compile(
-    r'\b([A-Z][a-zA-Z]*(?:\'[a-zA-Z]+)?(?:\s+[A-Z][a-zA-Z]*(?:\'[a-zA-Z]+)?){0,2}:\s*(?:The\s+)?'
-    r'[A-Z][a-zA-Z]*(?:\'[a-zA-Z]+)?(?:\s+[A-Z][a-zA-Z]*(?:\'[a-zA-Z]+)?){0,2})\b'
+    rf'\b([{_ACC_UPPER}][{_ACC_ANY}]*(?:\'[{_ACC_ANY}]+)?(?:\s+[{_ACC_UPPER}][{_ACC_ANY}]*(?:\'[{_ACC_ANY}]+)?){{0,2}}:\s*(?:The\s+)?'
+    rf'[{_ACC_UPPER}][{_ACC_ANY}]*(?:\'[{_ACC_ANY}]+)?(?:\s+[{_ACC_UPPER}][{_ACC_ANY}]*(?:\'[{_ACC_ANY}]+)?){{0,2}})\b'
 )
 
 ABBREVIATION_PATTERN = re.compile(r'\b([A-Z]{2,5})\b')
@@ -536,7 +544,7 @@ def extract_card_names_no_colon(
     func_pattern = '|'.join(re.escape(w) for w in FUNCTION_WORDS)
     # Match: CapitalizedWord + (space + (function_word | CapitalizedWord)) repeated
     pattern = re.compile(
-        rf'\b([A-Z][a-zA-Z]*(?:\'[a-zA-Z]+)?(?:\s+(?:{func_pattern}|[A-Z][a-zA-Z]*(?:\'[a-zA-Z]+)?))'
+        rf'\b([{_ACC_UPPER}][{_ACC_ANY}]*(?:\'[{_ACC_ANY}]+)?(?:\s+(?:{func_pattern}|[{_ACC_UPPER}][{_ACC_ANY}]*(?:\'[{_ACC_ANY}]+)?))'
         rf'{{1,{max_words}}})\b'
     )
     for match in pattern.finditer(text):
@@ -591,8 +599,11 @@ def extract_capitalized_phrases(
     if skip_words is None:
         skip_words = SKIP_WORDS_MINIMAL
 
+    # Title-case semantics preserved: only lowercase letters (incl. accented
+    # ones, e.g. "Méadbh") may follow the initial capital — which itself may
+    # be accented ("Éibhear") — so all-caps abbreviations still never match.
     pattern = re.compile(
-        rf'\b([A-Z][a-z]+(?:\'[a-zA-Z]+)?(?:\s+[A-Z][a-z]+(?:\'[a-zA-Z]+)?){{1,{max_words}}})\b'
+        rf'\b([{_ACC_UPPER}][{_ACC_LOWER}]+(?:\'[{_ACC_ANY}]+)?(?:\s+[{_ACC_UPPER}][{_ACC_LOWER}]+(?:\'[{_ACC_ANY}]+)?){{1,{max_words}}})\b'
     )
     for match in pattern.finditer(text):
         name = match.group(1).strip()
@@ -1239,8 +1250,11 @@ class TermAuthority:
         for line in text.split("\n"):
             line = line.strip()
             if line.startswith("## "):
-                # Header format: "## 杰洛特 (Geralt) — 6 versions"
-                match = re.search(r"\(([A-Za-z][A-Za-z\s':]*)\)", line)
+                # Header format: "## 杰洛特 (Geralt) — 6 versions". The base
+                # name may contain accented letters (Dana Méadbh, Eithné), so
+                # only the first char is constrained; the rest is any
+                # non-paren run.
+                match = re.search(r"\(([A-Za-z][^()]*)\)", line)
                 if match:
                     current_base_en = match.group(1).strip()
                 continue

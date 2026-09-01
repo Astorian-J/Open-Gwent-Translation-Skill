@@ -382,6 +382,62 @@ def _t_pipeline() -> tuple[str, str]:
     return ("PASS", "pipeline: prepare pack shape, good PASS, bad BLOCKED w/ detail, DB-missing fail-closed")
 
 
+def _t_ambiguous_rebuild() -> tuple[str, str]:
+    """2026-09 ambiguous_names.md rebuild invariants.
+
+    (a) Roche (BC35 misidentification trap): bare base resolves ambiguous
+        with BOTH cards as variants; full names stay exact.
+    (b) Accented names: 'Dana Méadbh: Caretaker' extracts from EN text as
+        one exact lock (extractor word classes include the À-ÿ range), and
+        the accented group header parses (base 'Dana Méadbh' loads).
+    (c) CN gate: a translation using bare 罗契 with no full version
+        anywhere gets an ambiguous-name issue that names both candidates.
+    """
+    ta = TermAuthority()
+
+    r = ta.resolve("Roche")
+    variants = {(v["en"], v["cn"]) for v in (r or {}).get("variants", [])}
+    if (r or {}).get("type") != "ambiguous" or \
+            ("Vernon Roche", "弗农·罗契") not in variants or \
+            ("Roche: Merciless", "罗契：冷酷之心") not in variants:
+        return ("FAIL", f"resolve('Roche') -> {r}")
+    full = ta.resolve("Roche: Merciless")
+    if not full or full.get("match_type") != "exact" or full.get("cn") != "罗契：冷酷之心":
+        return ("FAIL", f"resolve('Roche: Merciless') degraded: {full}")
+
+    got = {t["canonical_en"]: t["match_type"]
+           for t in ta.get_all_for_text("Dana Méadbh: Caretaker is underrated.")}
+    if got.get("Dana Méadbh: Caretaker") != "exact":
+        return ("FAIL", f"accented colon extraction: {got}")
+    if "dana méadbh" not in ta._ambiguous:
+        return ("FAIL", f"accented header not loaded, bases={sorted(ta._ambiguous)[:3]}...")
+
+    got2 = {t["canonical_en"]: t["match_type"]
+            for t in ta.get_all_for_text("Éibhear Hattori boosts artifacts.")}
+    if got2.get("Éibhear Hattori") != "exact":
+        return ("FAIL", f"accent-initial extraction: {got2}")
+
+    from check_translation import check_translation
+    issues, _ = check_translation(
+        "罗契这个版本很强。",
+        locked_phrases=set(),
+        direction="encn",
+        source_text="Roche is a strong pick this patch.",
+    )
+    amb = [i for i in issues if i.startswith("ambiguous name: 「罗契」") and "弗农·罗契" in i]
+    if not amb:
+        return ("FAIL", f"bare 罗契 not flagged, issues={issues}")
+    issues_ok, _ = check_translation(
+        "弗农·罗契这个版本很强。",
+        locked_phrases=set(),
+        direction="encn",
+        source_text="Vernon Roche is a strong pick this patch.",
+    )
+    if any(i.startswith("ambiguous name:") for i in issues_ok):
+        return ("FAIL", f"full name falsely flagged: {issues_ok}")
+    return ("PASS", "Ambiguous rebuild: Roche both-variant resolve + accented extract + CN bare-name gate")
+
+
 def _t_lite_pack() -> tuple[str, str]:
     """prepare --lite: the chat pack drops article-grade sections; plain prepare keeps them.
 
@@ -782,6 +838,7 @@ _TESTS = [
     _t_false_lock_guard,
     _t_subsume_guard,
     _t_ambiguous_base_priority,
+    _t_ambiguous_rebuild,
     _t_format_issue_shapes,
     _t_lock_terms_filter,
     _t_violations_aggregation,

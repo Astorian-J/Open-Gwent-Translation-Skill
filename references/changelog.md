@@ -1,5 +1,56 @@
 # Changelog
 
+## 2026-09-01 — 歧义名单全表重建：罗契双卡陷阱根治 + 21 组新登 + 机器不变量
+
+- **背景**：用户报「罗契：冷酷之心和弗农·罗契还是搞混」（BC35/VK 案同型）。
+  排查定位三层病根：①ambiguous_names.md 没登记 Roche——EN 裸 "Roche" 静默漏
+  提取（无锁无消歧提示），模型凭名气先验默认弗农·罗契；②门禁只查一致性不查
+  事实，源帖认错卡则一致地错（结构性，卡图核对防线在 bc_data 流程）；③全表
+  核验发现手工维护的歧义名单烂了几个月没人发现：34 行幽灵卡名（33 个唯一
+  名，卡库不存在的老名/错名）、多处官方改名漂移、1 个表头解析失败把行挂到
+  上一组
+- **references/ambiguous_names.md 全表重建（48→63 组）**（口径按审查复算：
+  26 组核对未动；16 组同键修复；21 组新键；旧 48 - 6 组旧键退役 = 42 保留
+  + 21 新 = 63）：
+  - 16 组同键修复：EN 改名对齐（Regis: Rebirth→Reborn、Triss: Butterfly
+    Spell→Butterflies、Yennefer: Enchantress→Conjurer、John Calveit→Jan
+    Calveit、Hjalmar: Pirate→Seawolf、Vilgefortz: Renegade Mage→Renegade、
+    Dagon/Tyr/Gregory/Torres 副标题对齐现名）+ 成员修到现役（Caranthir 幽灵
+    基名卡→Caranthir Ar-Feiniel、Usurper 全组、Harald 补到 5 张、
+    Dol Blathanna/Aen 组换现役成员）
+  - 21 组新键：姓氏形态 Roche/Adda/Roderick + 冒号形态 Auberon/Eithné/
+    Frightener/Gigascorpion Decoction/Jacques/Red Riders/Saber-Tooth Tiger/
+    Saesenthessis/Saov Ainmhi'dh/Shaping Nature/Shupe/Treant Mantis/Vial of
+    Forbidden Knowledge/Viraxas + 4 个官方改键继任组（Dana Meadbh→Dana
+    Méadbh、Kitsune→Aguara、Lake Guard→Lake Guardian、Melitele's Temple→
+    Temple of Melitele）
+  - 6 组旧键退役 = 上述 4 个继任键 + 2 组全幽灵删除（Seer、Clan Dimun
+    Pirate，卡库零命中）
+  - 清除 34 行幽灵卡名（33 个唯一名）
+  - 所有 CN 名逐字取自 card_names_4lang.json；线索列卡面数值与阵营词经
+    gwent-card-db 核实，且阵营词校验已并入 health_check 机器守护（需
+    gwent-card-db 在场）
+- **scripts/_shared.py 提取器重音支持**：CARD_NAME_PATTERN /
+  extract_card_names_no_colon / extract_capitalized_phrases 三个词模式补
+  À-ÿ 区间（同 _VARIANT_TOKEN_RE 先例）；修复 "Dana Méadbh: Caretaker"
+  全名隐形且子串 Caretaker 误锁看门人的存量缺口；歧义表头解析正则放开
+  重音字母（Dana Méadbh / Eithné 组此前会解析失败挂到上一组）
+- **health_check 新增 check_ambiguous_names**：歧义表与卡库逐字对照（幽灵/
+  CN 漂移/表头计数）——这份文件此前无任何机器守护，漂移数月无人知；缺库时
+  降级 INFO（同 effect_text 惯例）
+- **端到端实测**：裸 "Roche" → 歧义提取 + pack 双卡线索（NR 2/9 不忠间谍 vs
+  NR 4/12 直伤蓝衣铁卫）；译文写弗农·罗契 PASS；裸写「罗契」BLOCK 且违规信息
+  内联两个候选全名
+- **回归**：samples 基线 22 不变（零新增误报）；test_rebuild 25→26
+  （+_t_ambiguous_rebuild，含 Éibhear 重音首字母断言）；health_check 75→77
+  （+1 歧义不变量 +1 行为测试计入；75→77 的构成经 HEAD 快照对账属实）
+- **诚实边界**：源帖自己认错卡（写成另一张的真名）任何术语门都拦不住，只能靠
+  bc_data 的卡图核对铁律。含裸基础变体的组（自然法则/萨琪亚/红骑士/鹿灵/
+  狐妖/达娜梅碧/巨蝎煎药/刃齿虎/老矛头/卡兰希尔/禁识之瓶/萨琪亚萨司 12 组）
+  的中文裸名门禁结构性不触发——基名出现即满足 has_full，这是「裸名=基础版」
+  设计的既定行为，不是漏洞；真正的新误报面是 CJK 子串：译文含「商店店员」
+  会命中「店店」组的裸名检查（同「约翰」组先例，昆特语料概率低，接受并记录）
+
 ## 2026-09-01 — flash 提示词层加固（自查回路 + 硬触发 + 扩表 + 降级写法）
 
 - **背景**：flash 纯提示词层分析定位

@@ -341,6 +341,135 @@ def check_term_authority_invariants(script_dir: Path) -> list[tuple[str, str]]:
     return results
 
 
+def check_ambiguous_names(ref_dir: Path) -> list[tuple[str, str]]:
+    """ambiguous_names.md must match card_names_4lang.json verbatim.
+
+    The file is hand-curated and drifted for months (phantom EN names like
+    'Dana Meadbh'/'Regis: Rebirth', renamed cards, one header that failed
+    the base-name regex and silently attached its rows to the previous
+    group) because nothing cross-checked it against the card database.
+    This invariant closes that hole. Beyond per-variant EN existence + CN
+    verbatim match and header-parse accounting, two reconciliation guards
+    cover the silent-loss blind spots the review found:
+
+      - row-level: a malformed row swallowed by BOTH parsers (each accepts
+        a slightly different column shape) used to pass; now the raw
+        accepted-row count must equal both parsers' variant totals
+      - second parser: check_translation.load_ambiguous_names (CN-keyed,
+        powers the CN bare-name gate) requires "versions" in the header —
+        a header losing that word used to silently drop the whole group
+        from the CN gate while health stayed green
+
+    Clue-column faction tokens (NR/NG/.../Neutral) are checked against the
+    card's real faction when gwent-card-db is available (GWENT_CARD_DB env
+    or ~/gwent-card-db); otherwise that sub-check degrades to INFO.
+
+    card_names_4lang.json is a build-time artifact (CDPR data, not
+    committed); when missing the whole check degrades to INFO, mirroring
+    check_effect_text."""
+    results = []
+    db_path = ref_dir / "card_names_4lang.json"
+    md_path = ref_dir / "ambiguous_names.md"
+    if not md_path.exists():
+        # required_refs already FAILs a missing file; avoid double-counting
+        # (same idiom as check_card_overrides_quality).
+        return results
+    if not db_path.exists():
+        results.append(("INFO", "ambiguous_names: card_names_4lang.json 未构建，跳过对照"
+                        "（运行 build_card_names_reference.py 后自动核验）"))
+        return results
+    try:
+        import json
+        en2cn = {c["en"]: c["cn"]
+                 for c in json.loads(db_path.read_text(encoding="utf-8")).values()
+                 if c.get("en")}
+    except Exception as exc:  # noqa: BLE001
+        results.append(("WARN", f"ambiguous_names: card_names_4lang.json 解析失败 ({exc})"))
+        return results
+
+    from _shared import get_term_authority
+    ta = get_term_authority()
+
+    bad = []
+    for base, variants in ta._ambiguous.items():
+        for v in variants:
+            if v["en"] not in en2cn:
+                bad.append(f"幽灵卡名 [{base}] {v['en']}")
+            elif en2cn[v["en"]] != v["cn"]:
+                bad.append(f"CN漂移 [{base}] {v['en']} '{v['cn']}' != '{en2cn[v['en']]}'")
+
+    header_count = sum(
+        1 for line in md_path.read_text(encoding="utf-8").split("\n")
+        if line.startswith("## ") and "(" in line
+    )
+    if header_count != len(ta._ambiguous):
+        bad.append(f"表头解析失败: 文件 {header_count} 个组头只加载了 {len(ta._ambiguous)} 组"
+                   "（行会挂到上一组）")
+
+    ta_total = sum(len(v) for v in ta._ambiguous.values())
+
+    # Second-parser reconciliation: the CN-keyed loader behind the CN
+    # bare-name gate must see exactly the same groups and rows.
+    from check_translation import load_ambiguous_names
+    amb2 = load_ambiguous_names()
+    if len(amb2) != len(ta._ambiguous):
+        bad.append(f"check_translation 解析器组数 {len(amb2)} != _shared {len(ta._ambiguous)}"
+                   "（CN 门禁表头需含 'versions'）")
+    p2_total = sum(len(v) for v in amb2.values())
+    if p2_total != ta_total:
+        bad.append(f"解析器变体总数不一致: check_translation {p2_total} vs _shared {ta_total}")
+
+    # Row-level reconciliation: count EVERY data line (starts with '|',
+    # not a separator/header row) — NOT rows the parsers happen to accept.
+    # Counting by parser acceptance lets a row collapsed below the parsers'
+    # column threshold vanish from all counters at once and pass silently.
+    raw_rows = 0
+    for line in md_path.read_text(encoding="utf-8").split("\n"):
+        s = line.strip()
+        if s.startswith("|") and "---" not in s and "Full Name" not in s:
+            raw_rows += 1
+    if raw_rows != ta_total:
+        bad.append(f"表格行数 {raw_rows} != 加载变体数 {ta_total}（畸形行被解析器静默吞下）")
+
+    # Clue-column faction tokens must equal the card's real faction.
+    import os
+    gdb = Path(os.environ.get("GWENT_CARD_DB") or Path.home() / "gwent-card-db") / "tables" / "cards_en.json"
+    if gdb.exists():
+        try:
+            fac_of = {c["name"]: c["faction"]
+                      for c in json.loads(gdb.read_text(encoding="utf-8"))}
+            fac_map = {"NR": "Northern Realms", "NG": "Nilfgaard", "MO": "Monster",
+                       "SK": "Skellige", "ST": "Scoiatael", "SY": "Syndicate",
+                       "NE": "Neutral", "Neutral": "Neutral"}
+            import re as _re
+            # (?<![Nn]on-) skips ability-text compounds like "non-Neutral
+            # units" — a hyphen is a word boundary, so the faction token
+            # inside such a compound is not a faction claim about the card.
+            fac_re = _re.compile(r"(?<![Nn]on-)\b(NR|NG|MO|SK|ST|SY|NE|Neutral)\b")
+            for base, variants in ta._ambiguous.items():
+                for v in variants:
+                    real = fac_of.get(v["en"])
+                    if not real:
+                        continue
+                    for m in fac_re.finditer(v["clue"]):
+                        if fac_map[m.group(1)] != real:
+                            bad.append(f"线索阵营错 [{base}] {v['en']}: '{m.group(1)}' 实为 {real}")
+        except Exception as exc:  # noqa: BLE001
+            results.append(("WARN", f"ambiguous_names: 线索阵营校验失败 ({exc})"))
+    else:
+        results.append(("INFO", "ambiguous_names: 线索阵营词校验需 gwent-card-db"
+                        "（GWENT_CARD_DB 或 ~/gwent-card-db），未找到已跳过"))
+
+    if bad:
+        shown = "; ".join(bad[:8])
+        extra = f"（共 {len(bad)} 处）" if len(bad) > 8 else ""
+        results.append(("FAIL", "ambiguous_names.md 与卡库不一致: " + shown + extra))
+    else:
+        results.append(("PASS", f"ambiguous_names.md: {len(ta._ambiguous)} 组 {ta_total} 行"
+                        "与卡库逐字一致，双解析器对齐"))
+    return results
+
+
 def check_effect_text(ref_dir: Path) -> list[tuple[str, str]]:
     """effect_text.json is a build-time artifact (CDPR data, NOT committed — see
     NOTICE), generated by build_effect_reference.py --fetch at install time. A
@@ -712,6 +841,7 @@ def main():
     data_results = run_section("Data Integrity", lambda: check_data_integrity(ref_dir))
     phase_c_results = run_section("Phase C Checklist", lambda: check_phase_c_checklist(ref_dir))
     authority_results = run_section("TermAuthority Invariants", lambda: check_term_authority_invariants(script_dir))
+    ambiguous_results = run_section("Ambiguous Names", lambda: check_ambiguous_names(ref_dir))
     effect_results = run_section("Effect Text", lambda: check_effect_text(ref_dir))
     card_ov_results = run_section("Card Overrides", lambda: check_card_overrides_quality(ref_dir))
     hygiene_results = run_section("Reference Data Hygiene", lambda: check_reference_data_hygiene(ref_dir))
@@ -748,6 +878,7 @@ def main():
         ("Data Integrity", data_results),
         ("Phase C Checklist", phase_c_results),
         ("TermAuthority Invariants", authority_results),
+        ("Ambiguous Names", ambiguous_results),
         ("Effect Text", effect_results),
         ("Card Overrides", card_ov_results),
         ("Reference Data Hygiene", hygiene_results),
