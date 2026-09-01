@@ -126,7 +126,7 @@ else
     echo "WARNING: lite/SKILL.md not found in repo, skipping lite skill"
 fi
 
-# Deploy flash skill (live-chat fastest tier; single pass, no scripts, no gate)
+# Deploy flash skill (live-chat fastest tier; single reply, no scripts, no machine gate)
 FLASH_DIR="$(dirname "$SKILL_DIR")/gwent-translation-flash"
 if [ -f "$SKILL_DIR/flash/SKILL.md" ]; then
     mkdir -p "$FLASH_DIR"
@@ -150,7 +150,7 @@ echo ""
 echo "Gwent Translation Skill installed successfully!"
 echo "  Full skill: $SKILL_DIR"
 echo "  Lite skill: $LITE_DIR (for chat / short content)"
-echo "  Flash skill: $FLASH_DIR (for live chat / fastest, no verification)"
+echo "  Flash skill: $FLASH_DIR (for live chat / fastest, in-turn self-check, no machine gate)"
 echo ""
 echo "To use with Claude Code, restart Claude Code or type '/' to see the skills."
 echo "To use with other agents, run scripts from $SKILL_DIR and see AGENTS.md."

@@ -27,7 +27,7 @@ agent_created: true
 - 用户说「翻一下这句」「这段聊天什么意思」「quick translate」
 
 **不要用本 skill**：长文章翻译——用 `gwent-translation-style`（不带 `--lite` 的完整门禁）。
-**比 lite 还要快、完全不要核对**（直播聊天连发场景）——用 `gwent-translation-flash`（一轮直翻，无机器校验）。
+**比 lite 还要快、不要机器核对**（直播聊天连发场景）——用 `gwent-translation-flash`（一轮回复含轮内自查，无机器校验）。
 
 ---
 

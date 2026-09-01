@@ -29,7 +29,8 @@ without explicit instruction, default to translating it.
 **Do not use lite** for long articles or content requiring strict terminology
 locking, format skeleton, or full validation — use the main skill. For
 fast-paced live chat where even the two-command flow is too slow and the user
-accepts NO verification, `gwent-translation-flash` translates in a single pass.
+accepts no machine gate, `gwent-translation-flash` translates in a single pass
+with an in-turn self-check on proper nouns.
 
 ## Term rule (the one that matters most)
 

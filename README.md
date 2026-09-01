@@ -53,7 +53,7 @@ A source with no suspected proper nouns ("gg wp") can skip prepare and go straig
 |---------|-------|
 | Long articles (meta reports, BC proposals, card analysis) | `gwent-translation-style` (full pipeline) |
 | Chat messages, comments, single sentences | `gwent-translation-lite` (chat-length gate) |
-| Live chat at full speed — no result verification | `gwent-translation-flash` (table first; full-corpus lookup only for unknown names) |
+| Live chat at full speed — single pass, in-turn self-check, no machine gate | `gwent-translation-flash` (table first; hard triggers force full-corpus lookup) |
 
 All three tiers install together via `install.sh`. Lite agent interface: [`lite/AGENTS.md`](lite/AGENTS.md).
 
