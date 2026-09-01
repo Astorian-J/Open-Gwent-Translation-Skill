@@ -11,13 +11,13 @@ description: |
   Triggered by: 昆特秒翻, 昆特极速翻译, 昆特快翻, gwent flash translate, translate fast.
   Trade-off: the self-check is model self-discipline, not a machine gate. When
   the content matters or has many unfamiliar names, use gwent-translation-lite
-  (adds a machine term gate). For full articles, use gwent-translation-style.
+  (adds a machine term gate). For full articles, use gwent-translation-pro.
 agent_created: true
 ---
 
 # Gwent Translation Flash (昆特极速翻译)
 
-> 三层速查：完整文章用 `gwent-translation-style`（全量门禁）；
+> 三层速查：完整文章用 `gwent-translation-pro`（全量门禁）；
 > 聊天要保底用 `gwent-translation-lite`（prepare + finish --lite 机器核对）；
 > **本 skill = 聊天抢速度：一轮回复（含轮内草稿自查），不跑任何机器校验。**
 
@@ -30,8 +30,8 @@ agent_created: true
 ## 主 skill 目录（仅 lookup 查库时需要）
 
 本 skill 唯一可能用到的脚本是主 skill 的 `lookup.py`。主 skill 在**本文件
-所在目录的兄弟目录** `gwent-translation-style`（标准 install 布局，适用于
-`~/.claude`、`~/.kimi`、`~/.agents`、`~/.hanako` 等所有安装位置）；设过
+所在目录的兄弟目录** `gwent-translation-pro`（标准 install 布局，适用于
+`~/.claude`、`~/.kimi`、`~/.agents` 等所有安装位置）；设过
 `GWENT_SKILL_DIR` 环境变量时以环境变量为准。下文 `$SK` 替换为解析出的实际路径。
 
 ## 流程：表优先，命中硬触发必查库

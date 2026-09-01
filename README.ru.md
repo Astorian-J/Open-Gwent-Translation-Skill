@@ -13,7 +13,7 @@
 ## Возможности
 
 - **Двунаправленный и направленно-осознанный** — EN→CN с тоном сообщества игроков Bilibili (короткие рубленые фразы, активный залог); CN→EN в естественный английский, сохраняющий термины сообщества. У каждого направления свой конвейер, поэтому CN→EN не пометит английские названия карт как непереведённые остатки.
-- **1366 карт, заблокированных дословно** — Официальное EN/CN-название каждой карты, категория, атрибуты (редкость / фракция) и текст способности загружаются из официальных данных CDPR и исполняются дословно. Данные карт никогда не переводятся заново. Данные карт загружаются при установке (запустите `install.sh` или `scripts/build_effect_reference.py --fetch`); они не коммитятся в репозиторий — см. NOTICE.
+- **1381 карта, заблокированная дословно** — Официальное EN/CN-название каждой карты, категория, атрибуты (редкость / фракция) и текст способности загружаются из официальных данных CDPR и исполняются дословно. Данные карт никогда не переводятся заново. Данные карт загружаются при установке (запустите `install.sh` или `scripts/build_effect_reference.py --fetch`); они не коммитятся в репозиторий — см. NOTICE.
 - **200+ названий колод сообщества** — Прозвища, которые реально используют китайские игроки (大金北, 孽鬼跳松, 赤诚骑士北, 状态帝国...), а не дословные переводы.
 - **Инъекция сленга и жаргона** — Английский сленг (op, brick, tutor, mulligan, on steroids, sweet spot...) обнаруживается в исходнике и предварительно наполняется целевым переводом, чтобы перестать быть абракадаброй.
 - **Сохранение риторики и тона** — Метафоры, гипербола и сарказм переводятся по *намерению*, а не слово в слово. "Loud design" не станет "слишком громким".
@@ -43,7 +43,9 @@
 
 Данные карт **блокируются, а не предлагаются**: если название карты или официальный эффект встречается в источнике, перевод должен использовать официальную китайскую форму. Новые термины сообщества проходят через буфер проверки (`pending_terms.md`) перед окончательным принятием. Буфер — локальные данные пользователя: установка или обновление skill никогда его не сбрасывает.
 
-## Облегчённая версия (перевод чата)
+## Три уровня: Pro / Lite / Flash
+
+Навык поставляется в трёх уровнях, все устанавливаются вместе через `install.sh`.
 
 Для **короткого чата** — сообщения в группах, комментарии в Discord / QQ / Kook, отдельные предложения — полный конвейер избыточен. Облегчённый навык **lite** (`gwent-translation-lite`) запускает тот же конвейер в чатовой форме: **две команды вокруг одного прохода перевода**.
 
@@ -55,7 +57,7 @@
 
 | Контент | Навык |
 |---------|-------|
-| Длинные статьи (мета-отчёты, BC-предложения, разбор карт) | `gwent-translation-style` (полный конвейер) |
+| Длинные статьи (мета-отчёты, BC-предложения, разбор карт) | `gwent-translation-pro` (полный конвейер) |
 | Сообщения чата, комментарии, отдельные предложения | `gwent-translation-lite` (чатовый шлюз) |
 | Живой чат на полной скорости — один проход, самопроверка в том же ходу, без машинного шлюза | `gwent-translation-flash` (сначала таблица; жёсткие триггеры обязывают lookup полного корпуса) |
 
@@ -100,14 +102,15 @@ python scripts/translate.py finish translated.txt --source source.md --direction
 ## Структура файлов
 
 ```
-gwent-translation-style/
+gwent-translation-pro/
 ├── SKILL.md                 # Claude Code workflow + constraints
 ├── AGENTS.md                # Agent-agnostic interface (commands / JSON / exit codes)
 ├── agent.json               # Machine-readable command manifest
 ├── install.sh               # One-line installer
-├── references/              # 20 reference files
+├── references/              # 24 reference & data files
 │   ├── card_overrides.md       # Hand-maintained card aliases / renamed (committed)
 │   ├── card_names_4lang.json   # Card names EN<->CN (build-time, gitignored)
+│   ├── card_meta.json          # Card type / leader metadata (committed)
 │   ├── terminology_map.md       # EN->CN terminology
 │   ├── reverse_terminology_map.md  # CN->EN terminology
 │   ├── keywords_map.md          # Keyword translations
@@ -121,33 +124,39 @@ gwent-translation-style/
 │   ├── common_pitfalls.md       # Common mistakes
 │   ├── style_reference.md       # Style + rhetoric guidelines
 │   ├── style_fingerprint.md     # Author style markers
-│   ├── ambiguous_names.md       # Disambiguation
+│   ├── ambiguous_names.md       # Disambiguation (63 groups, machine-verified)
 │   ├── version_map.md           # Version-specific terms
 │   ├── phase_c_checklist.md     # Self-check rules
 │   ├── translation_workflow.md  # Workflow reference
+│   ├── term_decisions.md        # Terminology ruling log
 │   ├── pending_terms.md         # Terms awaiting review (runtime data, gitignored)
 │   ├── pending_terms.template.md # Tracked template; installs seed the buffer from it
 │   └── changelog.md             # Update history
-├── scripts/                 # 15 Python scripts
+├── scripts/                 # 18 scripts + shared core
 │   ├── translate.py             # Main entry: prepare→translate→finish pipeline
 │   ├── auto_pipeline.py         # Pre-processing + residue scan (internal to translate.py)
-│   ├── check_translation.py     # Residue + slang detection
+│   ├── check_translation.py     # Residue + slang + structure checks
 │   ├── completeness_guard.py    # Final gate
 │   ├── phase_c_check.py         # Self-check
 │   ├── term_enforcer.py         # Card data verification
 │   ├── context_lock.py          # Context / abbreviation lock
 │   ├── effect_verifier.py       # Official effect text check
-│   ├── build_effect_reference.py  # Build effect_text.json (fetch-at-build: online/offline)
+│   ├── build_effect_reference.py      # Build effect_text.json (fetch-at-build: online/offline)
+│   ├── build_card_names_reference.py  # Build card_names_4lang.json (--check: patch diff mode)
+│   ├── build_card_meta.py       # Build card_meta.json (reproducible, byte-identical)
 │   ├── format_skeleton.py       # Format preservation
 │   ├── diff_review.py           # Diff review
 │   ├── backtranslate.py         # Back-translation check
-│   ├── lookup.py                # Term lookup
+│   ├── lookup.py                # Term + card lookup (md tables + full 1381-card corpus)
 │   ├── learn.py                 # Learn new terms
-│   ├── health_check.py          # Integrity check (63 PASS)
-│   └── _shared.py               # Shared logic (TermAuthority)
-└── lite/                    # Облегчённый навык (перевод чата, 3 шага)
-    ├── SKILL.md                 # Определение навыка lite (перевод чата)
-    └── AGENTS.md                # Агент-независимый интерфейс lite
+│   ├── health_check.py          # Integrity check (78 PASS)
+│   ├── test_rebuild.py          # Behavior regression suite (27 tests)
+│   └── _shared.py               # Shared logic (TermAuthority, run_utf8)
+├── lite/                    # Облегчённый навык (перевод чата, 3 шага)
+│   ├── SKILL.md                 # Определение навыка lite (перевод чата)
+│   └── AGENTS.md                # Агент-независимый интерфейс lite
+└── flash/                   # Flash-навык — живой чат (1 проход, самопроверка в ходе)
+    └── SKILL.md                 # Определение навыка flash
 ```
 
 ## Ключевые термины
@@ -168,9 +177,9 @@ gwent-translation-style/
 
 ## Пользователи Claude Code
 
-Установите в `~/.claude/skills/gwent-translation-style/` и перезапустите Claude Code. Триггеры: `/gwent-translation-style`, "translate Gwent article", "Gwent translation".
+Установите в `~/.claude/skills/gwent-translation-pro/` и перезапустите Claude Code. Триггеры: `/gwent-translation-pro`, "translate Gwent article", "Gwent translation".
 
-`install.sh` устанавливает **оба** навыка вместе — основной `gwent-translation-style` и облегчённый `gwent-translation-lite`. Навык lite срабатывает на перевод чата / короткого контента (например, «翻一下这句» и подобные триггеры перевода сообщений).
+`install.sh` устанавливает **все три уровня вместе**: основной `gwent-translation-pro`, `gwent-translation-lite` и `gwent-translation-flash`. Навык lite срабатывает на перевод чата / короткого контента (например, «翻一下这句»); flash — когда важна скорость живого чата («昆特秒翻»).
 
 ## Содействие
 

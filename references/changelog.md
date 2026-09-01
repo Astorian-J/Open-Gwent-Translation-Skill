@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-09-01 — 三档更名 pro/lite/flash + README 四语种同步
+
+- **主 skill 更名**：`gwent-translation-style` → `gwent-translation-pro`。三档统一为
+  前缀-pro/lite/flash 格式（lite/flash 目录名本已匹配，零改动）；skill 选择界面的
+  名词与 slash 命令随之变为 `/gwent-translation-pro`。触发词不变
+- **改动面**：SKILL.md name 字段、lite 两入口与 flash 入口对主档的全部引用、
+  install.sh 默认目录、agent.json、_shared.py docstring；顺带清理已卸载的
+  ~/.hanako 路径残留（lite/flash 共 3 处）
+- **README 四语种内容同步**（上次内容同步停在 flash 档上线）：1366→1381 卡；
+  health_check 63→78 PASS；文件树补 3 个新脚本（build_card_names_reference /
+  build_card_meta / test_rebuild）+ card_meta.json + term_decisions.md + flash/
+  目录；「一起安装主 skill 和 lite」→「一起安装三个层级」；分层节更名
+  Three Tiers / 三个层级 / Trzy poziomy / Три уровня；Features 补
+  macOS/Linux/Windows 跨平台；树形结构经栈式校验器四语种全过
+- **迁移注意**：已装旧名目录的机器需重跑 install.sh（装到新目录）并删旧目录；
+  pending_terms.md 等运行时数据先备份再恢复（install.sh 的 re-clone 分支自带
+  备份/恢复，但跨目录改名需手动搬一次数据）；opencode 本地命令里的绝对路径
+  需同步（仓库外配置）
+
 ## 2026-09-01 — Windows GBK 编码崩溃修复：run_utf8 统一子进程调用
 
 - **背景**：用户在 Windows 实测报 `translate.py prepare --lite` / `finish --lite`

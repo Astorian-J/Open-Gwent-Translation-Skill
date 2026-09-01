@@ -5,13 +5,13 @@ description: |
   Discord/QQ comments, single sentences, brief remarks. 2-command flow with a
   lightweight machine term gate (prepare --lite -> translate -> finish --lite).
   Triggered by: 昆特聊天翻译, 昆特群消息翻译, 昆特短句翻译, Gwent chat translation, quick Gwent translate.
-  For full articles (meta reports, BC proposals, card analysis), use gwent-translation-style instead.
+  For full articles (meta reports, BC proposals, card analysis), use gwent-translation-pro instead.
 agent_created: true
 ---
 
 # Gwent Translation Lite (昆特聊天短翻译)
 
-> 短聊天内容用本 skill。完整文章（meta report / BC 提案 / 卡牌分析）用 `gwent-translation-style`
+> 短聊天内容用本 skill。完整文章（meta report / BC 提案 / 卡牌分析）用 `gwent-translation-pro`
 > （同一条流水线跑全量门禁，不带 `--lite`）。
 
 ## 你现在的任务
@@ -26,7 +26,7 @@ agent_created: true
 - 非正式口语内容
 - 用户说「翻一下这句」「这段聊天什么意思」「quick translate」
 
-**不要用本 skill**：长文章翻译——用 `gwent-translation-style`（不带 `--lite` 的完整门禁）。
+**不要用本 skill**：长文章翻译——用 `gwent-translation-pro`（不带 `--lite` 的完整门禁）。
 **比 lite 还要快、不要机器核对**（直播聊天连发场景）——用 `gwent-translation-flash`（一轮回复含轮内自查，无机器校验）。
 
 ---
@@ -44,8 +44,8 @@ agent_created: true
 ## 主 skill 目录（先定位一次）
 
 lite 没有自己的脚本，复用主 skill。主 skill 在**本文件所在目录的兄弟目录**
-`gwent-translation-style`（标准 install 布局，适用于 `~/.claude`、`~/.kimi`、
-`~/.agents`、`~/.hanako` 等所有安装位置）；设过 `GWENT_SKILL_DIR` 环境变量时以
+`gwent-translation-pro`（标准 install 布局，适用于 `~/.claude`、`~/.kimi`、
+`~/.agents` 等所有安装位置）；设过 `GWENT_SKILL_DIR` 环境变量时以
 环境变量为准。下文命令里的 `$SK` 一律替换为你解析出的主 skill 绝对路径。
 
 ## 流程（标准 3 步 = 2 条命令 + 1 次翻译）

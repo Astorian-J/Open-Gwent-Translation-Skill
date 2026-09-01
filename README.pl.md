@@ -13,7 +13,7 @@ Tłumaczenie maszynowe treści o Gwincie zawodzi w przewidywalny sposób: oficja
 ## Możliwości
 
 - **Dwukierunkowe i świadome kierunku** — EN→CN z tonem społeczności graczy Bilibili (krótkie, dosadne zdania, strona czynna); CN→EN w naturalny angielski zachowujący terminy społeczności. Każdy kierunek ma własny potok, więc CN→EN nie oflaguje angielskich nazw kart jako nieprzetłumaczonych resztek.
-- **1366 kart zablokowanych dosłownie** — Oficjalna nazwa EN/CN każdej karty, kategoria, atrybuty (rzadkość / frakcja) i tekst zdolności są ładowane z oficjalnych danych CDPR i egzekwowane dosłownie. Dane kart nigdy nie są ponownie tłumaczone. Dane kart są pobierane w czasie instalacji (uruchom `install.sh` lub `scripts/build_effect_reference.py --fetch`); nie są commitowane do repozytorium — patrz NOTICE.
+- **1381 kart zablokowanych dosłownie** — Oficjalna nazwa EN/CN każdej karty, kategoria, atrybuty (rzadkość / frakcja) i tekst zdolności są ładowane z oficjalnych danych CDPR i egzekwowane dosłownie. Dane kart nigdy nie są ponownie tłumaczone. Dane kart są pobierane w czasie instalacji (uruchom `install.sh` lub `scripts/build_effect_reference.py --fetch`); nie są commitowane do repozytorium — patrz NOTICE.
 - **200+ nazw talii społeczności** — Przydomki, których faktycznie używają chińscy gracze (大金北, 孽鬼跳松, 赤诚骑士北, 状态帝国...), nie tłumaczenia dosłowne.
 - **Wstrzykiwanie slangu i żargonu** — Angielski slang (op, brick, tutor, mulligan, on steroids, sweet spot...) jest wykrywany w źródle i wstępnie wstrzykiwany z docelowym tłumaczeniem, więc przestaje być bełkotem.
 - **Zachowanie retoryki i tonu** — Metafory, hiperbola i sarkazm są tłumaczone przez *intencję*, nie słowo w słowo. "Loud design" nie stanie się "zbyt głośnym".
@@ -43,7 +43,9 @@ Deterministyczny potok dwuetapowy — `translate.py` — otacza każdy zautomaty
 
 Dane kart są **zablokowane, nie sugerowane**: jeśli nazwa karty lub oficjalny efekt pojawia się w źródle, tłumaczenie musi użyć oficjalnej formy chińskiej. Nowe terminy społeczności przechodzą przez bufor weryfikacji (`pending_terms.md`) przed trwałym przyjęciem. Bufor to lokalne dane użytkownika: instalacja lub aktualizacja skillu nigdy go nie resetuje.
 
-## Wersja Lite (tłumaczenie czatu)
+## Trzy poziomy: Pro / Lite / Flash
+
+Umiejętność jest dostarczana w trzech poziomach, instalowanych razem przez `install.sh`.
 
 W przypadku **krótkich treści czatu** — wiadomości grupowych, komentarzy na Discord / QQ / Kook, pojedynczych zdań — pełny potok to przesada. Umiejętność **lite** (`gwent-translation-lite`) uruchamia ten sam potok w wersji czatowej: **dwa polecenia wokół jednego przebiegu tłumaczenia**.
 
@@ -55,7 +57,7 @@ W przypadku **krótkich treści czatu** — wiadomości grupowych, komentarzy na
 
 | Treść | Umiejętność |
 |---------|-------|
-| Długie artykuły (raporty meta, propozycje BC, analizy kart) | `gwent-translation-style` (pełny potok) |
+| Długie artykuły (raporty meta, propozycje BC, analizy kart) | `gwent-translation-pro` (pełny potok) |
 | Wiadomości czatu, komentarze, pojedyncze zdania | `gwent-translation-lite` (bramka czatowa) |
 | Czat na żywo, pełna prędkość — jedno przejście, samokontrola w turze, bez bramki maszynowej | `gwent-translation-flash` (najpierw tabela; twarde reguły wymuszają lookup pełnego korpusu) |
 
@@ -100,14 +102,15 @@ Dodaj `--json` do dowolnej komendy, aby uzyskać wyjście czytelne maszynowo. Pe
 ## Struktura plików
 
 ```
-gwent-translation-style/
+gwent-translation-pro/
 ├── SKILL.md                 # Claude Code workflow + constraints
 ├── AGENTS.md                # Agent-agnostic interface (commands / JSON / exit codes)
 ├── agent.json               # Machine-readable command manifest
 ├── install.sh               # One-line installer
-├── references/              # 20 reference files
+├── references/              # 24 reference & data files
 │   ├── card_overrides.md       # Hand-maintained card aliases / renamed (committed)
 │   ├── card_names_4lang.json   # Card names EN<->CN (build-time, gitignored)
+│   ├── card_meta.json          # Card type / leader metadata (committed)
 │   ├── terminology_map.md       # EN->CN terminology
 │   ├── reverse_terminology_map.md  # CN->EN terminology
 │   ├── keywords_map.md          # Keyword translations
@@ -121,33 +124,39 @@ gwent-translation-style/
 │   ├── common_pitfalls.md       # Common mistakes
 │   ├── style_reference.md       # Style + rhetoric guidelines
 │   ├── style_fingerprint.md     # Author style markers
-│   ├── ambiguous_names.md       # Disambiguation
+│   ├── ambiguous_names.md       # Disambiguation (63 groups, machine-verified)
 │   ├── version_map.md           # Version-specific terms
 │   ├── phase_c_checklist.md     # Self-check rules
 │   ├── translation_workflow.md  # Workflow reference
+│   ├── term_decisions.md        # Terminology ruling log
 │   ├── pending_terms.md         # Terms awaiting review (runtime data, gitignored)
 │   ├── pending_terms.template.md # Tracked template; installs seed the buffer from it
 │   └── changelog.md             # Update history
 ├── lite/                    # Wersja lite — tłumaczenie czatu
 │   ├── SKILL.md                 # Umiejętność lite (tłumaczenie czatu)
 │   └── AGENTS.md                # Interfejs niezależny od agenta
-└── scripts/                 # 15 Python scripts
+├── flash/                   # Wersja flash — czat na żywo (jedno przejście)
+│   └── SKILL.md                 # Umiejętność flash
+└── scripts/                 # 18 scripts + shared core
     ├── translate.py             # Main entry: prepare→translate→finish pipeline
     ├── auto_pipeline.py         # Pre-processing + residue scan (internal to translate.py)
-    ├── check_translation.py     # Residue + slang detection
+    ├── check_translation.py     # Residue + slang + structure checks
     ├── completeness_guard.py    # Final gate
     ├── phase_c_check.py         # Self-check
     ├── term_enforcer.py         # Card data verification
     ├── context_lock.py          # Context / abbreviation lock
     ├── effect_verifier.py       # Official effect text check
-    ├── build_effect_reference.py  # Build effect_text.json (fetch-at-build: online/offline)
+    ├── build_effect_reference.py      # Build effect_text.json (fetch-at-build: online/offline)
+    ├── build_card_names_reference.py  # Build card_names_4lang.json (--check: patch diff mode)
+    ├── build_card_meta.py       # Build card_meta.json (reproducible, byte-identical)
     ├── format_skeleton.py       # Format preservation
     ├── diff_review.py           # Diff review
     ├── backtranslate.py         # Back-translation check
-    ├── lookup.py                # Term lookup
+    ├── lookup.py                # Term + card lookup (md tables + full 1381-card corpus)
     ├── learn.py                 # Learn new terms
-    ├── health_check.py          # Integrity check (63 PASS)
-    └── _shared.py               # Shared logic (TermAuthority)
+    ├── health_check.py          # Integrity check (78 PASS)
+    ├── test_rebuild.py          # Behavior regression suite (27 tests)
+    └── _shared.py               # Shared logic (TermAuthority, run_utf8)
 ```
 
 ## Najważniejsze terminy
@@ -168,9 +177,9 @@ Mała próbka — pełny zestaw znajduje się w `references/`.
 
 ## Użytkownicy Claude Code
 
-Zainstaluj w `~/.claude/skills/gwent-translation-style/` i uruchom ponownie Claude Code. Wyzwalacze: `/gwent-translation-style`, "translate Gwent article", "Gwent translation".
+Zainstaluj w `~/.claude/skills/gwent-translation-pro/` i uruchom ponownie Claude Code. Wyzwalacze: `/gwent-translation-pro`, "translate Gwent article", "Gwent translation".
 
-Skrypt `install.sh` instaluje **jednocześnie** umiejętność główną i umiejętność lite. Wersja lite uruchamia się przy tłumaczeniu czatu / krótkich treści ("翻一下这句" / wyzwalacze tłumaczenia czatu).
+Skrypt `install.sh` instaluje **jednocześnie wszystkie trzy poziomy**: umiejętność główną (`gwent-translation-pro`), `gwent-translation-lite` i `gwent-translation-flash`. Wersja lite uruchamia się przy tłumaczeniu czatu / krótkich treści ("翻一下这句" / wyzwalacze tłumaczenia czatu); wersja flash — gdy liczy się szybkość czatu na żywo ("昆特秒翻").
 
 ## Współtworzenie
 

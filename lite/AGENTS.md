@@ -14,8 +14,8 @@ follow the 3 steps below. If the user posts Gwent text in either language
 without explicit instruction, default to translating it.
 
 > For **full-article** translation (meta reports, BC proposals, card analysis),
-> use the main skill `gwent-translation-style` instead — see the AGENTS.md in the
-> main skill directory (the sibling `gwent-translation-style` directory, as
+> use the main skill `gwent-translation-pro` instead — see the AGENTS.md in the
+> main skill directory (the sibling `gwent-translation-pro` directory, as
 > resolved in the "Locate the shared scripts" section below) for its
 > `translate.py` three-step pipeline with pre-injection and completeness guard.
 
@@ -48,16 +48,16 @@ translation.
 
 ## Prerequisite
 
-The **main skill** (`gwent-translation-style`) must be installed — lite reuses
+The **main skill** (`gwent-translation-pro`) must be installed — lite reuses
 its `scripts/` and `references/` without copying them. Install both via
 `install.sh` from the repository root.
 
 ## Locate the shared scripts
 
 Lite ships no scripts of its own. The **main skill** sits as a sibling of this
-lite directory — `<this file's directory>/../gwent-translation-style` (the
-standard install.sh layout; holds for `~/.claude`, `~/.kimi`, `~/.agents`,
-`~/.hanako` and any custom `INSTALL_DIR`). If the `GWENT_SKILL_DIR` environment
+lite directory — `<this file's directory>/../gwent-translation-pro` (the
+standard install.sh layout; holds for `~/.claude`, `~/.kimi`, `~/.agents`
+or any custom `INSTALL_DIR`). If the `GWENT_SKILL_DIR` environment
 variable is set, it wins. In the commands below, replace `$SK` with the resolved
 absolute path of the main skill directory.
 
@@ -197,7 +197,7 @@ For anything not listed, run `lookup.py`.
 
 - Lite is a **documentation-only** skill (this file + `SKILL.md`). It has no
   scripts of its own — everything is reused from the main skill (`$SK`, the
-  sibling `gwent-translation-style` directory).
+  sibling `gwent-translation-pro` directory).
 - If that sibling directory does not exist, the main skill is not installed;
   run `install.sh` first.
 - All scripts' `--json` output follows the same envelope as the main skill

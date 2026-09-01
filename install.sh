@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-SKILL_NAME="gwent-translation-style"
+SKILL_NAME="gwent-translation-pro"
 DEFAULT_SKILL_DIR="$HOME/.claude/skills/$SKILL_NAME"
 SKILL_DIR="${INSTALL_DIR:-$DEFAULT_SKILL_DIR}"
 REPO_URL="https://github.com/Astorian-J/Open-Gwent-Translation-Skill.git"

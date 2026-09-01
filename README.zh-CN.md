@@ -11,7 +11,7 @@
 ## 特性
 
 - **双向 + 方向感知** —— EN→CN 用 Bilibili 玩家社区口吻（短句、主动语态）；CN→EN 译成自然英文并保留社区术语。两个方向各自独立流水线，CN→EN 不会把英文卡名误判为"未翻译残留"。
-- **1366 张卡逐字锁定** —— 每张卡的官方中英文名、类别、属性（稀有度/阵营）、效果文本从 CDPR 官方数据加载并逐字强制，卡牌信息绝不"再翻译"。卡牌数据在安装时拉取（运行 `install.sh` 或 `scripts/build_effect_reference.py --fetch`），不入库——见 NOTICE。
+- **1381 张卡逐字锁定** —— 每张卡的官方中英文名、类别、属性（稀有度/阵营）、效果文本从 CDPR 官方数据加载并逐字强制，卡牌信息绝不"再翻译"。卡牌数据在安装时拉取（运行 `install.sh` 或 `scripts/build_effect_reference.py --fetch`），不入库——见 NOTICE。
 - **200+ 社区卡组名** —— 中文玩家真正在用的绰号（大金北、孽鬼跳松、赤诚骑士北、状态帝国……），不是直译。
 - **黑话/行话注入** —— 源文里的英文黑话（op、brick、tutor、mulligan、on steroids、sweet spot……）会被检测并预注入意向译法，不再翻成看不懂的东西。
 - **修辞与语气保留** —— 比喻、夸张、反讽按*意图*翻译，而非逐字。"loud design"不会变成"太大声"。
@@ -39,7 +39,9 @@
 
 卡牌数据是**锁定而非建议**：源文里出现的卡牌名或官方效果，译文必须用官方中文形式。新社区术语需经审核缓冲区（`pending_terms.md`）才能正式采纳。缓冲区是本地用户数据，安装或更新 skill 不会重置它。
 
-## 精简版（聊天翻译）
+## 三个层级：Pro / Lite / Flash
+
+skill 以三个层级发布，由 `install.sh` 一起安装。
 
 对于**短聊天内容**——群消息、Discord / QQ / Kook 评论、单句翻译——完整流水线就太重了。**精简版** skill（`gwent-translation-lite`）用聊天级形态跑同一条流水线：**两条命令夹一次翻译**。
 
@@ -51,7 +53,7 @@
 
 | 内容 | Skill |
 |---------|-------|
-| 长文章（meta 报告、BC 提案、卡牌分析） | `gwent-translation-style`（完整流水线） |
+| 长文章（meta 报告、BC 提案、卡牌分析） | `gwent-translation-pro`（完整流水线） |
 | 聊天消息、评论、单句 | `gwent-translation-lite`（聊天级门禁） |
 | 直播聊天抢速度，单轮回复含轮内自查，无机器门禁 | `gwent-translation-flash`（表优先，命中硬触发必查全库） |
 
@@ -96,14 +98,15 @@ python scripts/translate.py finish translated.txt --source source.md --direction
 ## 文件结构
 
 ```
-gwent-translation-style/
+gwent-translation-pro/
 ├── SKILL.md                 # Claude Code 工作流 + 约束
 ├── AGENTS.md                # Agent 无关接口（命令/JSON/退出码）
 ├── agent.json               # 机器可读命令清单
 ├── install.sh               # 一行安装器
-├── references/              # 20 个 reference 文件
+├── references/              # 24 个 reference / 数据文件
 │   ├── card_overrides.md       # 卡牌别名/修正（人工维护，committed）
 │   ├── card_names_4lang.json   # 卡牌名 EN<->CN（构建期生成，gitignored）
+│   ├── card_meta.json          # 卡牌类型/领袖元数据（committed）
 │   ├── terminology_map.md       # EN->CN 术语
 │   ├── reverse_terminology_map.md  # CN->EN 术语
 │   ├── keywords_map.md          # 关键词翻译
@@ -117,33 +120,39 @@ gwent-translation-style/
 │   ├── common_pitfalls.md       # 常见错误
 │   ├── style_reference.md       # 风格 + 修辞指南
 │   ├── style_fingerprint.md     # 作者风格标记
-│   ├── ambiguous_names.md       # 歧义消解
+│   ├── ambiguous_names.md       # 歧义消解（63 组，机器对卡库逐字核验）
 │   ├── version_map.md           # 版本特定术语
 │   ├── phase_c_checklist.md     # 自检规则
 │   ├── translation_workflow.md  # 工作流参考
+│   ├── term_decisions.md        # 术语裁决记录（改词表先补裁决）
 │   ├── pending_terms.md         # 待审核术语（运行时数据，不入库）
 │   ├── pending_terms.template.md # 模板（入库）；安装时由它初始化缓冲区
 │   └── changelog.md             # 更新历史
-├── scripts/                 # 15 个 Python 脚本
+├── scripts/                 # 18 个脚本 + 共享核心
 │   ├── translate.py             # 主入口：prepare→翻译→finish 流水线
 │   ├── auto_pipeline.py         # 译前处理 + 残留扫描（translate.py 的内部步骤）
-│   ├── check_translation.py     # 残留 + 黑话检测
+│   ├── check_translation.py     # 残留 + 黑话 + 结构检查
 │   ├── completeness_guard.py    # 最终门禁
 │   ├── phase_c_check.py         # 自检
 │   ├── term_enforcer.py         # 卡牌数据校验
 │   ├── context_lock.py          # 上下文/缩写锁定
 │   ├── effect_verifier.py       # 官方效果文本检查
-│   ├── build_effect_reference.py  # 构建 effect_text.json（fetch-at-build：在线/离线）
+│   ├── build_effect_reference.py      # 构建 effect_text.json（fetch-at-build：在线/离线）
+│   ├── build_card_names_reference.py  # 构建 card_names_4lang.json（--check：补丁 diff 模式）
+│   ├── build_card_meta.py       # 构建 card_meta.json（可复现，字节级一致）
 │   ├── format_skeleton.py       # 格式保留
 │   ├── diff_review.py           # diff 审查
 │   ├── backtranslate.py         # 回译检查
-│   ├── lookup.py                # 术语查询
+│   ├── lookup.py                # 术语/卡牌查询（词表 + 1381 卡全库）
 │   ├── learn.py                 # 学习新术语
-│   ├── health_check.py          # 完整性检查（63 PASS）
-│   └── _shared.py               # 共享逻辑（TermAuthority）
-└── lite/                    # 精简版 skill（聊天翻译）
-    ├── SKILL.md                 # 精简版 skill 工作流（聊天翻译）
-    └── AGENTS.md                # Agent 无关接口
+│   ├── health_check.py          # 完整性检查（78 PASS）
+│   ├── test_rebuild.py          # 行为回归套件（27 用例）
+│   └── _shared.py               # 共享逻辑（TermAuthority、run_utf8）
+├── lite/                    # 精简版 skill（聊天翻译）
+│   ├── SKILL.md                 # 精简版 skill 工作流（聊天翻译）
+│   └── AGENTS.md                # Agent 无关接口
+└── flash/                   # 极速版 skill（直播聊天，单轮直翻 + 轮内自查）
+    └── SKILL.md                 # 极速版 skill 工作流
 ```
 
 ## 术语示例
@@ -164,9 +173,9 @@ gwent-translation-style/
 
 ## Claude Code 用户
 
-安装到 `~/.claude/skills/gwent-translation-style/` 并重启 Claude Code。触发方式：`/gwent-translation-style`、"翻译这篇昆特牌文章"、"昆特翻译"。
+安装到 `~/.claude/skills/gwent-translation-pro/` 并重启 Claude Code。触发方式：`/gwent-translation-pro`、"翻译这篇昆特牌文章"、"昆特翻译"。
 
-`install.sh` 会**一起安装主 skill 和精简版 skill**。精简版（`gwent-translation-lite`）在聊天/短内容翻译时触发——比如"翻一下这句"、聊天消息翻译。
+`install.sh` 会**一起安装三个层级**：主 skill（`gwent-translation-pro`）、`gwent-translation-lite` 和 `gwent-translation-flash`。精简版在聊天/短内容翻译时触发——比如"翻一下这句"；极速版在直播聊天抢速度时触发——比如"昆特秒翻"。
 
 ## 贡献
 

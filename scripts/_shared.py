@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared utilities for gwent-translation-style scripts.
+"""Shared utilities for gwent-translation-pro scripts.
 
 Extracted to eliminate duplication of proper-noun extraction logic
 across learn.py, context_lock.py, and diff_review.py.

@@ -1,5 +1,5 @@
 ---
-name: gwent-translation-style
+name: gwent-translation-pro
 description: |
   Gwent (昆特牌) bidirectional article translation (EN↔CN) with community slang and Bilibili player tone.
   Triggered by: Gwent translation, 昆特牌翻译, 平衡委员会, meta report translation, 昆特牌英文翻译.
