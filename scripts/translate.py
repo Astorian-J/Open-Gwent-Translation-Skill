@@ -998,7 +998,10 @@ def cmd_finish(args: argparse.Namespace) -> None:
         except OSError:
             pass  # tracking is advisory; never fail the gate over it
     else:
-        gate_sidecar.unlink(missing_ok=True)
+        try:
+            gate_sidecar.unlink(missing_ok=True)
+        except OSError:
+            pass  # tracking is advisory; never fail the gate over it
 
     # Learn only after a genuine PASS; never let it affect the gate.
     learn_result = None
@@ -1029,8 +1032,10 @@ def cmd_finish(args: argparse.Namespace) -> None:
             effect_check = {
                 "checked": ed.get("checked", 0),
                 "not_found_count": len(ed.get("not_found", []) or []),
-                # Bounded by the pack's OFFICIAL_EFFECTS_CAP (~20); emit in full —
-                # an agent auditing effect fidelity wants the complete list.
+                # effect_verifier checks EVERY card the source mentions — no cap
+                # (the pack's OFFICIAL_EFFECTS_CAP only limits what the pack
+                # injects, not this audit); emit in full — an agent auditing
+                # effect fidelity wants the complete list.
                 "not_found_terms": [i.get("english", "?") for i in ed.get("not_found", []) or []],
             }
 
@@ -1148,7 +1153,12 @@ def cmd_run(args: argparse.Namespace) -> None:
     print("=" * 60)
     print("TRANSLATE — RUN (stage 1/2: prepare)")
     print("=" * 60)
-    prep_rc = subprocess.run(prep_cmd).returncode
+    # Not captured (console passthrough) — pin PYTHONIOENCODING so a child
+    # whose output is redirected to a file/pipe still emits UTF-8 instead of
+    # the locale encoding (GBK on zh-CN Windows would UnicodeEncodeError on
+    # Chinese output). Same contract run_utf8 enforces on captured calls.
+    prep_rc = subprocess.run(
+        prep_cmd, env={**os.environ, "PYTHONIOENCODING": "utf-8"}).returncode
     if prep_rc != 0:
         print("\n[RUN] prepare failed — fix the reported problem and re-run.")
         sys.exit(prep_rc)
@@ -1192,7 +1202,8 @@ def cmd_run(args: argparse.Namespace) -> None:
         fin_cmd.append("--allow-source-changed")
     if args.lite:
         fin_cmd.append("--lite")
-    sys.exit(subprocess.run(fin_cmd).returncode)
+    sys.exit(subprocess.run(
+        fin_cmd, env={**os.environ, "PYTHONIOENCODING": "utf-8"}).returncode)
 
 
 def main() -> None:

@@ -88,12 +88,15 @@ def check_ambiguous_names(
     ref_dir: Path,
     source_path: Path | None = None,
     lock_path: Path | None = None,
+    direction: str | None = None,
 ) -> list[str]:
     """Delegate ambiguous-name detection to check_translation.py.
 
     If lock_path is provided, reuse a pre-built lock; elif source_path is
     provided, build from source. Locked terms exempt ambiguous bases that
-    appear inside locked deck/card names.
+    appear inside locked deck/card names. direction is forwarded verbatim —
+    re-detecting it from mixed text (heavy EN quotes in an EN->CN
+    translation) misclassifies as cnen and silently disables the check.
     """
     from check_translation import (
         check_translation,
@@ -106,7 +109,7 @@ def check_ambiguous_names(
         locked_phrases = load_locked_phrases_from_source(source_path)
     else:
         locked_phrases = set()
-    all_issues, _warnings = check_translation(text, locked_phrases)
+    all_issues, _warnings = check_translation(text, locked_phrases, direction=direction)
     return [issue for issue in all_issues if "ambiguous name:" in issue]
 
 
@@ -227,7 +230,7 @@ def run_phase_c_check(
                 for issue in check_english_residue(text):
                     automated_issues.append(f"[{rid}] {issue}")
             elif rid == "encn-06":
-                for issue in check_ambiguous_names(text, ref_dir, source_path, lock_path):
+                for issue in check_ambiguous_names(text, ref_dir, source_path, lock_path, direction):
                     automated_issues.append(f"[{rid}] {issue}")
             elif rid == "encn-10":
                 if skip_ta:

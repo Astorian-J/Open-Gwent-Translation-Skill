@@ -98,7 +98,7 @@ def _write_out(out: dict) -> None:
         raise
 
 
-def _require_all_cards(out: dict) -> None:
+def _require_all_cards(out: dict, check: bool = False) -> None:
     """Hard-fail on a suspiciously small output.
 
     The card data has 1381 cards and is 100% complete in every language. A
@@ -109,7 +109,7 @@ def _require_all_cards(out: dict) -> None:
     if len(out) < MIN_HEALTHY_CARDS:
         print(f"错误：输出仅 {len(out)} 张卡（预期 {MIN_HEALTHY_CARDS}+），"
               f"疑似数据截断，拒绝写出残表。", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(3 if check else 1)
 
 
 def build(src_dir: Path, check: bool = False) -> dict:
@@ -130,7 +130,8 @@ def build(src_dir: Path, check: bool = False) -> dict:
               file=sys.stderr)
         print("       或用 --fetch 在线从 api.gwent.one 拉取（约 3 分钟，国内可达）。",
               file=sys.stderr)
-        sys.exit(1)
+        # check 模式下构建失败 exit 3（与 0/1/2 区分，见 main 的 except 块）。
+        sys.exit(3 if check else 1)
 
     # Load every language keyed by card_id once. Names are stripped here so the
     # join below never re-introduces whitespace.
@@ -160,7 +161,7 @@ def build(src_dir: Path, check: bool = False) -> dict:
             **names,
         }
 
-    _require_all_cards(out)
+    _require_all_cards(out, check=check)
     if not check:
         _write_out(out)
         _report_counts(out, skipped, f"offline {src_dir}")
@@ -238,7 +239,7 @@ def build_fetch(version: str = API_VERSION, check: bool = False) -> dict:
             **names,
         }
 
-    _require_all_cards(out)
+    _require_all_cards(out, check=check)
     if not check:
         _write_out(out)
         _report_counts(out, skipped, f"online api.gwent.one v{version}")
@@ -306,7 +307,8 @@ def main() -> None:
     )
     ap.add_argument("--check", action="store_true",
                     help="只对比不写库：构建新表并与现有 card_names_4lang.json diff"
-                         "（新增/移除/改名）；exit 0=无差异, 1=有差异, 2=现有库缺失/损坏")
+                         "（新增/移除/改名）；exit 0=无差异, 1=有差异, 2=现有库缺失/损坏,"
+                         " 3=构建失败")
     args = ap.parse_args()
 
     try:
@@ -320,7 +322,9 @@ def main() -> None:
         print("（card_names_4lang.json 未生成）", file=sys.stderr)
         print("       可重试：python3 scripts/build_card_names_reference.py --fetch",
               file=sys.stderr)
-        sys.exit(1)
+        # check 模式下构建失败单独用 exit 3，与 0=无差异 / 1=有差异 /
+        # 2=现有库缺失损坏 区分开——自动化不能把「没建成」当成「有差异」。
+        sys.exit(3 if args.check else 1)
     if args.check:
         _run_check(new_out)
 

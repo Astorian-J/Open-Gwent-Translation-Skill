@@ -37,7 +37,7 @@ from _shared import TermAuthority, build_lock_from_source, format_issue, parse_t
 from check_translation import check_term_authority_violations  # noqa: E402
 import translate  # noqa: E402
 from translate import _aggregate_violations, _card_db_status, _load_lock_terms  # noqa: E402
-from phase_c_check import check_context_lock_terms  # noqa: E402
+from phase_c_check import check_context_lock_terms, run_phase_c_check  # noqa: E402
 from term_enforcer import enforce_terms, count_occurrences, _build_cjk_suppress  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -865,6 +865,53 @@ def _t_m5_consumer_propagation() -> tuple[str, str]:
     return ("PASS", "M5 consumer: degraded term_enforcer -> [checker warning] issue + exit 1")
 
 
+def _t_subprocess_timeout_str() -> tuple[str, str]:
+    """C1: run_utf8 normalizes TimeoutExpired.stdout/.stderr to str.
+
+    POSIX raises TimeoutExpired with partial output as undecoded BYTES (only
+    the Windows branch backfills decoded str); both run_script* handlers
+    concatenate e.stdout into str diagnostics, so a child that wrote anything
+    before hanging crashed the handler itself (TypeError) instead of
+    reporting "[timeout]". Locks the single-point normalization in run_utf8.
+
+    Platform scope: the bytes-vs-str distinction only exists on POSIX — on
+    Windows this test passes with or without the normalization (the bug was
+    never there), so this is a POSIX-side guard, not a cross-platform one.
+    """
+    child = ("import sys, time; "
+             "print('partial输出', flush=True); "
+             "print('err部分', file=sys.stderr, flush=True); "
+             "time.sleep(30)")
+    try:
+        run_utf8([sys.executable, "-c", child], timeout=1)
+    except subprocess.TimeoutExpired as e:
+        if not isinstance(e.stdout, str) or not isinstance(e.stderr, str):
+            return ("FAIL",
+                    f"TimeoutExpired output not str: stdout={type(e.stdout).__name__}, "
+                    f"stderr={type(e.stderr).__name__}")
+        if "partial输出" not in e.stdout or "err部分" not in e.stderr:
+            return ("FAIL",
+                    f"partial output lost: stdout={e.stdout!r} stderr={e.stderr!r}")
+        return ("PASS", "C1: TimeoutExpired stdout/stderr normalized to str, partial output intact")
+    return ("FAIL", "run_utf8 did not raise TimeoutExpired for a sleeping child")
+
+
+def _t_phase_c_ambiguous_direction() -> tuple[str, str]:
+    """I1: encn-06 forwards the explicit direction into check_translation.
+
+    Mixed text (heavy EN quoting around a barely-started translation) trips
+    the char-ratio auto-detect into cnen, which used to silently disable the
+    ambiguous gate inside check_ambiguous_names. Bare "Roche" (two cards
+    share the base name) must be flagged when the outer direction is encn.
+    """
+    text = "Roche is great. " * 40 + "罗契很强。"
+    issues, _manual = run_phase_c_check(
+        text, "encn", SCRIPT_DIR.parent / "references")
+    if not any("ambiguous name:" in i for i in issues):
+        return ("FAIL", f"encn-06 silent on mixed text with explicit encn: {issues}")
+    return ("PASS", "I1: encn-06 ambiguous gate fires on mixed text under explicit encn")
+
+
 _TESTS = [
     _t_en_extraction,
     _t_cn_extraction,
@@ -893,6 +940,8 @@ _TESTS = [
     _t_m9_guard_lock_build_fail,
     _t_m5_degradation_signal,
     _t_m5_consumer_propagation,
+    _t_subprocess_timeout_str,
+    _t_phase_c_ambiguous_direction,
 ]
 
 

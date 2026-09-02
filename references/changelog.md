@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-09-02 — 独立审查 13 条全修（review-report-kimi-0902.md）
+
+- **来源**：同日独立代码审查（review-report-kimi-0902.md，2 Critical / 3 Important /
+  8 Minor）全部修复；逐条文件:行号与修法见 fix-report-kimi-0902.md
+- **C1+C2（Critical，单点修）**：`_shared.run_utf8` 捕获 `TimeoutExpired`，把 POSIX
+  下未解码的 bytes stdout/stderr 归一化为 str 再抛出——translate.py /
+  auto_pipeline.py 两个 handler 的 str 拼接在超时路径不再 TypeError；
+  test_rebuild 新增「超时前有部分输出」回归用例
+- **I1**：phase_c encn-06 歧义门禁把外层 direction 透传进 `check_translation`，
+  混合文本不再被字符比例启发式误判 cnen 而静默失效（新增回归用例）
+- **I2**：completeness_guard 的 terminology / phase_c 在 rc=0 但 stdout 非 JSON 时
+  返回 `(False, 0, [])`，与 check 5 `parse_ta_envelope` 的 fail-closed 纪律对齐
+- **I3**：`context_lock.py check` 在 lock 文件不存在时报错退出（exit 1 + 明确错误
+  信息）；「不存在则空锁」语义只保留给 `add`
+- **M1-M8**：PASS 路径 gate.json unlink 包 OSError；learn 新词侧补 `_QUOTE_NORM`
+  折叠去重；歧义表头首字符类并入 `_ACC_UPPER`；finish effect_check 注释如实描述
+  （verifier 全量核对，无 20 上限）；`get_all_for_text` docstring 归位；
+  build_card_names_reference `--check` 构建失败 exit 3（与 0/1/2 区分）；
+  translate.py run 两处非 capture 子进程钉 `PYTHONIOENCODING=utf-8`；
+  guard 自动检测方向读文件异常走标准错误输出
+- **回归**：test_rebuild 29 PASS（27+2 新用例）/ health_check 80 PASS FAIL=0 /
+  samples 基线 Found 22 issue(s) 不变
+
 ## 2026-09-01 — 三档更名 pro/lite/flash + README 四语种同步
 
 - **主 skill 更名**：`gwent-translation-style` → `gwent-translation-pro`。三档统一为

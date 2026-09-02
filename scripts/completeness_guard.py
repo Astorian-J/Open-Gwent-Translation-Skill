@@ -66,10 +66,9 @@ def run_check_translation(file_path: Path, lock_path: Path | None, direction: st
     standalone invocations. source_path is forwarded when the caller has it so
     the source-aware structural checks (protected tokens, bold-marker loss,
     completeness) can run — with --lock alone those checks are unreachable.
-    A failed parse degrades to (ok, 0, []): counts read 0 but `passed` still
-    carries the sub-script's exit code, so a broken checker can never fake a
-    PASS here (the caller's except guard and the finish-level status checks
-    back this up).
+    A failed parse is fail-closed — (False, 0, []) regardless of exit code:
+    a checker asked for --json that produced no parseable envelope can never
+    fake a PASS here (same discipline as check 5's parse_ta_envelope).
     """
     args = [str(file_path), "--direction", direction, "--skip-ta"]
     if lock_path:
@@ -80,7 +79,7 @@ def run_check_translation(file_path: Path, lock_path: Path | None, direction: st
     if parsed and isinstance(parsed.get("data"), dict):
         d = parsed["data"]
         return ok, d.get("issue_count", 0), d.get("issues", []) or []
-    return ok, 0, []
+    return False, 0, []
 
 
 def run_phase_c_check(file_path: Path, lock_path: Path | None, direction: str) -> tuple[bool, int, list]:
@@ -89,6 +88,8 @@ def run_phase_c_check(file_path: Path, lock_path: Path | None, direction: str) -
     Runs with --skip-ta: encn-10's term-enforcement is covered by the
     guard's single check-5 execution (see run_check_translation); without
     the flag, phase_c would spawn term_enforcer a second time.
+    A failed parse is fail-closed — (False, 0, []) regardless of exit code,
+    same discipline as run_check_translation and check 5's parse_ta_envelope.
     """
     script = Path(__file__).parent / "phase_c_check.py"
     if not script.exists():
@@ -103,7 +104,7 @@ def run_phase_c_check(file_path: Path, lock_path: Path | None, direction: str) -
     if parsed and isinstance(parsed.get("data"), dict):
         d = parsed["data"]
         return ok, d.get("automated_failed", 0), d.get("automated_issues", []) or []
-    return ok, 0, []
+    return False, 0, []
 
 
 def run_term_authority_check(file_path: Path, lock_path: Path | None) -> tuple[bool, int, str, list[dict]]:
@@ -181,8 +182,17 @@ def main() -> None:
 
     # Detect direction once and pass it to every downstream check so all of
     # them agree on which language is the target (and thus which residue to
-    # flag). An explicit --direction overrides the heuristic.
-    direction = args.direction or detect_direction(file_path.read_text(encoding="utf-8"))
+    # flag). An explicit --direction overrides the heuristic. A read failure
+    # (non-UTF-8 bytes, permissions) must not escape as a bare traceback —
+    # report through the same channel as every other entry error.
+    try:
+        translated_text = file_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        if args.json:
+            json_output(None, errors=[f"cannot read file: {args.file} ({e})"], exit_code=1)
+        print(f"Error: cannot read file: {args.file} ({e})")
+        sys.exit(1)
+    direction = args.direction or detect_direction(translated_text)
 
     # Build the context lock once and reuse it for every downstream check,
     # instead of letting each sub-script rebuild it from the source.
@@ -233,8 +243,18 @@ def main() -> None:
     # re-ran the whole checker to filter one category back out. "Found other
     # terminology issues" (terminology_ok False, list populated) is NOT a
     # crash — residue still derives from the issues check 2 did return.
+    # ok=False with zero issues and an empty list means the checker's OUTPUT
+    # was unusable (crash-degraded, or rc-0-but-not-JSON under the I2
+    # fail-closed rule) — residue must not claim a green "No residue" over
+    # output it never really parsed.
+    terminology_unusable = (not terminology_crashed
+                            and not terminology_ok
+                            and count == 0
+                            and not terminology_issues)
     if terminology_crashed:
         checks.append({"name": "residue_scan", "passed": False, "issue_count": 0, "issues": [], "message": "Residue not checked (terminology check crashed)"})
+    elif terminology_unusable:
+        checks.append({"name": "residue_scan", "passed": False, "issue_count": 0, "issues": [], "message": "Residue not checked (terminology check output unusable)"})
     else:
         residue_issues = [
             i for i in terminology_issues

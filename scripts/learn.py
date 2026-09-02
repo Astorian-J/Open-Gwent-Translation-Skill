@@ -352,7 +352,7 @@ def add_to_pending(terms: list[dict], buffer: bool = False) -> tuple[int, Path]:
 
     added = 0
     for term in terms:
-        if term["source"].lower() in existing_sources:
+        if term["source"].lower().translate(_QUOTE_NORM) in existing_sources:
             continue
         content += format_pending_entry(term)
         added += 1

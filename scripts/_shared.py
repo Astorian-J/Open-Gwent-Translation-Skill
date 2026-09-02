@@ -754,16 +754,27 @@ def run_utf8(
 
     child_env = {**os.environ, **(env or {}),
                  "PYTHONIOENCODING": "utf-8"}
-    return subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        env=child_env,
-        cwd=cwd,
-    )
+    try:
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            env=child_env,
+            cwd=cwd,
+        )
+    except subprocess.TimeoutExpired as e:
+        # POSIX raises TimeoutExpired with partial output still as undecoded
+        # BYTES (only the Windows branch backfills decoded str) — and every
+        # handler concatenates e.stdout/e.stderr into a str diagnostic, so a
+        # child that wrote anything before hanging crashed the handler itself
+        # with TypeError instead of reporting "[timeout]". Normalize here, at
+        # the single choke point, then re-raise.
+        e.stdout = e.stdout.decode("utf-8", "replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
+        e.stderr = e.stderr.decode("utf-8", "replace") if isinstance(e.stderr, bytes) else (e.stderr or "")
+        raise
 
 
 def build_lock_from_source(source_path: "Path | str") -> Path:
@@ -1284,10 +1295,12 @@ class TermAuthority:
             line = line.strip()
             if line.startswith("## "):
                 # Header format: "## 杰洛特 (Geralt) — 6 versions". The base
-                # name may contain accented letters (Dana Méadbh, Eithné), so
-                # only the first char is constrained; the rest is any
-                # non-paren run.
-                match = re.search(r"\(([A-Za-z][^()]*)\)", line)
+                # name may contain accented letters (Dana Méadbh, Eithné) —
+                # including as the FIRST char (É...). Base names are
+                # capital-initial by convention; lowercase stays accepted to
+                # preserve the pre-accent grammar rather than silently
+                # narrowing it.
+                match = re.search(rf"\(([{_ACC_UPPER}a-z][^()]*)\)", line)
                 if match:
                     current_base_en = match.group(1).strip()
                 continue
@@ -1612,11 +1625,6 @@ class TermAuthority:
         return results
 
     def get_all_for_text(self, text: str) -> list[dict]:
-        # Typographic apostrophes/quotes -> ASCII (position-preserving 1:1
-        # translate): sources write "Dragon’s Dream" while card data uses
-        # "Dragon's Dream" — without this fold the phrase extractors miss the
-        # real card and only its substrings get locked.
-        text = text.translate(_QUOTE_NORM)
         """Extract and resolve all known terms from a source text.
 
         Fully-subsumed entries are dropped: a term whose every occurrence sits
@@ -1624,6 +1632,11 @@ class TermAuthority:
         absorb rule would make it unpassable at the gate). See
         _drop_subsumed.
         """
+        # Typographic apostrophes/quotes -> ASCII (position-preserving 1:1
+        # translate): sources write "Dragon’s Dream" while card data uses
+        # "Dragon's Dream" — without this fold the phrase extractors miss the
+        # real card and only its substrings get locked.
+        text = text.translate(_QUOTE_NORM)
         candidates: set[str] = set()
         for name in extract_card_names(text):
             candidates.add(name.strip())

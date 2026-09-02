@@ -243,6 +243,17 @@ def main():
                 json_output(None, errors=[f"translation file not found: {args.translation}"], exit_code=1)
             print(f"Error: translation file not found: {args.translation}")
             sys.exit(1)
+        # Fail-closed on a missing lock: an absent lock loads as empty
+        # (load_lock's create-on-missing semantics exists for `add`), and an
+        # empty lock checks NOTHING yet would report "No consistency
+        # violations found." — a silent PASS. Refuse instead.
+        lock_path = Path(args.lock)
+        if not lock_path.exists():
+            if args.json:
+                json_output(None, errors=[f"lock file not found: {args.lock}"], exit_code=1)
+            print(f"Error: lock file not found: {args.lock}")
+            print(f"Build one first: python context_lock.py build <source> --output {args.lock}")
+            sys.exit(1)
         result = check_translation(args.translation, args.lock)
         if args.json:
             json_output(result, exit_code=1 if result["violation_count"] > 0 else 0)
