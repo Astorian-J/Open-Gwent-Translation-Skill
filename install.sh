@@ -147,6 +147,9 @@ CURRENT_TIERS=" gwent-translation-pro gwent-translation-lite gwent-translation-f
 for entry in "$TIERS_PARENT"/gwent-translation-*; do
     [ -e "$entry" ] || [ -L "$entry" ] || continue
     name="$(basename "$entry")"
+    # never prune the directory this install is writing into, even when
+    # INSTALL_DIR points at a non-standard (e.g. legacy-named) path
+    [ "$name" = "$(basename "$SKILL_DIR")" ] && continue
     case "$CURRENT_TIERS" in
         *" $name "*) continue ;;
     esac
