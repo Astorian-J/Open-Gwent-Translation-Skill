@@ -99,7 +99,13 @@ def count_occurrences(text: str, targets: list[str], cjk_suppress: set[str] | No
                 if not absorbed:
                     count += 1
         else:
-            pattern = rf"\b{re.escape(target)}\b"
+            if re.match(r"[a-z0-9]", target[-1]):
+                pattern = rf"\b{re.escape(target)}\b"
+            else:
+                # Target ends with punctuation (e.g. "Battle Stations!"): a
+                # trailing \b would require a word char on the other side and
+                # can never match, so use a lookahead instead.
+                pattern = rf"\b{re.escape(target)}(?![a-z0-9])"
             count += len(re.findall(pattern, text_lower))
     return count
 
@@ -282,6 +288,13 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
             checked += 1
             cn_source = info.get("cn", "") or term
             en_targets = [canonical_en]
+            # Slashed canonicals ("cost/fee", "Buff / Boost") list alternative
+            # official renderings — match any single one, never the literal
+            # slashed string.
+            for part in canonical_en.split("/"):
+                p = part.strip()
+                if p and p not in en_targets:
+                    en_targets.append(p)
             for alias in info.get("aliases", []):
                 en_targets.append(alias.strip())
             for abbrev in info.get("abbrevs", []):
