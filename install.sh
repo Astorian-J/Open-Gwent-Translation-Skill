@@ -136,6 +136,40 @@ else
     echo "WARNING: flash/SKILL.md not found in repo, skipping flash skill"
 fi
 
+# Prune legacy tier directories left behind by past renames (e.g.
+# gwent-translation-style from the 2026-09 three-tier rename). Everything under
+# the same parent whose name starts with gwent-translation- and is NOT in the
+# current tier list is deleted. Symlinks are removed too, and their link target
+# is deleted as well when it is itself a gwent-translation-* directory, so a
+# linked clone (style -> ~/.cc-switch/skills/...) does not leave its body behind.
+TIERS_PARENT="$(dirname "$SKILL_DIR")"
+CURRENT_TIERS=" gwent-translation-pro gwent-translation-lite gwent-translation-flash "
+for entry in "$TIERS_PARENT"/gwent-translation-*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    name="$(basename "$entry")"
+    case "$CURRENT_TIERS" in
+        *" $name "*) continue ;;
+    esac
+    if [ -L "$entry" ]; then
+        target="$(readlink "$entry")"
+        case "$target" in
+            /*) : ;;
+            *) target="$(dirname "$entry")/$target" ;;
+        esac
+        rm "$entry"
+        case "$(basename "$target")" in
+            gwent-translation-*)
+                rm -rf "$target"
+                echo "Removed legacy skill: $name (link + target $target)" ;;
+            *)
+                echo "Removed legacy skill link: $name (target $target kept)" ;;
+        esac
+    else
+        rm -rf "$entry"
+        echo "Removed legacy skill: $name"
+    fi
+done
+
 # Post-install self-check (informational; never aborts the install — a
 # degraded install is visible above, health_check just restates it with
 # per-check detail).
