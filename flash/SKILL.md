@@ -111,6 +111,7 @@ agent_created: true
 | tutor | 检索 | 找特定牌 |
 | highroll / lowroll | 上限发挥 / 下限发挥 | 最好 / 最坏情况 |
 | tempo | 节奏 | 每回合点数 |
+| vice | 败德 | SY 关键词（user-confirmed 2026-09-26） |
 
 ### 社区黑话（卡组 / 俗称）
 
