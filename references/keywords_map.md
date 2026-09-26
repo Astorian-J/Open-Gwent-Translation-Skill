@@ -53,6 +53,7 @@ Keywords extracted from server card data (1336 cards). Listed by frequency.
 | thrive | 成长 | 12 | MO mechanic |
 | symbiosis | 共生 | 5 | ST mechanic |
 | conspiracy | 共谋 | 5 | SY mechanic |
+| vice | 败德 | — | SY mechanic; user-confirmed official CN rendering 2026-09-26 (Ixora: Vice 8) |
 
 ## Control & Removal (控制)
 
