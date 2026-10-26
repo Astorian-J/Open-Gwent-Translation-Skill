@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-10-26 — 三档新增禁用冒号规则（与既有禁用破折号并列）
+
+- **需求**：用户要求三档 skill 全部加上「不要使用冒号和破折号」；破折号 2026-08-26
+  已禁（软层），本次补冒号，同一批入口同步（review-report-colon-1026.md）
+- **例外（必须）**：官方卡名自带冒号照抄（杰洛特：伊格尼法印 / Geralt: Igni）。
+  门禁 encn-09 / cnen-05 本就强制卡名冒号，禁令只管行文，不给例外会自相矛盾
+- **入口**（与 Dash 行/条并列新增 Colon）：`translate.py` STYLE_ENC / STYLE_CN +
+  LITE_STYLE_* 白名单（lite pack 同样携带）、SKILL.md 两张方向表、lite/SKILL.md、
+  lite/AGENTS.md、flash/SKILL.md、style_reference.md Punctuation 节扩为双禁
+- **软层不变**：机器检查不拦行文冒号（同破折号 8-26 决策，屡教不改再升级机器
+  规则）；既有 english_colon 检查只把已出现的英文冒号归一为中文冒号，
+  不强制冒号出现，与新规则无冲突
+- **回归**：test_rebuild 29 PASS / health_check 80 PASS / samples 基线 22 不变；
+  三种 pack 形态（完整 encn / lite / 完整 cnen）实测 Colon 行注入正确
+- **审查修复（2I/1M）**：style_reference.md 格式保留示例的产出侧冒号改逗号
+  （示例与规则同文档，矛盾会带偏模型）；lite / flash 冒号条补「英文方向同理
+  不用 :」（flash 无 pack 注入兜底，漏句 = CN→EN 禁令落空）；lite pack 测试
+  存在性断言加 "Colon"（防将来误删白名单不报红）
+
 ## 2026-09-02 — 独立审查 13 条全修（review-report-kimi-0902.md）
 
 - **来源**：同日独立代码审查（review-report-kimi-0902.md，2 Critical / 3 Important /

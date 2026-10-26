@@ -123,6 +123,7 @@ Direction-specific style reference (also embedded in the pack):
 | Numbers | Always Arabic numerals (5点, 12人口, R3, 4P) |
 | Parentheses | Chinese brackets 「（中文括号）」, not English (parens) |
 | Dash | No dash 「——」 anywhere: rewrite with commas/periods/brackets, even when the source uses em-dashes |
+| Colon | No colon 「：/ :」 in prose: rewrite with commas or split the sentence; official card names keep their colon (杰洛特：伊格尼法印) |
 | Verbs | Oral Chinese: 塞进/拍下/骗出/处理掉/赚翻/撑过/不管她/改回去 |
 | Rhetoric | 比喻/夸张/反讽/嘲讽：先识别，译意图不译字面，留住"咬人味"。见 style_reference.md《修辞与语气判断》 |
 | Style | Apply user's style fingerprint preferences when available |
@@ -137,6 +138,7 @@ Direction-specific style reference (also embedded in the pack):
 | Numbers | Arabic numerals. "5 power, 12 provision", "R3", not "Round Three" |
 | Parentheses | English parentheses (), not Chinese 「（）」 |
 | Dash | No em-dash (—) in the English output: use commas/periods/parentheses instead |
+| Colon | No colon in prose: use commas/periods instead; official card names keep their colon (Geralt: Igni) |
 | Slang | Preserve community slang: "nerf sponge", "abusive combo", "braindead deck" |
 | Rhetoric | Preserve figurative intent & sarcasm; don't flatten irony or drain hyperbole. See style_reference.md |
 | Style | Match the source's register (casual guide vs. formal analysis) |

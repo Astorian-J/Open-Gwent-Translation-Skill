@@ -63,7 +63,7 @@ Translation style modeled after Metallic Danny BC proposal (2026-05-30, verified
 | slightly reduce | 稍微降低一点 | Slightly reduce power → 稍微降低一点强度 |
 | this season | 这个赛季 | This season we... → 这个赛季我们... |
 
-## Punctuation: No Dashes (禁用破折号)
+## Punctuation: No Dashes, No Colons (禁用破折号和冒号)
 
 Translations NEVER use dashes to introduce or pad text — the 「——」 habit is a
 strong machine-translation tell:
@@ -74,6 +74,17 @@ strong machine-translation tell:
 - CN→EN output: no em-dash (—). Use commas, periods, or parentheses.
 - Hard style rule, not a suggestion: even a source full of em-dashes gets
   rewritten into natural punctuation.
+
+Translations NEVER use colons to introduce, list, or annotate in prose. Rewrite
+with commas or split the sentence:
+
+- EN→CN output: no 「：」 or ":" in prose. A source "this card is strong: it wins
+  rounds alone" becomes 「这张卡很强，能单独赢下整局」.
+- CN→EN output: no ":" in prose. Use commas, periods, or parentheses.
+- Exception: official card names keep their colon verbatim (杰洛特：伊格尼法印 /
+  Geralt: Igni). The machine gate REQUIRES that colon in card names (encn-09 /
+  cnen-05); the ban applies to prose only.
+- Hard style rule, not a suggestion.
 
 ## Figurative Language & Tone Judgment (修辞与语气判断)
 
@@ -151,7 +162,7 @@ into sincerity — that is the most common way these translations go bland.
 
 **示例：**
 - `| Card | Power |` → `| 卡牌 | 战力 |`（列数、`|`、`---` 全保留）
-- `- **Geralt**: strong` → `- **杰洛特**：很强`（`-` 和 `**` 保留，文字翻译）
+- `- **Geralt**: strong` → `- **杰洛特**，很强`（`-` 和 `**` 保留，文字翻译，行文不用冒号）
 - `## Tier List` → `## 梯队表`（`##` 保留）
 
 ## Term Variants (术语变体识别)

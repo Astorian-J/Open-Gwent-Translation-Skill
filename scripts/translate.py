@@ -61,6 +61,7 @@ STYLE_ENC = [
     ("Numbers", "Always Arabic numerals (5点, 12人口, R3, 4P)"),
     ("Parentheses", "Chinese brackets （）, not English ()"),
     ("Dash", "No dash 「——」 anywhere: rewrite with commas, periods, or brackets — even when the source uses em-dashes"),
+    ("Colon", "No colon 「：/ :」 in prose: rewrite with commas or split the sentence. Exception: official card names keep their colon (杰洛特：伊格尼法印)"),
     ("Verbs", "Oral Chinese: 塞进/拍下/骗出/处理掉/赚翻/撑过/不管她/改回去"),
     ("Rhetoric", "比喻/夸张/反讽/嘲讽：先识别意图，译意图不译字面，留住咬人味"),
     ("Style", "Apply user's style fingerprint preferences when available"),
@@ -73,6 +74,7 @@ STYLE_CN = [
     ("Numbers", 'Arabic numerals. "5 power, 12 provision", "R3", not "Round Three"'),
     ("Parentheses", "English parentheses (), not Chinese （）"),
     ("Dash", "No em-dash (—) in the English output: use commas, periods, or parentheses instead"),
+    ("Colon", "No colon in prose: use commas or split sentences instead. Exception: official card names keep their colon (Geralt: Igni)"),
     ("Slang", 'Preserve community slang: "nerf sponge", "abusive combo", "braindead deck"'),
     ("Rhetoric", "Preserve figurative intent & sarcasm; do not flatten irony or drain hyperbole"),
     ("Style", "Match the source's register (casual guide vs. formal analysis)"),
@@ -106,8 +108,8 @@ CHECKLIST_CN = [
 # Lite pack (chat-length content): style rows that matter for a short message.
 # Filtered from the tables above BY LABEL so the two stay in sync — article-grade
 # rows (sentence splitting, style fingerprint) would only pad what the model reads.
-LITE_STYLE_ENC = ("Tone", "Voice", "Numbers", "Parentheses", "Dash", "Verbs", "Rhetoric")
-LITE_STYLE_CN = ("Tone", "Numbers", "Parentheses", "Dash", "Slang", "Rhetoric")
+LITE_STYLE_ENC = ("Tone", "Voice", "Numbers", "Parentheses", "Dash", "Colon", "Verbs", "Rhetoric")
+LITE_STYLE_CN = ("Tone", "Numbers", "Parentheses", "Dash", "Colon", "Slang", "Rhetoric")
 
 # Balance change direction guidance — injected into the pack so the agent sees
 # the buff/nerf direction rules inline (Gwent-specific: power/provision may be

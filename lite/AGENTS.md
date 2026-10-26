@@ -95,6 +95,9 @@ Translate per direction (EN→CN or CN→EN), no tool calls in this step:
 - **CN→EN**: native-player register — casual, not academic, English parens ()
 - No dashes: never use 「——」 (or — in English output) to introduce or pad text;
   rewrite with commas, periods, or brackets, even when the source uses em-dashes
+- No colons: never use 「：」 (or : in English output) to introduce, list, or
+  annotate in prose; rewrite with commas or split sentences. Official card-name
+  colons stay verbatim (杰洛特：伊格尼法印 / Geralt: Igni)
 - Use official renderings from the lock table (`blue coin` → 蓝币,
   not "蓝色的硬币"; `provision` → 人口, not "费用")
 - Preserve rhetoric / hyperbole / irony — translate intent, not literal

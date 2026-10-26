@@ -535,7 +535,7 @@ def _t_lite_pack() -> tuple[str, str]:
             if need not in lite_pack:
                 return ("FAIL", f"lite pack missing essential: {need}")
         # style table is the filtered subset: chat rows present, article rows gone
-        for label in ("Tone", "Dash", "Rhetoric"):
+        for label in ("Tone", "Dash", "Colon", "Rhetoric"):
             if f"| {label} |" not in lite_pack:
                 return ("FAIL", f"lite pack style table missing row: {label}")
         for label in ("Sentence length", "Style"):
