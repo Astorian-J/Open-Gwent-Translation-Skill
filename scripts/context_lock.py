@@ -5,13 +5,18 @@ Maintains a per-document terminology lock table to ensure consistency.
 
 Usage:
     # Build lock table from source text
-    python context_lock.py build source_en.txt --output lock.json
+    python context_lock.py build source_en.txt --direction encn --output lock.json
 
     # Check translation against lock table
-    python context_lock.py check translation.txt --lock lock.json
+    python context_lock.py check translation.txt --lock lock.json --direction encn
 
     # Add a new term to the lock table
     python context_lock.py add "English Term" "中文翻译" --lock lock.json
+
+--direction (encn | cnen) is the task's translation direction and is required
+wherever terms are extracted or enforced: it selects the extraction strategy
+for the source and the target language for enforcement. It is never inferred
+from the text — mixed Chinese/English Gwent text defeats any such guess.
 
 Lock table format:
     {
@@ -34,9 +39,10 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
+    DIRECTIONS,
     json_output,
-    source_is_chinese,
     TermAuthority,
+    validate_direction,
 )
 from term_enforcer import enforce_terms
 
@@ -58,25 +64,26 @@ def save_lock(lock: dict, lock_file: str) -> None:
     Path(lock_file).write_text(json.dumps(lock, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def build_lock(source_file: str, lock_file: str) -> dict:
+def build_lock(source_file: str, lock_file: str, direction: str) -> dict:
     """Build a new lock table from source text.
 
-    Direction-aware: a Chinese source (CN->EN article) is extracted with the
-    Chinese dictionary lookup (TermAuthority.get_all_for_text_cn); an English
-    source (EN->CN article) keeps the existing English regex extraction. Source
-    language is detected via source_is_chinese (reusing detect_direction), so
-    the EN->CN path is unchanged. Official translations are pre-filled from
-    TermAuthority when available; unknown terms remain pending.
+    Direction-aware: a CN->EN task (direction "cnen") extracts the Chinese
+    source with the Chinese dictionary lookup (TermAuthority.get_all_for_text_cn);
+    an EN->CN task keeps the existing English regex extraction. The direction is
+    the task's own, passed in by the caller — a Chinese source full of English
+    card names must still be extracted as Chinese, which no text heuristic can
+    decide. Official translations are pre-filled from TermAuthority when
+    available; unknown terms remain pending.
     """
+    validate_direction(direction)
     source_text = Path(source_file).read_text(encoding="utf-8")
     ref_dir = Path(__file__).parent.parent / "references"
     authority = TermAuthority(ref_dir)
-    source_cn = source_is_chinese(source_text)
+    source_cn = direction == "cnen"
 
     lock = {
         "document": Path(source_file).stem,
         "created_at": datetime.now().isoformat(),
-        "direction": "cnen" if source_cn else "encn",
         "terms": {}
     }
 
@@ -119,7 +126,7 @@ def build_lock(source_file: str, lock_file: str) -> dict:
     return lock
 
 
-def check_translation(translation_file: str, lock_file: str) -> dict:
+def check_translation(translation_file: str, lock_file: str, direction: str) -> dict:
     """Check translation against lock table for consistency violations.
 
     Delegates to term_enforcer.enforce_terms so word-boundary matching, the
@@ -128,7 +135,7 @@ def check_translation(translation_file: str, lock_file: str) -> dict:
     report shape (term/expected/issue per violation).
     """
     lock = load_lock(lock_file)
-    enforced = enforce_terms(Path(translation_file), lock)
+    enforced = enforce_terms(Path(translation_file), lock, direction)
     is_cnen = enforced.get("direction") == "cnen"
 
     # issue_type -> the human-readable message this command prints.
@@ -195,12 +202,16 @@ def main():
 
     build = subparsers.add_parser("build", help="Build lock table from source text")
     build.add_argument("source", help="Source file")
+    build.add_argument("--direction", choices=DIRECTIONS, required=True,
+                       help="Translation direction (EN->CN or CN->EN): selects how the source is extracted")
     build.add_argument("--output", default=_DEFAULT_LOCK, help="Output lock file")
     build.add_argument("--json", action="store_true", help="Output structured JSON")
 
     check = subparsers.add_parser("check", help="Check translation against lock table")
     check.add_argument("translation", help="Translated file")
     check.add_argument("--lock", default=_DEFAULT_LOCK, help="Lock file")
+    check.add_argument("--direction", choices=DIRECTIONS, required=True,
+                       help="Translation direction (EN->CN or CN->EN): which language the terms must appear in")
     check.add_argument("--json", action="store_true", help="Output structured JSON")
 
     add = subparsers.add_parser("add", help="Add a term to the lock table")
@@ -218,7 +229,7 @@ def main():
                 json_output(None, errors=[f"source file not found: {args.source}"], exit_code=1)
             print(f"Error: source file not found: {args.source}")
             sys.exit(1)
-        lock = build_lock(args.source, args.output)
+        lock = build_lock(args.source, args.output, args.direction)
         term_count = len(lock["terms"])
         if args.json:
             json_output({
@@ -234,7 +245,7 @@ def main():
         print("2. As you decide each translation, update the lock table:")
         print(f'   python context_lock.py add "Term" "翻译" --lock {args.output}')
         print("3. For subsequent paragraphs, check against the lock:")
-        print(f'   python context_lock.py check translated.txt --lock {args.output}')
+        print(f'   python context_lock.py check translated.txt --lock {args.output} --direction {args.direction}')
 
     elif args.command == "check":
         translation_path = Path(args.translation)
@@ -252,9 +263,9 @@ def main():
             if args.json:
                 json_output(None, errors=[f"lock file not found: {args.lock}"], exit_code=1)
             print(f"Error: lock file not found: {args.lock}")
-            print(f"Build one first: python context_lock.py build <source> --output {args.lock}")
+            print(f"Build one first: python context_lock.py build <source> --direction {args.direction} --output {args.lock}")
             sys.exit(1)
-        result = check_translation(args.translation, args.lock)
+        result = check_translation(args.translation, args.lock, args.direction)
         if args.json:
             json_output(result, exit_code=1 if result["violation_count"] > 0 else 0)
         print(f"# Context Lock Check")

@@ -62,6 +62,10 @@ For articles longer than 5 paragraphs, build a terminology lock table:
 4. Subsequent mentions MUST use the same translation
 
 **This is done automatically by `translate.py prepare` (which runs `auto_pipeline.py pre`).**
+Pass the task's direction as `--direction encn` (EN→CN) or `--direction cnen` (CN→EN): it is
+required on every command and selects which side of the source is extracted (English card
+names vs. Chinese ones). It is never inferred from the text, so a Chinese source full of
+English card names is still locked from the Chinese side for a CN→EN task.
 If you need to manually edit the lock table:
 ```bash
 python scripts/context_lock.py add "English Term" "中文翻译" --lock /tmp/lock.json
@@ -186,9 +190,11 @@ When user provides their own translation for review:
    - Check for additions (information not in source)
    - Check tone consistency
 
-To use the diff review script:
+To use the diff review script (`--direction` is the direction of the reviewed
+pair and is required; the built-in checks above are written for EN→CN, for
+CN→EN the terminology checker's result carries the review):
 ```bash
-python scripts/diff_review.py source.txt user_translation.txt --output report.md
+python scripts/diff_review.py source.txt user_translation.txt --direction encn --output report.md
 ```
 
 Output format: grouped by severity (high/medium/low), with specific suggestions.

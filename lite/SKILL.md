@@ -20,6 +20,10 @@ agent_created: true
 立刻：拿到要翻的内容 → 判断方向（EN↔CN）→ 按下方流程走。
 用户贴了昆特牌中/英文没明说「翻译」，默认就是要翻译，直接翻。
 
+**方向由你判断，并作为 `--direction` 传给每一条命令**（`encn` = 英→中，`cnen` = 中→英）。
+脚本不猜方向：中文里夹英文卡名时按文本猜必错，方向错了 pack 和门禁会一起把译文推向错误的语言。
+用户说了目标语言以用户为准，没说就译成另一种语言；prepare 与 finish 的方向必须一致。
+
 ## 何时用
 
 - 群消息、Discord/QQ/Kook 评论、单句、短段落（< ~200 字）
@@ -52,9 +56,11 @@ lite 没有自己的脚本，复用主 skill。主 skill 在**本文件所在目
 
 ### 第 1 步：存源文 + prepare --lite（一条命令，锁表直接看输出）
 
+下方命令以英→中（`--direction encn`）为例；中→英把每条命令里的 `--direction` 都换成 `cnen`。
+
 ```bash
 printf '%s\n' "要翻译的内容" > /tmp/gwent-lite-src.md && \
-python3 "$SK/scripts/translate.py" prepare /tmp/gwent-lite-src.md --lite && \
+python3 "$SK/scripts/translate.py" prepare /tmp/gwent-lite-src.md --direction encn --lite && \
 cat /tmp/gwent-lite-src.pack.md
 ```
 
@@ -64,7 +70,7 @@ cat /tmp/gwent-lite-src.pack.md
 cat > /tmp/gwent-lite-src.md <<'EOF'
 要翻译的内容（可多行）
 EOF
-python3 "$SK/scripts/translate.py" prepare /tmp/gwent-lite-src.md --lite && cat /tmp/gwent-lite-src.pack.md
+python3 "$SK/scripts/translate.py" prepare /tmp/gwent-lite-src.md --direction encn --lite && cat /tmp/gwent-lite-src.pack.md
 ```
 
 命令输出里就有翻译要用的全部内容，不用再单独打开 pack 文件：
@@ -79,7 +85,7 @@ python3 "$SK/scripts/translate.py" prepare /tmp/gwent-lite-src.md --lite && cat 
 按方向翻译（EN→CN 或 CN→EN），照锁表 [COPY] 节译名 + 下方快速参考表：
 
 - **EN → CN**：B 站玩家口语。短句、主动语态、阿拉伯数字（5点 / 12人口 / R3）、中文括号「（）」
-- **CN → EN**：native player 口气。casual 不书面，英文括号 ( )
+- **CN → EN**：native player 口气。casual 不书面，英文括号 ( )，输出里不留中文（中文 ID 转写成拉丁字母）
 - **禁用破折号**：别用「——」引出或补充文字（AI 味重），改用逗号 / 句号 / 括号，原文有 em-dash 也改写；英文方向同理不用 —
 - **禁用冒号**：别用冒号「：」引出解释 / 列表 / 补充，改逗号或拆句，英文方向同理不用 :；官方译名自带的冒号照抄（杰洛特：伊格尼法印 / Geralt: Igni）
 - **修辞 / 夸张 / 反讽**：译意图不译字面（`loud design` → 存在感太强，不是「太大声」）
@@ -90,11 +96,13 @@ python3 "$SK/scripts/translate.py" prepare /tmp/gwent-lite-src.md --lite && cat 
 ```bash
 printf '%s\n' "你的译文" > /tmp/gwent-lite-out.md && \
 python3 "$SK/scripts/translate.py" finish /tmp/gwent-lite-out.md \
-  --source /tmp/gwent-lite-src.md --lite
+  --source /tmp/gwent-lite-src.md --direction encn --lite
 ```
 
 - **PASS** → 把译文发给用户，完成。
 - **BLOCKED** → 每条违规都带官方译法（`「term」 -> 官方译名`），照着改译文文件，重跑同一条命令。
+  `untranslated:` 开头的违规表示译文根本没翻成目标语言：中文原文留在了英文译文里（中→英时连中文 ID 也要转写）、
+  整段仍是英文，或与原文一字不差——把全文重新译成目标语言，不是改哪个词。
   finish 会对比上一轮违规：修复不得引入新违规（出现 `[REGRESS]` 先修新引入的）。
   最多改 3 轮；仍 BLOCKED 就把违规清单和你的译文一起给用户看，说明哪些词查不到官方译名。
 
@@ -110,7 +118,7 @@ python3 "$SK/scripts/translate.py" finish /tmp/gwent-lite-out.md \
 printf '%s\n' "原文" > /tmp/gwent-lite-fast-src.md && \
 printf '%s\n' "你的译文" > /tmp/gwent-lite-fast-out.md && \
 python3 "$SK/scripts/translate.py" finish /tmp/gwent-lite-fast-out.md \
-  --source /tmp/gwent-lite-fast-src.md --lite
+  --source /tmp/gwent-lite-fast-src.md --direction encn --lite
 ```
 
 finish 会从源文现算术语锁兜底，翻错的名词照样被拦（违规带官方译法）。

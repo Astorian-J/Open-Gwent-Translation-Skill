@@ -9,10 +9,12 @@ Usage:
 
 import ast
 import argparse
+import json
 import os
 import re
 import sys
 import tempfile
+import traceback
 from pathlib import Path
 from datetime import datetime
 
@@ -718,7 +720,7 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
                 test_file = Path(tf.name)
             try:
                 result = run_utf8(
-                    [sys.executable, str(check_script), str(test_file)],
+                    [sys.executable, str(check_script), str(test_file), "--direction", "encn"],
                     timeout=10,
                 )
                 if "English residue" in result.stdout:
@@ -794,6 +796,361 @@ def run_test_cases(script_dir: Path) -> list[tuple[str, str]]:
     return results
 
 
+# 方向是必填的任务参数：任何环节都不得从文本推断它。这两个名字是当初把
+# 「夹满英文卡名的中文源文」误判成英文的推断（prepare 做出 EN->CN 的 pack，门禁
+# 把译文往中文推）；已物理删除，重新引入必须报错。
+_DIRECTION_INFERENCE_NAMES = ("detect_direction", "source_is_chinese")
+# 这两个文件会提到上述名字：本检查自己，以及断言它们不存在的回归用例。
+_DIRECTION_SCAN_SKIP = {"health_check.py", "test_rebuild.py"}
+
+# 展示命令用法的文档与清单。原始 bug 的直接诱因就是文档示例没带 --direction，
+# 所以每一处写出来的命令调用都要查。
+_DIRECTION_DOC_FILES = (
+    "SKILL.md", "lite/SKILL.md", "lite/AGENTS.md", "AGENTS.md",
+    "references/translation_workflow.md", "agent.json",
+)
+# 需要方向的脚本。context_lock 只有 add 子命令不需要。前面的 lookbehind 把
+# backtranslate.py 这类恰好以同名结尾的脚本排除在外。
+_DIRECTION_SCRIPTS = (
+    "translate", "auto_pipeline", "context_lock", "term_enforcer", "check_translation",
+    "phase_c_check", "completeness_guard", "diff_review",
+)
+_SCRIPT_NAME = rf"(?<![A-Za-z_])(?:{'|'.join(_DIRECTION_SCRIPTS)})\.py"
+# 解释器的常见写法：python / python3 / python3.12 / py / python.exe，以及放在变量里的
+# （"$PY"、${PYTHON}、$PYTHON）。前面不能紧挨着字母数字，免得 copy 之类单词的尾巴命中。
+_INTERPRETER = (
+    r"(?<![A-Za-z0-9_.$-])(?:"
+    r"python[0-9.]*|py|python\.exe"
+    r"|\"\$\{?[A-Za-z_]+\}?\"|\$\{[A-Za-z_]+\}|\$[A-Za-z_]+"
+    r")"
+)
+# 一条命令的开头：可选的 `$` / `>` 提示符，可选的解释器（可带解释器参数，如
+# python3 -B），可选的 `./`，然后是脚本路径。
+_COMMAND_HEAD = (
+    rf"(?:[$>]\s*)?(?:{_INTERPRETER}(?:\s+-\S+)*\s+)?(?:\./)?\S*?{_SCRIPT_NAME}[\"']?(?=\s)"
+)
+# 带参数只能出现在行首（行首空白之后，可带提示符）；代码块里的行本来就是命令，可以出现在
+# 行内任何位置。
+_COMMAND_AT_START = re.compile(rf"^\s*{_COMMAND_HEAD}")
+_COMMAND_ANYWHERE = re.compile(_COMMAND_HEAD)
+# 按模块方式运行：python3 -m scripts.translate prepare …
+_MODULE_FORM = re.compile(r"-m\s+scripts\.translate(?!\.py)")
+# 第一个参数是子命令的脚本：只写到子命令的引用（`translate.py finish`）没写出参数，
+# 无从判断，不算命令。
+_SUBCOMMAND_SCRIPTS = ("translate.py", "auto_pipeline.py", "context_lock.py")
+# JSON 输出里已删除的字段。
+_REMOVED_DIRECTION_FIELDS = ("direction_auto_detected", "direction_warning")
+
+
+def _read_doc(path: Path) -> str | None:
+    """Read a doc as UTF-8; None when it cannot be read (the caller reports it)."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _first_outside_quotes(text: str, is_stop) -> int:
+    """Index of the first character of `text` outside quotes with `is_stop(index, char)`, else -1.
+
+    A quote character only opens a quoted stretch when the same character closes
+    it later in the text: an apostrophe inside a name (O'Brien.md) is not a quote.
+    """
+    quote = ""
+    for i, ch in enumerate(text):
+        if quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'`" and text.find(ch, i + 1) != -1:
+            quote = ch
+        elif is_stop(i, ch):
+            return i
+    return -1
+
+
+def _strip_line_comment(segment: str) -> str:
+    """Drop a trailing `# comment` that starts outside quotes."""
+    i = _first_outside_quotes(
+        segment, lambda i, ch: ch == "#" and i > 0 and segment[i - 1].isspace())
+    return segment if i < 0 else segment[:i]
+
+
+def _takes_direction(invocation: str) -> bool:
+    if re.search(_SCRIPT_NAME, invocation).group(0) != "context_lock.py":
+        return True
+    return re.search(r"context_lock\.py[\"']?\s+add(\s|$)", invocation) is None
+
+
+def _argument_span(invocation: str) -> str:
+    """The invocation up to its first unquoted comma that ends the text or is followed by whitespace.
+
+    What follows such a comma is prose or another command ("… prepare source.md,
+    then finish with the same --direction") and must not vouch for this one. A
+    comma inside an argument (2026-05,2026-06) leaves the command alone.
+    """
+    def prose_comma(i: int, ch: str) -> bool:
+        return ch == "," and (i + 1 == len(invocation) or invocation[i + 1].isspace())
+
+    i = _first_outside_quotes(invocation, prose_comma)
+    return invocation if i < 0 else invocation[:i]
+
+
+def _command_text(text: str) -> str:
+    """`text` as the shell reads it: trailing comment dropped, module form as a path."""
+    return _MODULE_FORM.sub("scripts/translate.py", _strip_line_comment(text))
+
+
+def _judge_command_line(line: str, anywhere: bool = False) -> tuple[list[str], int]:
+    """Judge the commands written on one line.
+
+    Returns (violations, commands examined). Commands joined by && / || / ; / |
+    are judged one by one, and a trailing `# comment` is removed first, so the
+    flag must follow the invocation inside its own command segment and before
+    its first prose comma. By default a command has to start the segment (after
+    an optional prompt). With `anywhere` it may sit anywhere in the segment, as
+    on the lines of a code block. A comment line counts only when it is itself
+    a commented-out command — a command starts it once the marker is gone — and
+    is then judged like any command line; a comment that merely talks about a
+    command ("# this replaces the old python … call", "# step 1; python …") is
+    prose. A trailing comment runs to the end of the line, separators included.
+    """
+    missing: list[str] = []
+    examined = 0
+    pattern = _COMMAND_ANYWHERE if anywhere else _COMMAND_AT_START
+    uncommented = re.sub(r"^\s*#+\s?", "", line, count=1)
+    if uncommented != line:
+        if _COMMAND_AT_START.search(_command_text(uncommented)) is None:
+            return missing, examined
+        line, pattern = uncommented, _COMMAND_AT_START
+    for segment in re.split(r"&&|\|\||[;|]", _command_text(line)):
+        m = pattern.search(segment)
+        if not m:
+            continue
+        invocation = _argument_span(segment[m.start():])
+        found = re.search(_SCRIPT_NAME, invocation)
+        if found is None:
+            # A comma before the script name cut the invocation short.
+            continue
+        script = found.group(0)
+        args = invocation[found.end():].strip("\"' ").split()
+        # A reference that names only the script and options (`check_translation.py --fix`) is not a command.
+        if not any(not arg.startswith("-") for arg in args):
+            continue
+        if len(args) < (2 if script in _SUBCOMMAND_SCRIPTS else 1):
+            continue
+        examined += 1
+        if _takes_direction(invocation) and "--direction" not in invocation:
+            missing.append(invocation.strip()[:70])
+    return missing, examined
+
+
+def _commands_lacking_direction(text: str) -> tuple[list[str], int]:
+    """Judge the commands written in a document.
+
+    Returns (violations, commands examined). Commands are judged where commands
+    are written — fenced and indented code blocks and backtick spans. Prose is
+    never judged: "Before this fix, python … prepare source.md guessed the
+    direction" explains a command and must not read as one.
+    """
+    missing: list[str] = []
+    examined = 0
+    # The open fence, as (character, length); a fence is closed only by a line
+    # of the same character, at least as long, and nothing else on it.
+    fence: tuple[str, int] | None = None
+    # 续行（行尾反斜杠）是同一条命令：先并回一行；引用块标记（行首的 `>`）不属于
+    # 内容，先去掉，引用块里的代码块（SKILL.md 的命令示例就是这么写的）才认得出来
+    for line in re.sub(r"^(?:\s*>)+\s?", "", text.replace("\\\n", " "), flags=re.M).split("\n"):
+        stripped = line.lstrip()
+        marker = re.match(r"([`~])\1{2,}", stripped)
+        if fence is None:
+            # An opening fence; the info string of a backtick fence holds no backtick.
+            if marker and not (marker.group(1) == "`" and "`" in stripped[marker.end():]):
+                fence = (marker.group(1), len(marker.group(0)))
+                continue
+        elif (marker and marker.group(1) == fence[0] and len(marker.group(0)) >= fence[1]
+              and not stripped[marker.end():].strip()):
+            fence = None
+            continue
+        if fence is not None:
+            found, count = _judge_command_line(line, anywhere=True)
+        elif line.startswith("    ") or line.startswith("\t"):
+            found, count = _judge_command_line(line)
+        else:
+            found, count = [], 0
+            for span in re.findall(r"`([^`\n]+)`", line):
+                more, n = _judge_command_line(span, anywhere=True)
+                found += more
+                count += n
+        missing += found
+        examined += count
+    return missing, examined
+
+
+def _manifest_commands(node) -> tuple[list[str], int]:
+    """Judge the commands stored as strings in a parsed agent.json."""
+    missing: list[str] = []
+    examined = 0
+    items = node.values() if isinstance(node, dict) else node if isinstance(node, list) else ()
+    for value in items:
+        if isinstance(value, str):
+            found, count = _judge_command_line(value)
+            missing += found
+            examined += count
+        elif isinstance(value, (dict, list)):
+            found, count = _manifest_commands(value)
+            missing += found
+            examined += count
+    return missing, examined
+
+
+def _duplicate_manifest_fields(base_dir: Path) -> tuple[list[str], str | None]:
+    """Duplicate entries in agent.json's per-command `args` / `json_output` lists.
+
+    Returns (duplicates, error). `error` is set when the manifest cannot be
+    read, parsed or walked — a `commands` that is not a list of objects, an
+    `args` / `json_output` that is present but null or not a list, an entry
+    without a name — in which case `duplicates` is empty. A field a command
+    simply does not have (the `run` wrapper declares no `json_output`) is fine.
+    """
+    text = _read_doc(base_dir / "agent.json")
+    if text is None:
+        return [], "unreadable"
+    try:
+        manifest = json.loads(text)
+    except json.JSONDecodeError as e:
+        return [], f"not valid JSON ({e})"
+    commands = manifest.get("commands") if isinstance(manifest, dict) else None
+    if not isinstance(commands, list) or not all(isinstance(c, dict) for c in commands):
+        return [], '"commands" is not a list of objects'
+    duplicates = []
+    for command in commands:
+        label = command.get("name", "?")
+        for field in ("args", "json_output"):
+            if field not in command:
+                continue
+            items = command[field]
+            if not isinstance(items, list):
+                return [], f"{label}.{field} is not a list"
+            names = []
+            for item in items:
+                if isinstance(item, dict) and isinstance(item.get("name"), str):
+                    names.append(item["name"])
+                elif isinstance(item, str):
+                    names.append(item)
+                else:
+                    return [], f"{label}.{field} has an entry without a name"
+            repeated = sorted({name for name in names if names.count(name) > 1})
+            duplicates += [f"{label}.{field}: {name}" for name in repeated]
+    return duplicates, None
+
+
+def check_direction_contract(script_dir: Path) -> list[tuple[str, str]]:
+    """方向是必填的任务参数：--direction 一律 required，且无按文本推断方向的代码。"""
+    results = []
+    optional: list[str] = []
+    inferred: list[str] = []
+    unreadable: list[str] = []
+    direction_args = 0
+    for path in sorted(script_dir.glob("*.py")):
+        if path.name in _DIRECTION_SCAN_SKIP:
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:  # check_scripts already reports the syntax error
+            continue
+        except (OSError, UnicodeDecodeError) as e:
+            unreadable.append(f"{path.name} ({e})")
+            continue
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "add_argument" and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and node.args[0].value == "--direction"):
+                direction_args += 1
+                if not any(keyword.arg == "required"
+                           and isinstance(keyword.value, ast.Constant)
+                           and keyword.value.value is True
+                           for keyword in node.keywords):
+                    optional.append(f"{path.name}:{node.lineno}")
+            if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and node.name in _DIRECTION_INFERENCE_NAMES):
+                inferred.append(f"{path.name}:{node.lineno} def {node.name}")
+            elif isinstance(node, ast.Name) and node.id in _DIRECTION_INFERENCE_NAMES:
+                inferred.append(f"{path.name}:{node.lineno} {node.id}")
+            elif isinstance(node, ast.alias) and node.name in _DIRECTION_INFERENCE_NAMES:
+                inferred.append(f"{path.name}:{node.lineno} import {node.name}")
+    if optional:
+        results.append(("FAIL", f"方向回归: --direction 不是必填: {', '.join(optional)}"))
+    elif direction_args == 0:
+        results.append(("FAIL", "方向回归: 没有找到任何 --direction 参数，检查与脚本已脱节"))
+    else:
+        results.append(("PASS", f"所有 --direction 参数均为必填 ({direction_args} 处)"))
+    if inferred:
+        results.append(("FAIL", f"方向回归: 按文本推断方向的代码被重新引入: {inferred}"))
+    else:
+        results.append(("PASS", "无按文本推断方向的代码 (detect_direction / source_is_chinese 已移除)"))
+    if unreadable:
+        results.append(("WARN", f"无法读取脚本，方向契约未完整检查: {unreadable}"))
+    return results
+
+
+def check_direction_docs(base_dir: Path) -> list[tuple[str, str]]:
+    """文档与 agent.json 同步方向契约：无已删字段、无重复项，写出的命令调用一律带 --direction。"""
+    results = []
+    docs: dict[str, str] = {}
+    unreadable: list[str] = []
+    paths = [base_dir / name for name in _DIRECTION_DOC_FILES]
+    paths += sorted(base_dir.glob("README*.md"))
+    for path in paths:
+        if not path.exists():
+            continue
+        text = _read_doc(path)
+        if text is None:
+            unreadable.append(str(path.relative_to(base_dir)))
+        else:
+            docs[str(path.relative_to(base_dir))] = text
+
+    stale = [f"{name}: {field}" for name, text in docs.items()
+             for field in _REMOVED_DIRECTION_FIELDS if field in text]
+    if stale:
+        results.append(("FAIL", f"文档残留已删字段: {stale}"))
+    else:
+        results.append(("PASS", "文档无已删字段残留 (direction_auto_detected / direction_warning)"))
+
+    duplicates, manifest_error = _duplicate_manifest_fields(base_dir)
+    if manifest_error:
+        results.append(("FAIL", f"agent.json 清单无法检查: {manifest_error}"))
+    elif duplicates:
+        results.append(("FAIL", f"agent.json 清单有重复项: {duplicates}"))
+    else:
+        results.append(("PASS", "agent.json 各命令的 args / json_output 无重复项"))
+
+    missing: list[str] = []
+    examined = 0
+    for name, text in docs.items():
+        if name == "agent.json":
+            continue  # its commands are judged from the parsed manifest below
+        found, count = _commands_lacking_direction(text)
+        missing += [f"{name}: {invocation}" for invocation in found]
+        examined += count
+    # agent.json is a manifest, not prose: every string value in it is a
+    # command or a description, so each string is judged on its own.
+    if "agent.json" in docs and manifest_error is None:
+        found, count = _manifest_commands(json.loads(docs["agent.json"]))
+        missing += [f"agent.json: {invocation}" for invocation in found]
+        examined += count
+    if missing:
+        results.append(("FAIL", f"文档里的命令调用缺 --direction: {missing}"))
+    elif examined == 0:
+        results.append(("FAIL", "没有在文档里找到任何需要方向的命令调用，检查与文档已脱节"))
+    else:
+        results.append(("PASS", f"文档里的命令调用均带 --direction (检查 {len(docs)} 个文件，"
+                                f"{examined} 条命令)"))
+    if unreadable:
+        results.append(("WARN", f"无法读取文档，命令示例未完整检查: {unreadable}"))
+    return results
+
+
 def _run_rebuild_behavior_tests() -> list[tuple[str, str]]:
     """Run the committed synthetic rebuild-behavior suite (scripts/test_rebuild.py).
 
@@ -804,6 +1161,16 @@ def _run_rebuild_behavior_tests() -> list[tuple[str, str]]:
         return test_rebuild.run()
     except Exception as e:  # noqa: BLE001
         return [("WARN", f"test_rebuild.py: failed to run ({type(e).__name__}: {e})")]
+
+
+def _section_results(name: str, func) -> list[tuple[str, str]]:
+    """One section's results. A check that raises is a failed check, not a dead health check."""
+    try:
+        return func()
+    except Exception as e:  # noqa: BLE001 - reported as the FAIL below, with its traceback on stderr
+        if sys.stderr is not None:  # closed (`2>&-`): a print would fall back to stdout
+            traceback.print_exc()
+        return [("FAIL", f"{name}: 检查自身抛出异常 {type(e).__name__}: {e}")]
 
 
 def main():
@@ -824,7 +1191,7 @@ def main():
     all_results = []
 
     def run_section(name: str, func) -> list[tuple[str, str]]:
-        results = func()
+        results = _section_results(name, func)
         all_results.extend(results)
         return results
 
@@ -839,6 +1206,8 @@ def main():
     card_ov_results = run_section("Card Overrides", lambda: check_card_overrides_quality(ref_dir))
     hygiene_results = run_section("Reference Data Hygiene", lambda: check_reference_data_hygiene(ref_dir))
     test_results = run_section("Functional Tests", lambda: run_test_cases(script_dir))
+    direction_results = run_section("Direction Contract", lambda: check_direction_contract(script_dir))
+    direction_doc_results = run_section("Direction Docs", lambda: check_direction_docs(base_dir))
     rebuild_results = run_section("Rebuild Behavior Tests", lambda: _run_rebuild_behavior_tests())
 
     pass_count = sum(1 for s, _ in all_results if s == "PASS")
@@ -876,6 +1245,8 @@ def main():
         ("Card Overrides", card_ov_results),
         ("Reference Data Hygiene", hygiene_results),
         ("Functional Tests", test_results),
+        ("Direction Contract", direction_results),
+        ("Direction Docs", direction_doc_results),
         ("Rebuild Behavior Tests", rebuild_results),
     ]
 

@@ -21,8 +21,14 @@ never calls an LLM API. It is a pure stdlib shell that reuses auto_pipeline.py
 (pre) and completeness_guard.py (gate). No check logic is reimplemented here.
 
 Usage:
-    python scripts/translate.py prepare <source> [--date YYYY-MM] [--type general] [--direction encn|cnen] [--lite] [--json]
-    python scripts/translate.py finish  <translated> --source <source> [--direction encn|cnen] [--json]
+    python scripts/translate.py prepare <source> --direction encn|cnen [--date YYYY-MM] [--type general] [--lite] [--json]
+    python scripts/translate.py finish  <translated> --source <source> --direction encn|cnen [--json]
+
+--direction is the task's translation direction and is required on every
+stage: the agent decides it from the request (EN->CN or CN->EN) and states it
+here. No stage infers it from the text — mixed Chinese/English Gwent text
+defeats any such guess, and a wrong direction makes pack, lock and gate all
+push the translation toward the wrong language.
 
 Exit code:
     0 = PASS (prepare built a ready pack / finish gate passed)
@@ -39,7 +45,8 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import detect_direction, format_issue, json_output, run_utf8, source_is_chinese
+from _shared import DIRECTIONS, format_issue, json_output, run_utf8
+from check_translation import UNTRANSLATED_SUMMARY
 
 SCRIPTS_DIR = Path(__file__).parent
 
@@ -55,6 +62,7 @@ EFFECT_TIMEOUT = 120  # official-effect verbatim pass (informational; same budge
 # to SKILL.md while translating. Keep these in sync with SKILL.md.
 
 STYLE_ENC = [
+    ("Language", "The output is Chinese: translate every sentence. Abbreviations (GN, R1) and short slang (gg wp) may stay; an output left in English is BLOCKED"),
     ("Tone", "Bilibili player community tone, concise, punchy, allow slang"),
     ("Sentence length", "Break long English sentences into 2-3 short Chinese sentences"),
     ("Voice", 'Active voice. "对手不管她" not "未被解掉"'),
@@ -68,6 +76,7 @@ STYLE_ENC = [
 ]
 
 STYLE_CN = [
+    ("Language", "The output is English: no Chinese at all. Romanize Chinese player IDs (pinyin or their usual Latin form) and keep code and links as they are; leftover Chinese is BLOCKED"),
     ("Tone", "Casual but natural English. Not stiff or academic. Like a native player talking"),
     ("Sentence length", "Combine short Chinese sentences into flowing English prose"),
     ("Voice", 'Maintain active voice. "If left unanswered" not "If not dealt with by opponent"'),
@@ -81,6 +90,7 @@ STYLE_CN = [
 ]
 
 CHECKLIST_ENC = [
+    "Written in Chinese, not left in the source (kept slang such as gg wp is fine)",
     'No "费/费用" in formal provision contexts (use 人口)',
     '"X for Y" -> "Y人口X战力" (not reversed, not identical numbers)',
     "Passive voice converted to active",
@@ -95,6 +105,7 @@ CHECKLIST_ENC = [
 ]
 
 CHECKLIST_CN = [
+    "No Chinese at all: everything translated, Chinese player IDs romanized",
     '"人口" -> "provision" (formal); "cost" only for SY Tribute',
     '"Y人口X战力" -> "X for Y" (correct order)',
     "No Chinese residue: all Chinese card names translated to English",
@@ -108,8 +119,8 @@ CHECKLIST_CN = [
 # Lite pack (chat-length content): style rows that matter for a short message.
 # Filtered from the tables above BY LABEL so the two stay in sync — article-grade
 # rows (sentence splitting, style fingerprint) would only pad what the model reads.
-LITE_STYLE_ENC = ("Tone", "Voice", "Numbers", "Parentheses", "Dash", "Colon", "Verbs", "Rhetoric")
-LITE_STYLE_CN = ("Tone", "Numbers", "Parentheses", "Dash", "Colon", "Slang", "Rhetoric")
+LITE_STYLE_ENC = ("Language", "Tone", "Voice", "Numbers", "Parentheses", "Dash", "Colon", "Verbs", "Rhetoric")
+LITE_STYLE_CN = ("Language", "Tone", "Numbers", "Parentheses", "Dash", "Colon", "Slang", "Rhetoric")
 
 # Balance change direction guidance — injected into the pack so the agent sees
 # the buff/nerf direction rules inline (Gwent-specific: power/provision may be
@@ -616,23 +627,11 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         print(f"Error: source file not found: {args.source}")
         sys.exit(1)
 
-    # Direction: explicit --direction wins; otherwise auto-detect from the SOURCE
-    # (a Chinese source means CN->EN). The old hard default "encn" silently built
-    # EN->CN packs for Chinese sources. pre is direction-independent (context_lock
-    # build auto-detects with the same source_is_chinese heuristic), so there is
-    # no --direction to forward — the two cannot disagree by construction.
-    direction_auto = args.direction is None
-    if direction_auto:
-        try:
-            source_text = source_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as e:
-            if args.json:
-                json_output(None, errors=[f"failed to read source file: {e}"], exit_code=1)
-            print(f"Error: failed to read source file {source_path}: {e}")
-            sys.exit(1)
-        direction = "cnen" if source_is_chinese(source_text) else "encn"
-    else:
-        direction = args.direction
+    # Direction is the task's own, stated by the agent via --direction. The
+    # same value drives the pack (style, checklist) and, forwarded to pre, the
+    # context lock — so the lock finish enforces is built for the direction the
+    # pack was written for.
+    direction = args.direction
     article_type = args.type
 
     # Ensure the card DB BEFORE pre (pre loads it via TermAuthority; a missing DB
@@ -646,7 +645,7 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         print("       想补跑: python scripts/build_effect_reference.py --fetch  (约 3 分钟)", file=sys.stderr)
 
     # Run auto_pipeline pre (Phase A, reused wholesale).
-    pre_args = ["pre", str(source_path), "--type", article_type]
+    pre_args = ["pre", str(source_path), "--type", article_type, "--direction", direction]
     if args.date:
         pre_args.extend(["--date", args.date])
     _ok, parsed, raw = run_script_json("auto_pipeline.py", pre_args, PRE_TIMEOUT)
@@ -676,18 +675,19 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     # Bind the pack to its source: snapshot the lock next to the pack (same
-    # naming convention), stamped with the source's content hash. finish
-    # reuses this snapshot instead of rebuilding, and refuses to gate against
-    # a source that changed after prepare (unless --allow-source-changed) —
+    # naming convention), stamped with the source's content hash and the task
+    # direction. finish reuses this snapshot instead of rebuilding, and refuses
+    # to gate against a source that changed after prepare (unless
+    # --allow-source-changed) or a snapshot prepared for another direction —
     # closing the window where the agent translates pack A but the gate
-    # rebuilds its lock from a mutated source.
+    # rebuilds its lock from a mutated source, or verifies the other language.
     source_sha = hashlib.sha256(source_path.read_bytes()).hexdigest()
     lock_src = Path(pre_data.get("lock_path", "")) if pre_data.get("lock_path") else None
     lock_sidecar = source_path.with_name(source_path.stem + ".lock.json")
     if lock_src and lock_src.exists():
         try:
             lock_json = json.loads(lock_src.read_text(encoding="utf-8"))
-            lock_json["_prepare_meta"] = {"source_sha256": source_sha}
+            lock_json["_prepare_meta"] = {"source_sha256": source_sha, "direction": direction}
             lock_sidecar.write_text(json.dumps(lock_json, ensure_ascii=False), encoding="utf-8")
         except (OSError, json.JSONDecodeError) as e:
             print(f"[WARN] lock sidecar not written ({e}); finish will rebuild from source", file=sys.stderr)
@@ -699,7 +699,6 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         "command": "prepare",
         "source": str(source_path),
         "direction": direction,
-        "direction_auto_detected": direction_auto,
         "date": args.date or "auto",
         "type": article_type,
         "lite": bool(args.lite),
@@ -726,8 +725,7 @@ def cmd_prepare(args: argparse.Namespace) -> None:
     print("TRANSLATE — PREPARE")
     print("=" * 60)
     print(f"\nSource:    {source_path}")
-    print(f"Direction: {'EN->CN' if direction == 'encn' else 'CN->EN'}"
-          f"{' (auto-detected from source)' if direction_auto else ''}")
+    print(f"Direction: {'EN->CN' if direction == 'encn' else 'CN->EN'}")
     print(f"Pack:      {pack_path}")
     print(f"Lock:      {'built' if lock_built else 'FAILED (pack written with empty lock table)'}")
     print(f"CardDB:    {card_db_count} cards {'(READY)' if cards_ready else '(NOT READY — run build_card_names_reference.py, then re-run prepare)'}")
@@ -767,26 +765,15 @@ def cmd_finish(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     direction = args.direction
-    direction_warning = None
-    if not direction:
-        try:
-            text = translated_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as e:
-            if args.json:
-                json_output(None, errors=[f"failed to read translated file: {e}"], exit_code=1)
-            print(f"Error: failed to read translated file {translated_path}: {e}")
-            sys.exit(1)
-        direction = detect_direction(text)
-        direction_warning = (
-            f"--direction not given; auto-detected as {direction} from the translation "
-            f"(unreliable on mixed text — pass --direction explicitly for a trustworthy gate)"
-        )
 
     # Hard gate. Prefer the prepare-time lock snapshot (pack/lock binding):
     # reusing it guarantees the gate judges against the same term set the
-    # agent translated from. A source that changed after prepare invalidates
-    # the snapshot — refuse unless --allow-source-changed (the right fix is
-    # re-running prepare so pack and gate stay in sync).
+    # agent translated from. The snapshot is only valid for the task it was
+    # prepared for. A source that changed after prepare invalidates it —
+    # refuse unless --allow-source-changed (the right fix is re-running
+    # prepare so pack and gate stay in sync). A snapshot prepared for another
+    # direction holds a lock extracted from the other language, so it is
+    # never reused: the agent translated from a pack for a different task.
     lock_sidecar = source_path.with_name(source_path.stem + ".lock.json")
     lock_reused = False
     source_changed = False
@@ -798,24 +785,42 @@ def cmd_finish(args: argparse.Namespace) -> None:
     guard_args = [str(translated_path), "--direction", direction, "--source", str(source_path)]
     if lock_sidecar.exists():
         try:
-            sidecar_meta = json.loads(lock_sidecar.read_text(encoding="utf-8")).get("_prepare_meta", {})
+            sidecar = json.loads(lock_sidecar.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            sidecar_meta = {}
-        current_sha = hashlib.sha256(source_path.read_bytes()).hexdigest()
-        if sidecar_meta.get("source_sha256") and sidecar_meta["source_sha256"] != current_sha:
-            source_changed = True
-            if not args.allow_source_changed:
-                block_before_guard = (
-                    "source changed after prepare: the pack's term lock is stale. "
-                    "Re-run prepare on the current source (or pass --allow-source-changed "
-                    "to gate against a freshly rebuilt lock)."
-                )
-        if not source_changed:
-            guard_args.extend(["--lock", str(lock_sidecar)])
-            lock_reused = True
-        # A changed source NEVER reuses the snapshot: --allow-source-changed
-        # only bypasses the BLOCK above, and the gate then rebuilds its lock
-        # from the CURRENT source — that is the documented contract.
+            sidecar = None
+        # A snapshot that parses but has the wrong shape is as unusable as an
+        # unreadable one: no direction can be read off it.
+        meta = sidecar.get("_prepare_meta") if isinstance(sidecar, dict) else None
+        sidecar_meta = meta if isinstance(meta, dict) else {}
+        snapshot_direction = sidecar_meta.get("direction")
+        if snapshot_direction != direction:
+            state = (
+                "was prepared for EN->CN" if snapshot_direction == "encn"
+                else "was prepared for CN->EN" if snapshot_direction == "cnen"
+                else "records no direction (it predates explicit directions, "
+                     "was built by hand, or is unreadable)"
+            )
+            block_before_guard = (
+                f"{lock_sidecar.name} {state}, but finish was called with --direction {direction}. "
+                f"finish reuses a snapshot only when it was prepared for the same direction, so that "
+                f"pack, lock and gate describe one task. Re-run prepare with --direction {direction}."
+            )
+        else:
+            current_sha = hashlib.sha256(source_path.read_bytes()).hexdigest()
+            if sidecar_meta.get("source_sha256") and sidecar_meta["source_sha256"] != current_sha:
+                source_changed = True
+                if not args.allow_source_changed:
+                    block_before_guard = (
+                        "source changed after prepare: the pack's term lock is stale. "
+                        "Re-run prepare on the current source (or pass --allow-source-changed "
+                        "to gate against a freshly rebuilt lock)."
+                    )
+            if not source_changed:
+                guard_args.extend(["--lock", str(lock_sidecar)])
+                lock_reused = True
+            # A changed source NEVER reuses the snapshot: --allow-source-changed
+            # only bypasses the BLOCK above, and the gate then rebuilds its lock
+            # from the CURRENT source — that is the documented contract.
     if not lock_reused:
         # No prepare snapshot next to this source. Usually fine (prepare was
         # run elsewhere / old layout), but the #1 cause is a mistyped or
@@ -847,13 +852,13 @@ def cmd_finish(args: argparse.Namespace) -> None:
             "translated": str(translated_path),
             "source": str(source_path),
             "direction": direction,
-            "direction_warning": direction_warning,
             "blocked": True,
             "block_reason": block_before_guard,
             "lock_reused": False,
-            "source_changed": True,
+            "source_changed": source_changed,
             "violations": [],
             "violations_total": 0,
+            "repair_tracking": None,
             "guard_exit_code": None,
             "guard_all_passed": None,
             "guard": None,
@@ -867,6 +872,7 @@ def cmd_finish(args: argparse.Namespace) -> None:
         print("=" * 60)
         print(f"\nTranslated: {translated_path}")
         print(f"Source:     {source_path}")
+        print(f"Direction:  {'EN->CN' if direction == 'encn' else 'CN->EN'}")
         print("")
         print(f"[BLOCKED] {block_before_guard}")
         sys.exit(1)
@@ -972,7 +978,17 @@ def cmd_finish(args: argparse.Namespace) -> None:
                 and isinstance(prev.get("keys"), list)):
             old_keys = set(prev["keys"])
             new_keys = set(current_keys)
-            regressed = sorted(new_keys - old_keys)
+            # An `untranslated` entry names a leftover by its text. When the
+            # previous round's list was truncated (it ended in the summary
+            # entry), leftovers that were summed up then and are listed now are
+            # not defects the edit introduced, so they do not count as
+            # regressions — they are still BLOCKED. When everything was listed
+            # last round, a leftover that is new this round IS a regression,
+            # like any other new key: the edit introduced it.
+            was_truncated = any(k.endswith(UNTRANSLATED_SUMMARY) for k in old_keys)
+            regressed = sorted(
+                k for k in new_keys - old_keys
+                if not (was_truncated and "|untranslated: " in k))
             repair_tracking = {
                 "previous_violations": len(old_keys),
                 "current_violations": len(new_keys),
@@ -1046,7 +1062,6 @@ def cmd_finish(args: argparse.Namespace) -> None:
         "translated": str(translated_path),
         "source": str(source_path),
         "direction": direction,
-        "direction_warning": direction_warning,
         "guard_exit_code": guard_exit_code,
         "guard_all_passed": all_passed,
         "lock_reused": lock_reused,
@@ -1073,8 +1088,6 @@ def cmd_finish(args: argparse.Namespace) -> None:
     print(f"\nTranslated: {translated_path}")
     print(f"Source:     {source_path}")
     print(f"Direction:  {'EN->CN' if direction == 'encn' else 'CN->EN'}")
-    if direction_warning:
-        print(f"Note:       {direction_warning}")
     print("")
 
     if not blocked:
@@ -1108,6 +1121,8 @@ def cmd_finish(args: argparse.Namespace) -> None:
             print(f"Violations ({violations_total} total, showing {len(shown)}; full list in --json output):")
             for v in shown:
                 print(f"   - [{v.get('check', '?')}] {format_issue(v)}")
+            if any("中文原文留在了英文译文里" in (v.get("message") or "") for v in violations):
+                print("       (中→英：人名和 ID 用拼音或其惯用的拉丁 ID，不要保留中文)")
         if repair_tracking:
             if repair_tracking["regressed_count"]:
                 print("")
@@ -1146,9 +1161,7 @@ def cmd_run(args: argparse.Namespace) -> None:
     prep_cmd = [sys.executable, str(self_py), "prepare", str(source_path)]
     if args.date:
         prep_cmd.extend(["--date", args.date])
-    prep_cmd.extend(["--type", args.type])
-    if args.direction:
-        prep_cmd.extend(["--direction", args.direction])
+    prep_cmd.extend(["--type", args.type, "--direction", args.direction])
     if args.lite:
         prep_cmd.append("--lite")
 
@@ -1165,11 +1178,7 @@ def cmd_run(args: argparse.Namespace) -> None:
         print("\n[RUN] prepare failed — fix the reported problem and re-run.")
         sys.exit(prep_rc)
 
-    # Same auto-detect rule prepare uses (Chinese source -> cnen), so the
-    # printed finish command carries an explicit, trustworthy direction.
-    direction = args.direction or (
-        "cnen" if source_is_chinese(source_path.read_text(encoding="utf-8")) else "encn"
-    )
+    direction = args.direction
 
     translated_path = Path(args.translated) if args.translated else None
     if translated_path is None:
@@ -1224,8 +1233,8 @@ def main() -> None:
         help="Article type (default: general)",
     )
     prep.add_argument(
-        "--direction", choices=["encn", "cnen"],
-        help="Direction for the pack banner + style table (default: auto-detected from source)",
+        "--direction", choices=DIRECTIONS, required=True,
+        help="Translation direction (EN->CN or CN->EN): drives the pack's style/checklist and how the source's terms are locked",
     )
     prep.add_argument("--lite", action="store_true",
                       help="Chat-length pack: drops the article-grade sections finish --lite does "
@@ -1240,7 +1249,8 @@ def main() -> None:
         "--source", required=True,
         help="Original source file (REQUIRED — needed to build the term lock for the gate)",
     )
-    fin.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
+    fin.add_argument("--direction", choices=DIRECTIONS, required=True,
+                     help="Translation direction (EN->CN or CN->EN): the language the gate verifies — the direction prepare was run with")
     fin.add_argument("--json", action="store_true", help="Output structured JSON")
     fin.add_argument("--allow-source-changed", action="store_true",
                      help="Gate against a freshly rebuilt lock even when the source changed "
@@ -1267,8 +1277,8 @@ def main() -> None:
         help="Article type (default: general)",
     )
     runp.add_argument(
-        "--direction", choices=["encn", "cnen"],
-        help="Direction for the pack banner + style table (default: auto-detected from source)",
+        "--direction", choices=DIRECTIONS, required=True,
+        help="Translation direction (EN->CN or CN->EN): drives the pack's style/checklist and how the source's terms are locked",
     )
     runp.add_argument("--allow-source-changed", action="store_true",
                      help="Forwarded to finish when --translated is given")

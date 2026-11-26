@@ -7,10 +7,14 @@ residue scanning (scan). The full translation workflow is driven by
 translate.py (prepare/finish); this script provides the building blocks.
 
 Usage (Pre-translation):
-    python auto_pipeline.py pre source.md --date 2026-05 --type meta
+    python auto_pipeline.py pre source.md --date 2026-05 --type meta --direction encn
 
 Usage (Residue scan, after you have translated.txt):
     python auto_pipeline.py scan translated.txt --direction encn
+
+--direction (encn | cnen) is the task's translation direction and is required:
+`pre` needs it to extract the source's terms from the right language, `scan`
+to know which language counts as residue. It is never inferred from the text.
 """
 
 import argparse
@@ -23,7 +27,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import detect_direction, json_output, run_utf8, terms_summary, TermAuthority
+from _shared import DIRECTIONS, json_output, run_utf8, terms_summary, TermAuthority
 
 
 # Scripts that already support --json in Phase 1.
@@ -227,7 +231,7 @@ def run_script(name: str, args: list[str], json_mode: bool = False) -> tuple[boo
     return result.returncode == 0, output, parsed
 
 
-def pre_translation(source_path: Path, date: str | None, article_type: str, json_mode: bool = False, verbose_terms: bool = False) -> tuple[str | dict, bool]:
+def pre_translation(source_path: Path, date: str | None, article_type: str, direction: str, json_mode: bool = False, verbose_terms: bool = False) -> tuple[str | dict, bool]:
     """Run all preprocessing steps. Returns a report and overall success."""
     all_ok = True
     # 清理上次 pre 遗留的陈旧临时文件（>1 小时），避免 /tmp 长期累积。不能清理本次/
@@ -247,10 +251,10 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
     ) as _tmp:
         lock_file = Path(_tmp.name)
 
-    # Step 1: Context lock
+    # Step 1: Context lock — extracted for the task's direction.
     ok, out, _ = run_script(
         "context_lock.py",
-        ["build", str(source_path), "--output", str(lock_file)],
+        ["build", str(source_path), "--direction", direction, "--output", str(lock_file)],
         json_mode=json_mode,
     )
     lock_built = ok
@@ -304,6 +308,7 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
             "source": str(source_path),
             "date": date or "auto",
             "type": article_type,
+            "direction": direction,
             "lock_built": lock_built,
             "lock_path": str(lock_file),
             "card_references_found": len(quick_ref),
@@ -324,6 +329,7 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
         f"Source: {source_path}",
         f"Date: {date or 'auto'}",
         f"Type: {article_type}",
+        f"Direction: {'EN->CN' if direction == 'encn' else 'CN->EN'}",
         "",
     ]
 
@@ -435,7 +441,7 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
     lines.append("")
     lines.append("1. Perform the translation using the quick reference above")
     lines.append("2. Save translation to a file (e.g., translated.txt)")
-    lines.append("3. Run: python scripts/translate.py finish translated.txt --source source.md")
+    lines.append(f"3. Run: python scripts/translate.py finish translated.txt --source source.md --direction {direction}")
     lines.append("")
     lines.append("The translation is NOT final until finish reports PASS.")
     lines.append("=" * 60)
@@ -446,20 +452,18 @@ def pre_translation(source_path: Path, date: str | None, article_type: str, json
 
 def scan_translation(
     translated_path: Path,
-    direction: str | None = None,
+    direction: str,
     json_mode: bool = False,
 ) -> tuple[str | dict, bool]:
     """Standalone scan mode: check a translated file for untranslated card names.
 
     Direction-aware final defense line. For EN->CN output it reports English
-    card names left untranslated; for CN->EN output it reports Chinese card
-    names left untranslated. Direction is auto-detected from the file when
-    not given, and passed through to check_translation.py so both sides agree.
+    card names left untranslated; for CN->EN output it reports Chinese
+    card names left untranslated. An output that is still in the source
+    language (the checker's `untranslated` findings) is reported alongside them.
+    The direction is the task's own ("encn" / "cnen") and is passed through to
+    check_translation.py so both sides agree.
     """
-    text = translated_path.read_text(encoding="utf-8")
-    direction_auto_detected = direction is None
-    direction = direction or detect_direction(text)
-
     ok, out, parsed = run_script(
         "check_translation.py",
         [str(translated_path), "--direction", direction],
@@ -468,10 +472,13 @@ def scan_translation(
 
     residue_categories = {"english_residue", "chinese_residue"}
     residues = []
+    untranslated = []
     if parsed and parsed.get("data"):
         for issue in parsed["data"].get("issues", []):
             if issue.get("category") in residue_categories:
                 residues.append(issue)
+            elif issue.get("category") == "untranslated":
+                untranslated.append(issue)
     else:
         # Fallback for non-JSON mode or parse failure.
         residues = [
@@ -479,17 +486,24 @@ def scan_translation(
             for line in out.split("\n")
             if "English residue" in line or "Chinese residue" in line
         ]
+        untranslated = [
+            {"message": line.strip()}
+            for line in out.split("\n")
+            if "untranslated:" in line
+        ]
+    clean = not residues and not untranslated
 
     if json_mode:
         data = {
             "command": "scan",
             "translated": str(translated_path),
             "direction": direction,
-            "direction_auto_detected": direction_auto_detected,
             "residue_count": len(residues),
             "residues": residues,
+            "untranslated_count": len(untranslated),
+            "untranslated": untranslated,
         }
-        return data, len(residues) == 0
+        return data, clean
 
     # Residues are always in the SOURCE language; the fix is to translate
     # them into the target language of this direction.
@@ -516,15 +530,26 @@ def scan_translation(
         lines.append(f"Action required: Replace the above {source_lang} card names")
         lines.append(f"with their {target_lang} translations before finalizing.")
         lines.append("")
-        lines.append("[BLOCKED] After fixing, re-run: python auto_pipeline.py scan translated.txt")
+
+    if untranslated:
+        lines.append(f"[BLOCKED] The output is still in {source_lang} ({len(untranslated)} finding):")
+        lines.append("")
+        for issue in untranslated:
+            lines.append(f"  {issue.get('message', issue)}")
+        lines.append("")
+        lines.append(f"Action required: translate the whole text into {target_lang}.")
+        lines.append("")
+
+    if not clean:
+        lines.append(f"[BLOCKED] After fixing, re-run: python auto_pipeline.py scan translated.txt --direction {direction}")
     else:
         lines.append(f"[PASS] No {source_lang} residue found. Translation is clean.")
         lines.append("")
         lines.append("Next step — run the final gate:")
-        lines.append("  python scripts/translate.py finish translated.txt --source source.md")
+        lines.append(f"  python scripts/translate.py finish translated.txt --source source.md --direction {direction}")
 
     lines.append("")
-    return "\n".join(lines), len(residues) == 0
+    return "\n".join(lines), clean
 
 
 def main():
@@ -536,12 +561,15 @@ def main():
     pre.add_argument("--date", help="Article date (YYYY-MM)")
     pre.add_argument("--type", choices=["meta", "bc-proposal", "card-analysis", "patch-notes", "general"],
                      default="general", help="Article type")
+    pre.add_argument("--direction", choices=DIRECTIONS, required=True,
+                     help="Translation direction (EN->CN or CN->EN): selects how the source's terms are extracted")
     pre.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     pre.add_argument("--verbose-terms", action="store_true", help="Emit full term/violation lists (default: counts + top 5)")
 
-    scan = subparsers.add_parser("scan", help="Scan translated file for untranslated card names")
+    scan = subparsers.add_parser("scan", help="Scan translated file for untranslated card names and output still in the source language")
     scan.add_argument("translated", help="Translated file to scan")
-    scan.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
+    scan.add_argument("--direction", choices=DIRECTIONS, required=True,
+                      help="Translation direction (EN->CN or CN->EN): which language counts as residue")
     scan.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
 
     args = parser.parse_args()
@@ -568,7 +596,8 @@ def main():
         sys.exit(1)
 
     if args.command == "pre":
-        report, ok = pre_translation(source_path, args.date, args.type, json_mode=json_mode, verbose_terms=args.verbose_terms)
+        report, ok = pre_translation(source_path, args.date, args.type, args.direction,
+                                     json_mode=json_mode, verbose_terms=args.verbose_terms)
         if json_mode:
             json_output(report, exit_code=0 if ok else 1)
         print(report)

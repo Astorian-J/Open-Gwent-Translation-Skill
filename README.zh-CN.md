@@ -145,8 +145,8 @@ gwent-translation-pro/
 │   ├── backtranslate.py         # 回译检查
 │   ├── lookup.py                # 术语/卡牌查询（词表 + 1381 卡全库）
 │   ├── learn.py                 # 学习新术语
-│   ├── health_check.py          # 完整性检查（78 PASS）
-│   ├── test_rebuild.py          # 行为回归套件（27 用例）
+│   ├── health_check.py          # 完整性检查（91 PASS）
+│   ├── test_rebuild.py          # 行为回归套件（35 用例）
 │   └── _shared.py               # 共享逻辑（TermAuthority、run_utf8）
 ├── lite/                    # 精简版 skill（聊天翻译）
 │   ├── SKILL.md                 # 精简版 skill 工作流（聊天翻译）

@@ -7,7 +7,11 @@ If any check fails, outputs a BLOCKED message that MUST be
 resolved before the translation can be finalized.
 
 Usage:
-    python completeness_guard.py translated.txt
+    python completeness_guard.py translated.txt --direction encn
+
+--direction (encn | cnen) is the task's translation direction and is required:
+it is passed unchanged to every downstream check, so the gate can never verify
+one language here and another elsewhere. It is never inferred from the text.
 
 Exit code:
     0 = PASS (translation ready)
@@ -21,8 +25,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
+    DIRECTIONS,
     build_lock_from_source,
-    detect_direction,
     format_issue,
     json_output,
     parse_ta_envelope,
@@ -107,7 +111,7 @@ def run_phase_c_check(file_path: Path, lock_path: Path | None, direction: str) -
     return False, 0, []
 
 
-def run_term_authority_check(file_path: Path, lock_path: Path | None) -> tuple[bool, int, str, list[dict]]:
+def run_term_authority_check(file_path: Path, lock_path: Path | None, direction: str) -> tuple[bool, int, str, list[dict]]:
     """Run term_enforcer.py — the guard's SINGLE term-authority execution.
 
     check_translation and phase_c run with --skip-ta inside the guard (their
@@ -122,8 +126,8 @@ def run_term_authority_check(file_path: Path, lock_path: Path | None) -> tuple[b
       "ran"     — actually executed; pass/count are meaningful
       "error"   — the check itself raised (set by the caller's except guard)
 
-    Direction-aware since the lock carries the official target for both ways
-    (term_enforcer.enforce_terms branches on the lock's direction).
+    Direction-aware: term_enforcer branches on the task's direction, the same
+    value every other check in this run received.
     """
     if lock_path is None:
         return True, 0, "skipped", []
@@ -134,7 +138,10 @@ def run_term_authority_check(file_path: Path, lock_path: Path | None) -> tuple[b
         # status="error" + passed=False (same semantics as the M9 lock guard).
         raise FileNotFoundError(f"scripts/term_enforcer.py missing — check cannot run")
 
-    rc_ok, parsed, _raw = run_script_json("term_enforcer.py", [str(file_path), "--lock", str(lock_path)])
+    rc_ok, parsed, _raw = run_script_json(
+        "term_enforcer.py",
+        [str(file_path), "--lock", str(lock_path), "--direction", direction],
+    )
     ta_ok, count, violations, err = parse_ta_envelope(parsed)
     if err is not None:
         return False, count, "ran", [{
@@ -156,7 +163,8 @@ def main() -> None:
     parser.add_argument("--source", help="Source file to build the term lock from"
                         " (or pass --lock to reuse a prepare-time snapshot)")
     parser.add_argument("--lock", help="Pre-built context lock JSON (reuse, do not rebuild)")
-    parser.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
+    parser.add_argument("--direction", choices=DIRECTIONS, required=True,
+                        help="Translation direction (EN->CN or CN->EN): forwarded unchanged to every check")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     parser.add_argument("--verbose-terms", action="store_true", help="Emit full violation/term lists (default: counts + top 5)")
     parser.add_argument("--lite", action="store_true", help="Skip the Phase C style/format self-check (chat-length content): terminology + residue + term authority still gate")
@@ -180,19 +188,18 @@ def main() -> None:
         print("Save your translation to a file first, then re-run.")
         sys.exit(1)
 
-    # Detect direction once and pass it to every downstream check so all of
-    # them agree on which language is the target (and thus which residue to
-    # flag). An explicit --direction overrides the heuristic. A read failure
-    # (non-UTF-8 bytes, permissions) must not escape as a bare traceback —
-    # report through the same channel as every other entry error.
+    # Every check below reads the translation through a sub-script, which would
+    # surface an unreadable file (non-UTF-8 bytes, permissions) as an opaque
+    # checker failure. Read it once here so it is reported through the same
+    # channel as every other entry error.
     try:
-        translated_text = file_path.read_text(encoding="utf-8")
+        file_path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         if args.json:
             json_output(None, errors=[f"cannot read file: {args.file} ({e})"], exit_code=1)
         print(f"Error: cannot read file: {args.file} ({e})")
         sys.exit(1)
-    direction = args.direction or detect_direction(translated_text)
+    direction = args.direction
 
     # Build the context lock once and reuse it for every downstream check,
     # instead of letting each sub-script rebuild it from the source.
@@ -208,7 +215,7 @@ def main() -> None:
             print(f"[WARN] {lock_build_error}", file=sys.stderr)
     elif source_path:
         try:
-            lock_path = build_lock_from_source(source_path)
+            lock_path = build_lock_from_source(source_path, direction)
         except Exception as e:
             lock_build_error = str(e)
             # Diagnostic, not report data — stderr keeps stdout pure JSON.
@@ -282,7 +289,7 @@ def main() -> None:
         checks.append({"name": "term_authority", "passed": False, "issue_count": 0, "status": "error", "violations": [], "message": f"Term authority: context lock build failed ({lock_build_error}); check could not run"})
     else:
         try:
-            passed, count, status, ta_violations = run_term_authority_check(file_path, lock_path)
+            passed, count, status, ta_violations = run_term_authority_check(file_path, lock_path, direction)
             if status == "skipped":
                 msg = "Term authority: skipped (no lock file)"
             else:
@@ -301,7 +308,6 @@ def main() -> None:
     if args.json:
         data = {
             "direction": direction,
-            "direction_auto_detected": args.direction is None,
             "all_passed": all_pass,
             "blocked": not all_pass,
             "checks": checks,

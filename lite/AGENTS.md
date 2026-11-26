@@ -13,6 +13,13 @@ Do this right now: get the content to translate → pick a direction (EN↔CN) �
 follow the 3 steps below. If the user posts Gwent text in either language
 without explicit instruction, default to translating it.
 
+**You decide the direction and pass it as `--direction` on every command**
+(`encn` = EN→CN, `cnen` = CN→EN). The scripts never infer it: a Chinese
+source full of English card names defeats any text heuristic, and a wrong
+direction makes pack and gate push the translation toward the wrong language.
+The user's stated target language wins; otherwise translate into the other
+language. prepare and finish must receive the same direction.
+
 > For **full-article** translation (meta reports, BC proposals, card analysis),
 > use the main skill `gwent-translation-pro` instead — see the AGENTS.md in the
 > main skill directory (the sibling `gwent-translation-pro` directory, as
@@ -65,11 +72,13 @@ absolute path of the main skill directory.
 
 ### 1. prepare --lite — save the content, get the lock table (one command)
 
-The lock table is printed to stdout via `cat`; no separate pack read needed:
+The lock table is printed to stdout via `cat`; no separate pack read needed.
+The commands show EN→CN (`--direction encn`); for CN→EN change `--direction`
+to `cnen` on every command.
 
 ```bash
 printf '%s\n' "content to translate" > /tmp/gwent-lite-src.md && \
-python3 "$SK/scripts/translate.py" prepare /tmp/gwent-lite-src.md --lite && \
+python3 "$SK/scripts/translate.py" prepare /tmp/gwent-lite-src.md --direction encn --lite && \
 cat /tmp/gwent-lite-src.pack.md
 ```
 
@@ -92,7 +101,8 @@ Translate per direction (EN→CN or CN→EN), no tool calls in this step:
 
 - **EN→CN**: Bilibili-player register — short sentences, active voice, Arabic
   numerals (5点 / 12人口 / R3), Chinese brackets 「（）」
-- **CN→EN**: native-player register — casual, not academic, English parens ()
+- **CN→EN**: native-player register — casual, not academic, English parens (),
+  and no Chinese left in the output (romanize Chinese IDs)
 - No dashes: never use 「——」 (or — in English output) to introduce or pad text;
   rewrite with commas, periods, or brackets, even when the source uses em-dashes
 - No colons: never use 「：」 (or : in English output) to introduce, list, or
@@ -109,14 +119,18 @@ Translate per direction (EN→CN or CN→EN), no tool calls in this step:
 ```bash
 printf '%s\n' "your translation" > /tmp/gwent-lite-out.md && \
 python3 "$SK/scripts/translate.py" finish /tmp/gwent-lite-out.md \
-  --source /tmp/gwent-lite-src.md --lite
+  --source /tmp/gwent-lite-src.md --direction encn --lite
 ```
 
 - **PASS** → deliver the translation to the user. Done.
 - **BLOCKED** → every violation carries the official rendering
   (`「term」 -> official`); apply it to the translation file and re-run the same
-  command. Up to 3 fix rounds; still BLOCKED, hand the violation list +
-  translation to the user and say which terms have no official rendering.
+  command. An `untranslated:` violation means the output is not a translation —
+  Chinese left in an English output (romanize Chinese IDs), an output that is
+  still English, or a verbatim copy of the source: re-translate the whole text
+  into the target language; it is not a term fix. Up to 3 fix rounds; still
+  BLOCKED, hand the violation list + translation to the user and say which
+  terms have no official rendering.
 
 `--lite` runs the terminology / residue / term-authority gates only (right-sized
 for chat) and skips the article-grade Phase C style check, learn, and the
@@ -133,7 +147,7 @@ command:
 printf '%s\n' "source text" > /tmp/gwent-lite-fast-src.md && \
 printf '%s\n' "your translation" > /tmp/gwent-lite-fast-out.md && \
 python3 "$SK/scripts/translate.py" finish /tmp/gwent-lite-fast-out.md \
-  --source /tmp/gwent-lite-fast-src.md --lite
+  --source /tmp/gwent-lite-fast-src.md --direction encn --lite
 ```
 
 finish rebuilds the term lock from the source on the fly and still blocks a
@@ -207,6 +221,11 @@ For anything not listed, run `lookup.py`.
   (`{success, exit_code, data, errors}`), so lite composes cleanly into
   deterministic JSON tool pipelines. `finish --lite --json` reports the same
   `violations` shape as the main gate (each entry carries `expected_official`).
+- `--direction` is a required argument on every `translate.py` subcommand
+  (`prepare` / `finish` / `run`) and on every standalone checker; omitting it
+  is an argument error (exit 2), never a guess. `finish` refuses a prepare
+  snapshot that was not prepared for the same direction (`blocked`, with the
+  reason) — re-run `prepare`.
 - For programmatic / cross-agent tool access (Cursor, Claude Desktop, remote
   agents without a local filesystem), an MCP server is planned but not yet
   built; until then, agents with a local filesystem use this file's

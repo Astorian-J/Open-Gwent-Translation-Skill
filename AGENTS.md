@@ -13,11 +13,15 @@ schemas. No Claude Code-specific knowledge is required.
 立刻做三件事 / Do this right now:
 
 1. **拿到要翻译的内容** — 用户已贴在对话里；若没有，主动问「把要翻译的昆特牌文章发给我」
-2. **判断方向** — 英文→中文 (`encn`) 还是 中文→英文 (`cnen`)
+2. **判断方向** — 英文→中文 (`encn`) 还是 中文→英文 (`cnen`)，并作为 `--direction` 传给 `prepare` 和 `finish`
 3. **走流程** — `translate.py prepare` → 翻译 → `translate.py finish`（见下方 Quick Start）
 
 > 只要用户贴了昆特牌相关的中文或英文，哪怕没明说「翻译」，默认就是要翻译，直接开干。
 > If the user posts Gwent text in either language without explicit instruction, default to translating it.
+>
+> The agent decides the direction and states it with `--direction`; the scripts never
+> infer it (see Global Conventions). The user's stated target language wins; otherwise
+> translate into the other language.
 
 ## Quick Start
 
@@ -36,7 +40,7 @@ python scripts/translate.py finish translated.txt --source source.md --direction
 python scripts/translate.py run source.md --direction encn
 #   finish --lite = chat-length content gate (skips Phase C style check,
 #   learn, effect audit; terminology/residue/term-authority still gate)
-python scripts/translate.py finish translated.txt --source source.md --lite
+python scripts/translate.py finish translated.txt --source source.md --direction encn --lite
 ```
 
 > `translate.py` is the ONLY entry point. `auto_pipeline.py`, `phase_c_check.py`,
@@ -66,7 +70,7 @@ or `completeness_guard` manually — they are internal steps of `translate.py` n
 | 1. Prepare | `translate.py prepare source.md --date YYYY-MM --type general --direction encn` | `translate.py` (deterministic; internally calls `auto_pipeline pre`) |
 | 2. Translate | Agent reads `source.pack.md`, translates the full source, saves to `translated.txt` | Agent (the only LLM step) |
 | 3. Finish | `translate.py finish translated.txt --source source.md --direction encn` | `translate.py` (deterministic gate; internally runs `completeness_guard` + `learn`; add `--lite` for chat-length content) |
-| 0. (optional) Run | `translate.py run source.md [--translated out.txt]` | `translate.py` (prepare + exact finish command; with `--translated`, prepare + finish in one shot) |
+| 0. (optional) Run | `translate.py run source.md --direction encn [--translated out.txt]` | `translate.py` (prepare + exact finish command; with `--translated`, prepare + finish in one shot) |
 
 ### Finish extras (repair-loop tracking)
 
@@ -80,10 +84,47 @@ renamed outputs and mixed modes never compare against the wrong round.
 
 `prepare` snapshots its term lock as `<source>.lock.json` next to the pack;
 `finish` reuses that snapshot (`lock_reused` in the JSON) and BLOCKS if the
-source changed since `prepare` (`--allow-source-changed` rebuilds instead).
+source changed since `prepare` (`--allow-source-changed` rebuilds instead) or if
+the snapshot was not prepared for this direction — another direction, or no
+direction recorded (it predates explicit directions, or was built by hand).
+Neither case can be bypassed: re-run `prepare` with the same `--direction`.
 The finish JSON also carries `effect_check` — an INFORMATIONAL count of
 source-mentioned cards whose official ability text was not copied verbatim
 (never affects the exit code).
+
+`finish` also blocks an output that is not a translation (`untranslated`
+violations, in both `--lite` and full mode). Preserved spans — fenced and inline
+code, links, e-mail addresses, hashtags and mentions, Markdown link targets —
+are excluded, and with the source at hand only when they occur in it verbatim:
+the format rules keep them as the source has them, so a span the translator
+wrapped around leftover text is judged like any other text.
+
+- CN→EN: every run of Chinese left in the output is one violation, however
+  many English card names surround it — so Chinese player IDs are romanized
+  (pinyin or their usual Latin form), not kept. One violation per run keeps the
+  messages stable while the others are fixed, so the repair loop shows progress
+  instead of regressions. Beyond 30 runs only the first 30 are listed and the
+  rest are summed up in one count-free entry, so a whole untranslated article
+  does not flood the context.
+- EN→CN: no Chinese at all plus English prose — a lowercase word of 4+
+  letters, or in a sentence a common reply opener (`Thanks.` / `Cheers.`) or a
+  short function word (`My bad.` / `How are you.`); abbreviations, bare names
+  and short slang like `gg wp` may stay — or English dominating a long output.
+  A name, event, version or score followed by a full stop (`Krentabol.` /
+  `Gwent Masters.` / `Season 12.` / `Lerio2 vs Krentabol.`) is not prose and
+  passes.
+- Either direction: a verbatim copy of the source, unless the source is nothing
+  but IDs, numbers or kept slang.
+
+Known gaps of this rule on EN→CN. Not caught: a reply made only of capitalized
+or very short words that neither starts with a common reply opener nor holds a
+short function word — with or without a full stop (`Nice try`, `BRACE YOURSELVES`,
+`Disconnected.`, `Crashed.`) — and an output with a little Chinese around
+untranslated English. Falsely caught in an output without any Chinese: bare
+lowercase names (`kappa pride`), bare domains with neither a scheme nor `www.`
+(`playgwent.com/decks`), names built from common reply words (`Nice Guy.`), and
+a name, expansion or date that holds a short function word once a full stop
+follows (`Way of the Witcher.` / `Price of Power.` / `May 5.` / `Best of 3.`).
 
 `finish` returns `PASS` (finalize) or `BLOCKED` (fix and re-run, up to 3 rounds,
 never finalize while BLOCKED). See `SKILL.md` Step 3 for the agent-driven
@@ -94,8 +135,10 @@ re-translate loop on BLOCKED.
 - All scripts accept an optional `--json` flag.
 - Without `--json`, output is human-readable text for terminals and logs.
 - With `--json`, output is a single JSON object to stdout.
-- Exit codes: `0` = success, `1` = failure or blocked.
-- The JSON envelope is always:
+- Exit codes: `0` = success, `1` = failure or blocked — both emit the JSON
+  envelope with `--json`; `2` = invalid arguments (argparse, e.g. a missing
+  `--direction`) — reported on stderr, with no JSON envelope.
+- For exit codes 0 and 1, the envelope emitted with `--json` is always:
 
 ```json
 {
@@ -106,23 +149,19 @@ re-translate loop on BLOCKED.
 }
 ```
 
-- **Translation direction**: `scan`, `phase_c_check`, `check_translation`,
-  and `completeness_guard` all accept `--direction {encn,cnen}`. Direction is
-  auto-detected from the translated text when omitted, but the detection is a
-  character-ratio heuristic that fails on poorly-translated or mixed text (e.g.
-  a barely-started CN->EN translation reads as Chinese and is misclassified).
-  Since the translation workflow always knows the real direction, pass
-  `--direction` explicitly in automated pipelines rather than relying on the
-  fallback. The detected/used direction is reported in each command's JSON
-  output. In addition, `translate.py prepare` (source-based detection),
-  `check_translation`, `completeness_guard`,
-  `auto_pipeline scan`, `phase_c_check`, and `term_enforcer` report a
-  `direction_auto_detected` boolean in their JSON output: `true` when the
-  direction came from the auto-detection fallback described above, `false`
-  when it was given explicitly via `--direction`. (`term_enforcer` has no
-  `--direction` flag — it takes the direction from the lock's `direction`
-  field, so for it `true` means the lock carried no direction and the
-  heuristic fallback ran.)
+- **Translation direction**: `--direction {encn,cnen}` is a REQUIRED argument on
+  every command that extracts, checks or reviews terms — `translate.py prepare /
+  finish / run`, `auto_pipeline pre / scan`, `context_lock build / check`,
+  `term_enforcer`, `check_translation`, `phase_c_check`, `completeness_guard`,
+  `diff_review`. `encn` = EN→CN, `cnen` = CN→EN. It is the task's own direction,
+  decided by the agent from the request, and is never inferred from the text:
+  mixed Chinese/English Gwent text defeats any heuristic, and a wrong direction
+  makes the pack, the lock and the gate all push the translation toward the wrong
+  language. Omitting it is an argument error (exit code 2). Pass the same value
+  to `prepare` and `finish`; `finish` refuses a snapshot prepared for another
+  direction, and one that records no direction (made before directions were
+  recorded, or built by hand) — re-run `prepare`. The direction used is reported
+  in each command's JSON output (`direction`).
 
 ## Script Reference
 
@@ -133,9 +172,12 @@ Orchestrates pre-processing and residue scanning.
 #### `pre`
 
 ```bash
-python scripts/auto_pipeline.py pre source.md --date YYYY-MM --type general --json
+python scripts/auto_pipeline.py pre source.md --date YYYY-MM --type general --direction encn --json
 ```
 
+- `--direction`: REQUIRED. Translation direction, `encn` (EN→CN) or `cnen`
+  (CN→EN). Selects how the source is extracted for the lock: English card
+  names/terms for `encn`, Chinese ones for `cnen`. Never inferred from the text.
 - `--date`: Article date in `YYYY-MM` format. Optional; used for metadata only.
 - `--type`: Article type. Choices:
   - `meta` — meta report / tier list
@@ -157,6 +199,7 @@ JSON data:
   "source": "source.md",
   "date": "2026-05",
   "type": "general",
+  "direction": "encn",
   "lock_built": true,
   "lock_path": "/tmp/lock.json",
   "card_references_found": 12,
@@ -200,11 +243,13 @@ and must disambiguate all `ambiguous_terms` with a full subtitle variant.
 #### `scan`
 
 Direction-aware residue scan: reports English card names left in an EN->CN
-translation, or Chinese card names left in a CN->EN translation. Direction is
-auto-detected from the file, or set explicitly with `--direction`.
+translation, or Chinese card names left in a CN->EN translation, and surfaces
+the checker's `untranslated` findings (output still in the source language). The
+direction is the task's own, passed with the required `--direction`. `scan` has
+no source, so a verbatim copy is caught only by the language rules above.
 
 ```bash
-python scripts/auto_pipeline.py scan translated.txt --json
+python scripts/auto_pipeline.py scan translated.txt --direction encn --json
 python scripts/auto_pipeline.py scan translated.txt --direction cnen --json
 ```
 
@@ -215,9 +260,10 @@ JSON data:
   "command": "scan",
   "translated": "translated.txt",
   "direction": "encn",
-  "direction_auto_detected": false,
   "residue_count": 0,
-  "residues": []
+  "residues": [],
+  "untranslated_count": 0,
+  "untranslated": []
 }
 ```
 
@@ -225,14 +271,14 @@ JSON data:
 
 Detailed terminology checker. Direction-aware: for EN->CN output it runs the
 full terminology check set and reports English residue; for CN->EN output it
-reports Chinese residue instead. Direction is auto-detected from the file, or
-set explicitly with `--direction`. Optionally accepts a source file (or
-pre-built lock) to run term authority enforcement — the inline pass here is
-EN→CN only; the guard-level `term_authority` check enforces BOTH directions.
+reports Chinese residue instead. The direction is the task's own, passed with
+the required `--direction`. Optionally accepts a source file (or pre-built
+lock) to run term authority enforcement — the inline pass here is EN→CN only;
+the guard-level `term_authority` check enforces BOTH directions.
 
 ```bash
-python scripts/check_translation.py translated.txt --json
-python scripts/check_translation.py translated.txt --source source.md --json
+python scripts/check_translation.py translated.txt --direction encn --json
+python scripts/check_translation.py translated.txt --source source.md --direction encn --json
 python scripts/check_translation.py translated.txt --direction cnen --json
 ```
 
@@ -241,7 +287,6 @@ JSON data:
 ```json
 {
   "direction": "encn",
-  "direction_auto_detected": false,
   "issue_count": 5,
   "warning_count": 1,
   "auto_fixable_count": 2,
@@ -267,7 +312,12 @@ Issue categories include: `provision_mix`, `identical_numbers`,
 `suspicious_order`, `forbidden_term`, `outdated_card_name`, `ambiguous_name`,
 `chinese_numerals`, `passive_voice`, `english_parentheses`, `english_colon`,
 `abbreviation`, `typo`, `homophone`, `deck_abbreviation`, `english_residue`,
-`chinese_residue`, `term_authority_violation`.
+`chinese_residue`, `term_authority_violation`, `untranslated`.
+
+`untranslated` fires in both directions (and under `finish --lite`) when the
+output is not a translation — the reverse check of `--direction`: given the
+direction, does the output actually read as the target language? The exact
+rules are listed under "Finish extras" above.
 
 ### `phase_c_check.py`
 
@@ -279,7 +329,7 @@ python scripts/phase_c_check.py translated.txt --direction encn --json
 python scripts/phase_c_check.py translated.txt --source source.md --direction encn --json
 ```
 
-Direction is auto-detected if omitted. Choices: `encn` (EN→CN), `cnen` (CN→EN).
+`--direction` is required. Choices: `encn` (EN→CN), `cnen` (CN→EN).
 The `--source` flag is required for the automated `encn-10` term authority check;
 without it, the rule falls back to a manual warning.
 
@@ -288,7 +338,6 @@ JSON data:
 ```json
 {
   "direction": "encn",
-  "direction_auto_detected": false,
   "automated_failed": 2,
   "automated_issues": [
     {"rule_id": "encn-01", "message": "forbidden provision term: ..."}
@@ -304,18 +353,18 @@ JSON data:
 ### `completeness_guard.py`
 
 Final check. Combines terminology, residue, Phase C, and term authority checks.
-Direction-aware: direction is auto-detected from the file or set with
-`--direction`, and applied to every downstream check. The residue check looks
-for English residue (EN→CN) or Chinese residue (CN→EN); term authority
-enforcement runs in BOTH directions (the lock carries the official target each
-way: EN→CN asserts the official Chinese appears in the Chinese translation,
-CN→EN asserts the official English appears in the English translation). The
+Direction-aware: the required `--direction` is the task's own and is passed
+unchanged to every downstream check, so the gate can never verify one language
+here and another elsewhere. The residue check looks for English residue (EN→CN)
+or Chinese residue (CN→EN); term authority enforcement runs in BOTH directions
+(EN→CN asserts the official Chinese appears in the Chinese translation, CN→EN
+asserts the official English appears in the English translation). The
 `term_authority` check carries a `status` field: `ran` (executed), `skipped`
 (no `--source`/lock provided; not run), or `error` (the check itself raised).
 
 ```bash
-python scripts/completeness_guard.py translated.txt --json
-python scripts/completeness_guard.py translated.txt --source source.md --json
+python scripts/completeness_guard.py translated.txt --direction encn --json
+python scripts/completeness_guard.py translated.txt --source source.md --direction encn --json
 python scripts/completeness_guard.py translated.txt --source source.md --direction cnen --json
 ```
 
@@ -327,7 +376,6 @@ JSON data:
 ```json
 {
   "direction": "encn",
-  "direction_auto_detected": false,
   "all_passed": false,
   "blocked": true,
   "checks": [
@@ -343,12 +391,14 @@ JSON data:
 ### `term_enforcer.py`
 
 Term authority enforcement. Validates that locked terms from the pre-translation
-phase are correctly used in the translation. The JSON output also reports
-`direction_auto_detected` (see Global Conventions above).
+phase are correctly used in the translation. The required `--direction` selects
+which side is enforced — the official Chinese for `encn`, the official English
+for `cnen` — and is the same value the rest of the run received. With `--source`
+it also selects how the lock is built.
 
 ```bash
-python scripts/term_enforcer.py translated.txt --lock lock.json --json
-python scripts/term_enforcer.py translated.txt --source source.md --json
+python scripts/term_enforcer.py translated.txt --lock lock.json --direction encn --json
+python scripts/term_enforcer.py translated.txt --source source.md --direction cnen --json
 ```
 
 JSON data:
@@ -369,7 +419,7 @@ JSON data:
   ],
   "pass_count": 43,
   "locked_terms_checked": 45,
-  "direction_auto_detected": false
+  "direction": "encn"
 }
 ```
 
@@ -409,7 +459,9 @@ The following scripts also support `--json` and can be used independently:
 - `scripts/term_enforcer.py` — Enforce locked terms in a translation.
 - `scripts/format_skeleton.py` — Standalone Markdown structure extract/restore
   tool (not part of the prepare/finish pipeline).
-- `scripts/diff_review.py` — Compare source and translation.
+- `scripts/diff_review.py` — Compare source and translation (review mode).
+  Requires `--direction`, forwarded to the terminology checker; its own
+  built-in checks and closing checklist are written for EN→CN.
 - `scripts/learn.py` — Discover new terms from the source text.
 - `scripts/backtranslate.py` — Heuristic back-translation validation.
 
@@ -429,6 +481,15 @@ All translation rules and data live in `references/`:
 ## Notes for Agent Implementers
 
 - Do not finalize a translation while `completeness_guard.py` reports BLOCKED.
+- Decide the direction from the request and pass the same
+  `--direction {encn,cnen}` to every command. It is required and never
+  inferred: a missing direction is an argument error, not a guess.
+- Using the scripts as a library: the direction is a required argument there
+  too — `check_translation(text, *, direction, ...)` takes it keyword-only, and
+  `term_enforcer.enforce_terms(translated_path, lock, direction)`,
+  `context_lock.build_lock(source_file, lock_file, direction)` and
+  `_shared.build_lock_from_source(source, direction)` require it positionally.
+  A value other than `encn` / `cnen` raises `ValueError`.
 - Always pass `--source source.md` to `completeness_guard.py` and
   `phase_c_check.py` so that term authority enforcement runs automatically.
 - Use the `term_authority.locked_terms` block from `auto_pipeline.py pre` as the

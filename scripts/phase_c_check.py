@@ -6,7 +6,7 @@ Loads the structured Phase C checklist from references/phase_c_checklist.md
 and runs the machine-checkable rules against a translated file.
 
 Usage:
-    python phase_c_check.py <translated_file> [--direction encn|cnen]
+    python phase_c_check.py <translated_file> --direction encn|cnen
 
 Exit code:
     0 = all automated checks passed (manual checks may still need review)
@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _shared import detect_direction, json_output, parse_markdown_table, parse_ta_envelope, run_utf8
+from _shared import DIRECTIONS, json_output, parse_markdown_table, parse_ta_envelope, run_utf8
 from check_translation import check_chinese_residue, check_english_residue
 
 
@@ -88,15 +88,16 @@ def check_ambiguous_names(
     ref_dir: Path,
     source_path: Path | None = None,
     lock_path: Path | None = None,
-    direction: str | None = None,
+    *,
+    direction: str,
 ) -> list[str]:
     """Delegate ambiguous-name detection to check_translation.py.
 
     If lock_path is provided, reuse a pre-built lock; elif source_path is
     provided, build from source. Locked terms exempt ambiguous bases that
-    appear inside locked deck/card names. direction is forwarded verbatim —
-    re-detecting it from mixed text (heavy EN quotes in an EN->CN
-    translation) misclassifies as cnen and silently disables the check.
+    appear inside locked deck/card names. direction is the task's own and is
+    forwarded verbatim — the check must run for the task's direction, whatever
+    the mix of languages in the text.
     """
     from check_translation import (
         check_translation,
@@ -106,7 +107,7 @@ def check_ambiguous_names(
     if lock_path:
         locked_phrases = load_locked_phrases_from_lock(lock_path)
     elif source_path:
-        locked_phrases = load_locked_phrases_from_source(source_path)
+        locked_phrases = load_locked_phrases_from_source(source_path, direction)
     else:
         locked_phrases = set()
     all_issues, _warnings = check_translation(text, locked_phrases, direction=direction)
@@ -117,11 +118,15 @@ def check_context_lock_terms(
     translated_path: Path,
     source_path: Path | None = None,
     lock_path: Path | None = None,
+    *,
+    direction: str,
 ) -> list[str]:
     """Delegate context-lock term enforcement to term_enforcer.py.
 
     Reuse a pre-built lock via lock_path (--lock); otherwise build from
     source_path (--source). If neither is provided, the check is skipped.
+    direction is forwarded to term_enforcer so its lock and its enforcement
+    match the task.
     """
     if source_path is None and lock_path is None:
         return []
@@ -137,7 +142,8 @@ def check_context_lock_terms(
     else:
         flag, ref = "--source", str(source_path)
     result = run_utf8(
-        [sys.executable, str(script), str(translated_path), flag, ref, "--json"],
+        [sys.executable, str(script), str(translated_path), flag, ref,
+         "--direction", direction, "--json"],
         timeout=60,
     )
     # No early-return on returncode==0: the envelope can still carry degraded
@@ -230,7 +236,7 @@ def run_phase_c_check(
                 for issue in check_english_residue(text):
                     automated_issues.append(f"[{rid}] {issue}")
             elif rid == "encn-06":
-                for issue in check_ambiguous_names(text, ref_dir, source_path, lock_path, direction):
+                for issue in check_ambiguous_names(text, ref_dir, source_path, lock_path, direction=direction):
                     automated_issues.append(f"[{rid}] {issue}")
             elif rid == "encn-10":
                 if skip_ta:
@@ -239,7 +245,7 @@ def run_phase_c_check(
                     # manual note instead of spawning a second TA run.
                     manual_warnings.append(f"[{rid}] {rule['description']} — normally covered by the guard's term_authority check (which itself needs a --source/--lock)")
                 elif translated_path and (source_path or lock_path):
-                    for issue in check_context_lock_terms(translated_path, source_path, lock_path):
+                    for issue in check_context_lock_terms(translated_path, source_path, lock_path, direction=direction):
                         automated_issues.append(f"[{rid}] {issue}")
                 else:
                     manual_warnings.append(f"[{rid}] {rule['description']} — {message}")
@@ -277,8 +283,9 @@ def main() -> None:
     parser.add_argument("file", help="Translated file to check")
     parser.add_argument(
         "--direction",
-        choices=["encn", "cnen"],
-        help="Translation direction (auto-detected if omitted)",
+        choices=DIRECTIONS,
+        required=True,
+        help="Translation direction (EN->CN or CN->EN): selects which half of the checklist runs",
     )
     parser.add_argument("--source", help="Source file for term authority check")
     parser.add_argument("--lock", help="Pre-built context lock JSON (reuse, do not rebuild)")
@@ -296,7 +303,7 @@ def main() -> None:
         sys.exit(1)
 
     text = file_path.read_text(encoding="utf-8")
-    direction = args.direction or detect_direction(text)
+    direction = args.direction
     ref_dir = Path(__file__).parent.parent / "references"
     source_path = Path(args.source) if args.source else None
     lock_path = Path(args.lock) if args.lock else None
@@ -309,7 +316,6 @@ def main() -> None:
     if args.json:
         data = {
             "direction": direction,
-            "direction_auto_detected": args.direction is None,
             "automated_failed": len(automated_issues),
             "automated_issues": [parse_issue(i) for i in automated_issues],
             "manual_warning_count": len(manual_warnings),

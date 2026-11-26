@@ -20,11 +20,14 @@ agent_created: true
 立刻做三件事 / Do this right now:
 
 1. **拿到要翻译的内容** — 用户已贴在对话里；若没有，主动问「把要翻译的昆特牌文章发给我」
-2. **判断方向** — 英文→中文 (`encn`) 还是 中文→英文 (`cnen`)
+2. **判断方向** — 英文→中文 (`encn`) 还是 中文→英文 (`cnen`)，并作为 `--direction` 传给 `prepare` 和 `finish`
 3. **走流程** — `prepare` → 翻译 → `finish`（见下方 Translation Workflow）
 
 > 只要用户贴了昆特牌相关的中文或英文，哪怕没明说「翻译」，默认就是要翻译，直接开干。
 > If the user posts Gwent text in either language without explicit instruction, default to translating it.
+>
+> 方向由你判断、显式传入，脚本不猜。中文里夹英文卡名时按文本猜必错，方向错了 pack 和门禁会一起把译文推向错误的语言。
+> 用户说了目标语言以用户为准，没说就译成另一种语言。
 
 ## Overview
 
@@ -117,6 +120,7 @@ Direction-specific style reference (also embedded in the pack):
 
 | Dimension | Rule |
 |-----------|------|
+| Language | The output is Chinese: translate every sentence. Abbreviations (GN, R1) and short slang (gg wp) may stay; an output left in English is BLOCKED |
 | Tone | Bilibili player community tone, concise, punchy, allow slang |
 | Sentence length | Break long English sentences into 2-3 short Chinese sentences |
 | Voice | Active voice. "对手不管她" not "未被解掉" |
@@ -132,6 +136,7 @@ Direction-specific style reference (also embedded in the pack):
 
 | Dimension | Rule |
 |-----------|------|
+| Language | The output is English: no Chinese at all. Romanize Chinese player IDs (pinyin or their usual Latin form) and keep code and links as they are; leftover Chinese is BLOCKED |
 | Tone | Casual but natural English. Not stiff or academic. Like a native player talking |
 | Sentence length | Combine short Chinese sentences into flowing English prose |
 | Voice | Maintain active voice. "If left unanswered" not "If not dealt with by opponent" |
@@ -160,11 +165,27 @@ python scripts/translate.py finish translated.txt --source source.md --direction
 - **`BLOCKED`** = **DO NOT FINALIZE**. Fix the reported issues and re-run until PASS.
   `finish` also refuses to run when the source changed after `prepare` (the pack's
   `.lock.json` snapshot is stale) — re-run `prepare`, or pass `--allow-source-changed`
-  to gate against a freshly rebuilt lock.
+  to gate against a freshly rebuilt lock — and when the snapshot was not prepared for
+  this direction (another direction, or none recorded): re-run `prepare` with the same
+  `--direction` you pass to `finish`.
 
 `finish` runs every check through `completeness_guard` and additionally refuses to pass if
 the context lock could not be built from the source — so terminology is never silently
 skipped. Always pass `--source` and `--direction` explicitly for a trustworthy gate.
+It also blocks an output that is not a translation (`untranslated` violations). Preserved
+spans — fenced and inline code, links, e-mail addresses, hashtags and mentions, link targets —
+are excluded, and only when they come from the source verbatim: wrapping leftover text in code
+or a link target does not buy an exemption.
+
+- **CN → EN**: every run of Chinese left in the output is one violation, however many
+  English card names surround it — so Chinese player IDs are romanized (pinyin or their
+  usual Latin form), not kept. Beyond 30 runs the rest are summed up in one entry.
+- **EN → CN**: no Chinese at all plus English prose (a lowercase word of 4+ letters, or in a
+  sentence a common reply opener or a short function word: `Thanks.` / `My bad.`; abbreviations,
+  bare names and short slang like `gg wp` may stay), or English dominating a long output. A
+  name, event, version or score followed by a full stop (`Krentabol.` / `Season 12.`) passes.
+- **Either direction**: a verbatim copy of the source, unless the source is nothing but
+  IDs, numbers or kept slang.
 
 The machine-checkable rules behind `finish` live in `references/phase_c_checklist.md`.
 
@@ -182,7 +203,12 @@ so add it); **terminology / residue / phase_c** entries carry `category`, `sever
 and a `message` that names the term and the correct rendering inline
 (e.g. `English residue: 「Regis: Bloodlust」→ 「雷吉斯：血欲化身」`). Read whichever
 field is present — do not key on `expected_official` alone or you will skip
-residue-class violations.
+residue-class violations. An `untranslated` entry (`中文原文留在了英文译文里` /
+`译文仍是英文` / `译文与原文一字不差`) is not a term fix: the output is not a
+translation — re-translate it into the target language (for CN → EN, romanize or
+translate any Chinese left in the output). Each leftover run of Chinese is its own entry;
+do not wrap leftovers in code or link targets, the gate only honours preserved spans that
+come from the source.
 
 1. Read `violations` from the `finish` JSON (or the `[BLOCKED]` lines). The list is
    always complete and deduped — one entry per independent problem, each carrying

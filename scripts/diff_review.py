@@ -4,7 +4,14 @@ Diff Review Mode (审校差异模式).
 Compares a translation against source to find issues without retranslating.
 
 Usage:
-    python diff_review.py <source_en.txt> <translation.txt> [--output report.md] [--json]
+    python diff_review.py <source.txt> <translation.txt> --direction encn|cnen [--output report.md] [--json]
+
+--direction is the task's translation direction of the reviewed pair and is
+required; it is passed to the terminology checker verbatim, never inferred from
+the text. Note that this command's own built-in checks (forbidden CN terms,
+Chinese numerals, English proper nouns missing) and its closing checklist are
+written for EN->CN; for CN->EN they simply find nothing, and the checker's
+result is what the review rests on.
 """
 
 import argparse
@@ -15,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
+    DIRECTIONS,
     extract_abbreviations,
     extract_capitalized_phrases,
     extract_card_names,
@@ -117,8 +125,11 @@ def check_completeness(source: str, translation: str) -> list[dict]:
     return issues
 
 
-def run_full_checker(translation_file: str) -> list[dict]:
+def run_full_checker(translation_file: str, direction: str) -> list[dict]:
     """Run the standalone terminology checker and return structured issues.
+
+    direction is the reviewed pair's own, passed to the checker verbatim so a
+    CN->EN review is judged as CN->EN.
 
     Always parses check_translation's --json envelope (success/exit_code/
     data/issues) — the plain-text output format is not a stable contract.
@@ -136,7 +147,7 @@ def run_full_checker(translation_file: str) -> list[dict]:
             "suggestion": "Restore scripts/check_translation.py and re-run",
         }]
 
-    cmd = [sys.executable, str(script), translation_file, "--json"]
+    cmd = [sys.executable, str(script), translation_file, "--direction", direction, "--json"]
     result = run_utf8(cmd, timeout=60)
 
     try:
@@ -167,7 +178,8 @@ def run_full_checker(translation_file: str) -> list[dict]:
     ]
 
 
-def generate_report(source: str, translation: str, translation_file: str | None = None, json_mode: bool = False) -> tuple[str | dict, int]:
+def generate_report(source: str, translation: str, direction: str,
+                    translation_file: str | None = None, json_mode: bool = False) -> tuple[str | dict, int]:
     """Generate a comprehensive diff review report.
 
     Returns (report, issue_count); the caller decides the exit code from
@@ -180,13 +192,16 @@ def generate_report(source: str, translation: str, translation_file: str | None 
     all_issues = terminology_issues + numeric_issues + completeness_issues
 
     if translation_file:
-        all_issues.extend(run_full_checker(translation_file))
+        all_issues.extend(run_full_checker(translation_file, direction))
 
     # Sort by severity
     all_issues.sort(key=lambda x: _SEVERITY_ORDER.get(x["severity"], 3))
 
-    source_sentences = len([s for s in source.split('.') if s.strip()])
-    translation_sentences = len([s for s in translation.split('。') if s.strip()])
+    # Sentence counts follow the reviewed pair's languages: the source is
+    # split on its own full stop, the translation on its target's.
+    source_stop, translation_stop = ("。", ".") if direction == "cnen" else (".", "。")
+    source_sentences = len([s for s in source.split(source_stop) if s.strip()])
+    translation_sentences = len([s for s in translation.split(translation_stop) if s.strip()])
 
     if json_mode:
         return {
@@ -245,8 +260,10 @@ def generate_report(source: str, translation: str, translation_file: str | None 
 
 def main():
     parser = argparse.ArgumentParser(description="Diff Review Mode")
-    parser.add_argument("source", help="English source file")
+    parser.add_argument("source", help="Source file")
     parser.add_argument("translation", help="Translated file")
+    parser.add_argument("--direction", choices=DIRECTIONS, required=True,
+                        help="Translation direction of the reviewed pair (EN->CN or CN->EN), passed to the terminology checker")
     parser.add_argument("--output", help="Write report to file")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     args = parser.parse_args()
@@ -268,7 +285,8 @@ def main():
     source = source_path.read_text(encoding="utf-8")
     translation = translation_path.read_text(encoding="utf-8")
 
-    report, issue_count = generate_report(source, translation, translation_file=args.translation, json_mode=args.json)
+    report, issue_count = generate_report(source, translation, args.direction,
+                                          translation_file=args.translation, json_mode=args.json)
 
     if args.json:
         json_output(report, exit_code=1 if issue_count > 0 else 0)

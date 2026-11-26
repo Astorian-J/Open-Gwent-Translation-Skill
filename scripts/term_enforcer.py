@@ -6,9 +6,9 @@ pre-processing. Catches terms left untranslated (including abbreviations and
 aliases) and ambiguous names that were not disambiguated.
 
 Usage:
-    python term_enforcer.py translated.txt --lock lock.json
-    python term_enforcer.py translated.txt --source source.md
-    python term_enforcer.py translated.txt --lock lock.json --json
+    python term_enforcer.py translated.txt --lock lock.json --direction encn
+    python term_enforcer.py translated.txt --source source.md --direction cnen
+    python term_enforcer.py translated.txt --lock lock.json --direction encn --json
 """
 
 import argparse
@@ -20,11 +20,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
     _QUOTE_NORM,
+    DIRECTIONS,
     build_lock_from_source,
-    detect_direction,
     extract_cn_variants,
     get_term_authority,
     json_output,
+    validate_direction,
 )
 
 
@@ -207,7 +208,7 @@ def _build_cjk_suppress(lock: dict) -> tuple[set[str], list[str]]:
     return suppress, degraded
 
 
-def enforce_terms(translated_path: Path, lock: dict) -> dict:
+def enforce_terms(translated_path: Path, lock: dict, direction: str) -> dict:
     """Check translated text against the lock table (direction-aware).
 
     EN->CN (encn): each locked term's official Chinese must appear in the Chinese
@@ -219,8 +220,9 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
     neither is missing-or-literal. A collision (one Chinese name -> several
     English cards) passes when ANY candidate English is present.
 
-    Direction is taken from the lock's ``direction`` field (set by context_lock
-    build_lock) and falls back to detect_direction on the translation.
+    direction is the task's own ("encn" / "cnen"), supplied by the caller — the
+    same value every other checker in the run received, so the gate can never
+    verify one language here and another elsewhere.
 
     Returns:
         dict with violation_count, violations, pass_count, locked_terms_checked,
@@ -228,10 +230,7 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
         these can flip a BLOCKED into a false PASS and must block finalization).
     """
     translation = translated_path.read_text(encoding="utf-8")
-    direction = lock.get("direction") or detect_direction(translation)
-    # True when the lock carried no direction and the heuristic fallback ran
-    # (term_enforcer has no --direction flag; the lock is the only override).
-    direction_auto_detected = not lock.get("direction")
+    validate_direction(direction)
     is_cnen = direction == "cnen"
     violations: list[dict] = []
     passed = 0
@@ -398,7 +397,6 @@ def enforce_terms(translated_path: Path, lock: dict) -> dict:
         "pass_count": passed,
         "locked_terms_checked": checked,
         "direction": direction,
-        "direction_auto_detected": direction_auto_detected,
         "warnings": degraded_warnings,
     }
 
@@ -409,6 +407,8 @@ def main():
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--lock", help="Context lock JSON file")
     group.add_argument("--source", help="Source file (auto-build lock)")
+    parser.add_argument("--direction", choices=DIRECTIONS, required=True,
+                        help="Translation direction (EN->CN or CN->EN): which language the locked terms must appear in")
     parser.add_argument("--json", action="store_true", help="Output structured JSON")
     args = parser.parse_args()
 
@@ -433,7 +433,7 @@ def main():
                 json_output(None, errors=[f"source file not found: {args.source}"], exit_code=1)
             print(f"Error: source file not found: {args.source}")
             sys.exit(1)
-        lock_file = build_lock_from_source(source_path)
+        lock_file = build_lock_from_source(source_path, args.direction)
 
     try:
         lock = load_lock(lock_file)
@@ -442,7 +442,7 @@ def main():
             # --source builds a /tmp/gwent_lock_*.json temp lock (the caller
             # owns cleanup, per build_lock_from_source's contract).
             lock_file.unlink(missing_ok=True)
-    result = enforce_terms(translated_path, lock)
+    result = enforce_terms(translated_path, lock, args.direction)
 
     # Degradation (e.g. CJK suppress built incompletely) can flip a BLOCKED
     # into a false PASS, so it counts as an issue everywhere: JSON exit code,

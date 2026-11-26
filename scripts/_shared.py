@@ -47,54 +47,25 @@ def json_output(data: Any, errors: list[str] | None = None, exit_code: int = 0) 
     sys.exit(exit_code)
 
 
-# --- Translation direction detection ---
+# --- Translation direction ---
 
-# Heuristic thresholds for direction detection (character-ratio based).
-# See the caveat in detect_direction's docstring — unreliable on mixed text;
-# callers that know the real direction should pass --direction explicitly.
-DIRECTION_RATIO = 2        # 中文需明显多于英文（中文字数 > 英文词数 × 此值）
-DIRECTION_MIN_TOKENS = 20  # 且达到最小字符/词数才判定，避免短文本误判
+# The task's translation direction: EN->CN ("encn") or CN->EN ("cnen"). It is a
+# required parameter everywhere terms are extracted or checked — never inferred
+# from the text, which is how a Chinese source full of English card names used
+# to be read as English.
+DIRECTIONS = ("encn", "cnen")
 
 
-def detect_direction(text: str) -> str:
-    """Heuristically detect translation direction from output text.
+def validate_direction(direction: str) -> str:
+    """Return `direction` when it is a known task direction, else raise ValueError.
 
-    Returns "encn" when the text reads as a Chinese translation (EN->CN
-    output) and "cnen" when it reads as English (CN->EN output). Used by
-    the terminology checker, the residue scanner, and the completeness
-    guard so all of them agree on which language is the *target* and thus
-    which kind of residue to flag.
-
-    Caveat: this is a character-ratio heuristic and is unreliable on
-    poorly-translated or heavily mixed text. A CN->EN translation that was
-    barely started (still mostly Chinese) is misclassified as "encn", so its
-    untranslated Chinese card names go unflagged. Callers that know the real
-    direction (the translation workflow always does) should pass it
-    explicitly via --direction rather than rely on this fallback.
+    The CLI guards this with argparse choices; library callers have no such
+    guard, and a misspelt direction would otherwise fall through to the EN->CN
+    branch and produce a verdict for the wrong task.
     """
-    chinese_chars = len(re.findall(r"[一-鿿]", text))
-    english_words = len(re.findall(r"[A-Za-z]{2,}", text))
-
-    # Substantial Chinese with limited English -> EN->CN output.
-    if chinese_chars > english_words * DIRECTION_RATIO and chinese_chars > DIRECTION_MIN_TOKENS:
-        return "encn"
-    # Substantial English with limited Chinese -> CN->EN output.
-    if english_words > chinese_chars / DIRECTION_RATIO and english_words > DIRECTION_MIN_TOKENS:
-        return "cnen"
-    # Fallback: more Chinese than English -> encn, else cnen.
-    return "encn" if chinese_chars >= english_words else "cnen"
-
-
-def source_is_chinese(text: str) -> bool:
-    """True when the text reads predominantly Chinese — i.e. a CN->EN source.
-
-    detect_direction reports the language a text reads as the TARGET of a
-    translation; applied to a SOURCE file, "encn" (Chinese target) means the
-    source itself is Chinese. We invert that label to name the SOURCE language
-    for extraction-strategy selection, reusing detect_direction's thresholds so
-    the extractor and the checker can never disagree on what counts as Chinese.
-    """
-    return detect_direction(text) == "encn"
+    if direction not in DIRECTIONS:
+        raise ValueError(f"direction must be one of {DIRECTIONS}, got {direction!r}")
+    return direction
 
 
 # --- --verbose-terms output sizing ---
@@ -777,8 +748,13 @@ def run_utf8(
         raise
 
 
-def build_lock_from_source(source_path: "Path | str") -> Path:
+def build_lock_from_source(source_path: "Path | str", direction: str) -> Path:
     """Build a context lock from a source file by shelling out to context_lock.py.
+
+    direction ("encn" / "cnen") is the task's translation direction — required,
+    never inferred: it selects the extraction strategy for the source (English
+    regexes vs. Chinese dictionary lookup), so a guessed direction would lock
+    the other side's terms.
 
     Returns the path to the generated lock file — a temp file the caller is
     responsible for cleaning up. Raises RuntimeError on build failure so callers
@@ -786,13 +762,15 @@ def build_lock_from_source(source_path: "Path | str") -> Path:
     """
     import tempfile
 
+    validate_direction(direction)
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", prefix="gwent_lock_", delete=False
     ) as tmp:
         lock_file = Path(tmp.name)
     result = run_utf8(
         [sys.executable, str(Path(__file__).parent / "context_lock.py"),
-         "build", str(source_path), "--output", str(lock_file)],
+         "build", str(source_path), "--direction", direction,
+         "--output", str(lock_file)],
         timeout=120,
     )
     if result.returncode != 0:

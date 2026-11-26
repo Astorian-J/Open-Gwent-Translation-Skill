@@ -14,12 +14,12 @@
         "name": "prepare",
         "command": "python scripts/translate.py prepare {source} --date {date} --type {type} --direction {direction} --json",
         "required_args": [
-          "source"
+          "source",
+          "--direction"
         ],
         "optional_args": {
           "date": "YYYY-MM",
           "type": "meta | bc-proposal | card-analysis | patch-notes | general",
-          "direction": "encn | cnen (auto-detected from source if omitted)",
           "lite": "chat-length pack (article-grade sections dropped); pairs with finish --lite"
         },
         "state_outputs": [
@@ -37,11 +37,10 @@
         "command": "python scripts/translate.py finish {translated} --source {source} --direction {direction} --json",
         "required_args": [
           "translated",
-          "source"
+          "--source",
+          "--direction"
         ],
-        "optional_args": {
-          "direction": "encn | cnen (auto-detected if omitted)"
-        },
+        "optional_args": {},
         "state_outputs": [
           "blocked",
           "guard_all_passed",
@@ -88,7 +87,7 @@
         },
         {
           "name": "--direction",
-          "required": false,
+          "required": true,
           "choices": [
             "encn",
             "cnen"
@@ -110,7 +109,6 @@
         "command",
         "source",
         "direction",
-        "direction_auto_detected",
         "date",
         "type",
         "lite",
@@ -142,7 +140,7 @@
         },
         {
           "name": "--direction",
-          "required": false,
+          "required": true,
           "choices": [
             "encn",
             "cnen"
@@ -176,7 +174,6 @@
         "translated",
         "source",
         "direction",
-        "direction_warning",
         "guard_exit_code",
         "guard_all_passed",
         "lock_reused",
@@ -227,7 +224,7 @@
         },
         {
           "name": "--direction",
-          "required": false,
+          "required": true,
           "choices": [
             "encn",
             "cnen"
@@ -275,6 +272,14 @@
           ]
         },
         {
+          "name": "--direction",
+          "required": true,
+          "choices": [
+            "encn",
+            "cnen"
+          ]
+        },
+        {
           "name": "--json",
           "required": false,
           "type": "flag"
@@ -283,6 +288,7 @@
       "json_output": [
         "command",
         "source",
+        "direction",
         "date",
         "type",
         "lock_built",
@@ -308,7 +314,7 @@
         },
         {
           "name": "--direction",
-          "required": false,
+          "required": true,
           "choices": [
             "encn",
             "cnen"
@@ -324,9 +330,10 @@
         "command",
         "translated",
         "direction",
-        "direction_auto_detected",
         "residue_count",
-        "residues"
+        "residues",
+        "untranslated_count",
+        "untranslated"
       ]
     },
     {
@@ -350,7 +357,7 @@
         },
         {
           "name": "--direction",
-          "required": false,
+          "required": true,
           "choices": [
             "encn",
             "cnen"
@@ -364,7 +371,6 @@
       ],
       "json_output": [
         "direction",
-        "direction_auto_detected",
         "issue_count",
         "warning_count",
         "auto_fixable_count",
@@ -389,7 +395,7 @@
         },
         {
           "name": "--direction",
-          "required": false,
+          "required": true,
           "choices": [
             "encn",
             "cnen"
@@ -403,7 +409,6 @@
       ],
       "json_output": [
         "direction",
-        "direction_auto_detected",
         "automated_failed",
         "automated_issues",
         "manual_warning_count",
@@ -428,7 +433,7 @@
         },
         {
           "name": "--direction",
-          "required": false,
+          "required": true,
           "choices": [
             "encn",
             "cnen"
@@ -442,7 +447,6 @@
       ],
       "json_output": [
         "direction",
-        "direction_auto_detected",
         "all_passed",
         "blocked",
         "checks"
@@ -520,6 +524,14 @@
           "type": "file_path"
         },
         {
+          "name": "--direction",
+          "required": true,
+          "choices": [
+            "encn",
+            "cnen"
+          ]
+        },
+        {
           "name": "--output",
           "required": false,
           "type": "file_path"
@@ -550,6 +562,14 @@
           "name": "--lock",
           "required": false,
           "type": "file_path"
+        },
+        {
+          "name": "--direction",
+          "required": true,
+          "choices": [
+            "encn",
+            "cnen"
+          ]
         },
         {
           "name": "--json",
@@ -678,6 +698,14 @@
           "type": "file_path"
         },
         {
+          "name": "--direction",
+          "required": true,
+          "choices": [
+            "encn",
+            "cnen"
+          ]
+        },
+        {
           "name": "--output",
           "required": false,
           "type": "file_path"
@@ -791,6 +819,14 @@
           "type": "file_path"
         },
         {
+          "name": "--direction",
+          "required": true,
+          "choices": [
+            "encn",
+            "cnen"
+          ]
+        },
+        {
           "name": "--json",
           "required": false,
           "type": "flag"
@@ -801,7 +837,7 @@
         "violations",
         "pass_count",
         "locked_terms_checked",
-        "direction_auto_detected"
+        "direction"
       ]
     }
   ]

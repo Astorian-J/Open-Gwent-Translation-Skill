@@ -145,8 +145,8 @@ gwent-translation-pro/
 │   ├── backtranslate.py         # Back-translation check
 │   ├── lookup.py                # Term + card lookup (md tables + full 1381-card corpus)
 │   ├── learn.py                 # Learn new terms
-│   ├── health_check.py          # Integrity check (78 PASS)
-│   ├── test_rebuild.py          # Behavior regression suite (27 tests)
+│   ├── health_check.py          # Integrity check (91 PASS)
+│   ├── test_rebuild.py          # Behavior regression suite (35 tests)
 │   └── _shared.py               # Shared logic (TermAuthority, run_utf8)
 ├── lite/                    # Lite skill — chat translation (3-step)
 │   ├── SKILL.md                  # Lite skill workflow

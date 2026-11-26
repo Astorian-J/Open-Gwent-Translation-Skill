@@ -5,7 +5,11 @@ Detects common errors: provision mixing, number reversal, forbidden terms,
 abbreviations, passive voice, Chinese numerals, English parentheses.
 
 Usage:
-    python check_translation.py <file> [--fix]
+    python check_translation.py <file> --direction encn|cnen [--fix]
+
+--direction is the task's translation direction and is required: it selects
+which checks apply and which language counts as residue. It is never inferred
+from the text — mixed Chinese/English Gwent text defeats any such guess.
 
 Rules are loaded from references/ directory to stay in sync.
 """
@@ -22,8 +26,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _shared import (
+    DIRECTIONS,
     SKIP_WORDS_MINIMAL,
-    detect_direction,
     extract_card_names,
     extract_card_names_no_colon,
     extract_cn_variants,
@@ -35,6 +39,7 @@ from _shared import (
     load_lock_file,
     parse_ta_envelope,
     run_utf8,
+    validate_direction,
 )
 
 # --- Load rules from references ---
@@ -89,14 +94,16 @@ def load_card_corrections():
     return dict(get_card_name_corrections())
 
 
-def load_locked_phrases_from_source(source_path: Path) -> set[str]:
+def load_locked_phrases_from_source(source_path: Path, direction: str) -> set[str]:
     """Build a context lock from the source and return locked Chinese phrases.
 
     These phrases represent the official/community translations that the agent
     is required to use. An ambiguous base name counts as disambiguated only
     when one of these phrases is actually present in the translation (see the
-    ambiguous-name guard in check_translation).
+    ambiguous-name guard in check_translation). direction selects how the
+    source is extracted, exactly as for the gate's own lock.
     """
+    validate_direction(direction)
     script = Path(__file__).parent / "context_lock.py"
     if not script.exists():
         return set()
@@ -108,7 +115,8 @@ def load_locked_phrases_from_source(source_path: Path) -> set[str]:
 
     try:
         result = run_utf8(
-            [sys.executable, str(script), "build", str(source_path), "--output", str(tmp_path)],
+            [sys.executable, str(script), "build", str(source_path),
+             "--direction", direction, "--output", str(tmp_path)],
             timeout=60,
         )
         if result.returncode != 0:
@@ -276,6 +284,9 @@ def load_fuzzy_fixes():
 SUSPICIOUS_ORDER_MARGIN = 5
 # 中文残留名最短长度，跳过单字避免「的/了」等误匹配
 MIN_CN_RESIDUE_LEN = 2
+# 「译文仍是源语言」的优势判定门槛（英→中）：英文词超过汉字两倍且多于这个数才判
+# 「英文占优」——零星几个没翻的卡名、缩写不能被读成「整段没翻」
+UNTRANSLATED_MIN_TOKENS = 20
 
 # --- Patterns ---
 
@@ -306,6 +317,55 @@ ENGLISH_COLON = re.compile(r'[一-鿿][A-Za-z]+:')
 # with CJK text — we only want to match these abbreviations when surrounded
 # by non-ASCII letters or punctuation.
 ABBREV_PATTERN = re.compile(r'(?<![A-Za-z])(BC|OP|UP|OTB|RSS|CA|GG|BM|PTS|R[123])(?![A-Za-z])')
+
+# 「译文仍是源语言」用的语言计量。
+# 英文行文的证据有两种。
+# - 小写开头、4 个字母以上的英文词（luck、played）：直接算。
+# - 句末标点 + 一个只有行文里才会出现的词：常见的英文回复开头词（Thanks. / Cheers. /
+#   Nice try!），或两三个字母的小写功能词（My bad. / How are you. / Come on.）。
+# 后一种要带句末标点、且只认这两小类词，是因为同样「首字母大写 + 句号」的还有不需要翻译的
+# 人名、赛事名、版本号、比分（Krentabol. / Gwent Masters. / Season 12. / Lerio2 vs
+# Krentabol.）。带数字的 token（Lerio2）、驼峰 token（MetallicDanny）、短 token（GN、R1、
+# gg wp、lol）都不算行文；俚语式的感叹（BRUH. / RIP.）可以留在中文输出里，也不算。
+HAN_CHAR = re.compile(r'[一-鿿]')
+HAN_RUN = re.compile(r'[一-鿿]+')
+ENGLISH_WORD = re.compile(r'[A-Za-z]{2,}')
+ENGLISH_LOWERCASE_WORD = re.compile(r'\b[a-z][A-Za-z]{3,}\b')
+ENGLISH_REPLY_OPENER = re.compile(
+    r"\b(?:thanks|thank|congrats|congratulations|grats|nice|good|well|happy|merry|sorry|welcome|"
+    r"cheers|hello|sure|okay|fine|respect|indeed|great|same|agreed|exactly|yes|no|yeah|glad|"
+    r"oops|wow|yikes|phew|let|what|how|why|when|who)\b",
+    re.I,
+)
+ENGLISH_FUNCTION_WORD = re.compile(
+    r"\b(?:am|is|are|was|be|do|does|did|has|had|can|may|not|no|yes|on|in|of|to|at|by|up|my|me|we|"
+    r"us|you|it|he|she|her|his|our|its|and|but|or|so|as|if|the|for|out|off)\b",
+    re.I,
+)
+SENTENCE_END = re.compile(r'[.!?。！？]')
+# 中→英逐段列出违规的上限：残留段数超过它时只列前这么多段，其余并入一条汇总。
+UNTRANSLATED_RUN_LISTING_LIMIT = 30
+# 那条汇总的文案。不带计数，所以逐轮之间键不变；finish 据此认出「上一轮的清单被截断过」。
+UNTRANSLATED_SUMMARY = "还有更多段落没有译成英文，把全文译成英文"
+
+# 行文里的链接。中文不在链接后面加空格，所以匹配到汉字和全角标点为止——否则同一行
+# 后面的中文都会被当成链接吞掉。
+_URL_END = r"\s)\]>'\"\u4e00-\u9fff\u3000-\u303f\uff00-\uffef"
+URL_IN_TEXT = rf"https?://[^{_URL_END}]+"
+# 原样保留、不翻译的内容。格式规则要求它们逐字保留，所以其中的字符不代表译文的语言：
+# - 围栏代码块：从开头围栏到收尾围栏（同一种字符、不短于开头）或文末
+# - 行内代码：一个反引号串，到下一个等长的反引号串为止，中间可以夹着别的长度的反引号串，
+#   但不跨空行（行内代码不跨段落，所以一个游离的反引号藏不掉后面的大段正文）
+# - 链接、不带协议头的链接、邮箱、话题标签与 @ 提及、Markdown 链接目标
+PROTECTED_SPANS = re.compile(
+    r"(?ms)^[ \t]*(?P<fence>`{3,}|~{3,})[^\n]*\n?.*?(?:^[ \t]*(?P=fence)[`~]*[ \t]*$|\Z)"
+    r"|(?P<open>`+)(?:[^`\n]|\n(?![ \t]*(?:\n|$))|(?!(?P=open)(?!`))`+(?!`))+?(?P=open)(?!`)"
+    r"|" + URL_IN_TEXT
+    + rf"|www\.[^{_URL_END}]+"
+    r"|[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+"
+    r"|[#@][A-Za-z0-9_]+"
+    r"|\]\([^\n)]*\)"
+)
 
 # Gameplay-context words that, within a ±20 char window, indicate a slang term is
 # used in its community sense (not literal). Filters literal "broken link" / "loud
@@ -351,32 +411,149 @@ def _slang_warnings(source_text: str | None, translation: str) -> list[str]:
     return warnings
 
 
+def _unprotected_text(text: str, source_text: str | None) -> str:
+    """Return `text` with its preserved spans removed.
+
+    Code, links, link targets, e-mail addresses, hashtags and mentions are kept
+    verbatim by the format rules, so their characters say nothing about the
+    output's language. With the source at hand, only a span that occurs in the
+    source verbatim (whitespace aside) counts as preserved: a span that appears
+    in the output alone was written by the translator, so its characters are
+    judged like any other text.
+    """
+    def key(span: str) -> str:
+        # Whitespace aside, and without a trailing sentence stop of either width:
+        # the punctuation after a link is translated, the link itself is kept.
+        return "".join(span.split()).rstrip(".,;:!?。．！？，；：")
+
+    if source_text is None:
+        return PROTECTED_SPANS.sub(" ", text)
+    preserved = {key(m.group(0)) for m in PROTECTED_SPANS.finditer(source_text)}
+    return PROTECTED_SPANS.sub(
+        lambda m: " " if key(m.group(0)) in preserved else m.group(0), text)
+
+
+def check_untranslated(text: str, direction: str, source_text: str | None = None) -> list[str]:
+    """Flag a "translation" that is not one: still the source language, or a copy of the source.
+
+    direction is the task's own ("encn" / "cnen"), never inferred from the text —
+    the text only decides whether the output honours it. Preserved spans (code,
+    links, link targets, e-mail addresses, hashtags and mentions) are excluded
+    first: the format rules keep them verbatim, so their characters say nothing
+    about the output's language. With the source at hand only spans that occur
+    in the source verbatim count as preserved — see _unprotected_text.
+
+    The two directions are deliberately not symmetric, because the two target
+    languages behave differently in Gwent text:
+
+    - CN->EN (target English): Chinese never belongs in the output. Every run of
+      Han characters outside preserved spans is source text left untranslated and
+      is reported on its own, however many English card names stand around it —
+      "how much of each language" ratios get exactly that shape wrong. One
+      violation per run keeps each message stable while the others are fixed, so
+      the repair loop sees progress instead of regressions. Beyond
+      UNTRANSLATED_RUN_LISTING_LIMIT runs the rest are summed up in one
+      count-free message, so a whole untranslated article does not flood the
+      agent's context. What to do with Chinese player IDs (romanize them) is
+      stated where the agent reads before translating — the pack and SKILL.md —
+      not repeated on every violation.
+    - EN->CN (target Chinese): Latin tokens are routine in a Chinese output (GN,
+      BC, R1, player IDs, kept slang such as "gg wp"), so English counts only as
+      prose: a lowercase word of 4+ letters, or — in a sentence — a common
+      reply opener or a short function word (Thanks. / Cheers. / My bad.), with
+      no Chinese at all, or dominating a long output. Names, events, versions
+      and scores followed by a full stop (Krentabol. / Season 12. / Lerio2 vs
+      Krentabol.) are not prose and stay.
+
+    A verbatim copy of the source is blocked in either direction, provided the
+    source holds translatable text (a Han character for CN->EN, prose for EN->CN):
+    a source that is nothing but IDs, numbers or kept slang legitimately
+    translates to itself.
+    """
+    validate_direction(direction)
+    is_cnen = direction == "cnen"
+    arrow = "CN->EN" if is_cnen else "EN->CN"
+    target_lang = "英文" if is_cnen else "中文"
+
+    def reads_as_english(body: str) -> bool:
+        if ENGLISH_LOWERCASE_WORD.search(body) is not None:
+            return True
+        # A capitalized reply (Cheers. / My bad.) ends as a sentence and holds
+        # a word only prose starts with, or a short function word.
+        if SENTENCE_END.search(body) is None:
+            return False
+        return (ENGLISH_REPLY_OPENER.search(body) is not None
+                or ENGLISH_FUNCTION_WORD.search(body) is not None)
+
+    def holds_source_language(body: str) -> bool:
+        if is_cnen:
+            return HAN_CHAR.search(body) is not None
+        return reads_as_english(body)
+
+    # 1. A verbatim copy of the source (whitespace aside).
+    if (source_text is not None
+            and "".join(text.split()) == "".join(source_text.split())
+            and holds_source_language(_unprotected_text(source_text, None))):
+        return [f"untranslated: 译文与原文一字不差 (方向 {arrow}) — 根本没有翻译，必须把全文译成{target_lang}"]
+
+    # 2. The output is still in the source language.
+    body = _unprotected_text(text, source_text)
+    if is_cnen:
+        runs = HAN_RUN.findall(body)
+        violations = [
+            f"untranslated: 中文原文留在了英文译文里 (方向 {arrow}) — "
+            f"「{run[:12] + '…' if len(run) > 12 else run}」没有译成英文"
+            for run in runs[:UNTRANSLATED_RUN_LISTING_LIMIT]
+        ]
+        if len(runs) > UNTRANSLATED_RUN_LISTING_LIMIT:
+            # Count-free on purpose: the key must not change from round to round.
+            violations.append(
+                f"untranslated: 中文原文留在了英文译文里 (方向 {arrow}) — {UNTRANSLATED_SUMMARY}")
+        return violations
+
+    han = len(HAN_CHAR.findall(body))
+    if not reads_as_english(body):
+        return []
+    # With Chinese present, only English dominating a long output convicts: a
+    # few leftover names or abbreviations do not.
+    if han > 0 and not (len(ENGLISH_WORD.findall(body)) > 2 * han
+                        and len(ENGLISH_WORD.findall(body)) > UNTRANSLATED_MIN_TOKENS):
+        return []
+    first = (ENGLISH_LOWERCASE_WORD.search(body) or ENGLISH_REPLY_OPENER.search(body)
+             or ENGLISH_FUNCTION_WORD.search(body))
+    quote = " ".join(body[first.start():first.start() + 24].split())
+    return [f"untranslated: 译文仍是英文 (方向 {arrow}) — 「{quote}」没有被翻译，必须把全文译成{target_lang}"]
+
+
 def check_translation(
     text: str,
     locked_phrases: set[str] | None = None,
-    direction: str | None = None,
+    *,
+    direction: str,
     source_text: str | None = None,
 ) -> tuple[list[str], list[str]]:
     """Check translation text, return (issues, warnings).
 
     If `source_text` is given, slang terms in it are reverse-scanned and a
     non-blocking warning is emitted when the translation lacks any intended CN
-    form for a slang term used in a gameplay context.
+    form for a slang term used in a gameplay context, and the output is checked
+    against it for being a verbatim copy.
 
-    Direction ("encn" or "cnen") selects which checks apply and is
-    auto-detected from the text when omitted. The full terminology check
-    set (provision mix, forbidden terms, fuzzy fixes, English residue, ...)
-    targets a Chinese *output* and runs only for EN->CN. A CN->EN output is
-    scanned for untranslated Chinese card names instead, because running
-    the EN->CN checks against English text would flag the target language
-    itself as residue.
+    direction ("encn" or "cnen") is the task's translation direction — required,
+    never inferred. The full terminology check set (provision mix, forbidden
+    terms, fuzzy fixes, English residue, ...) targets a Chinese *output* and
+    runs only for EN->CN. A CN->EN output is scanned for untranslated Chinese
+    card names instead, because running the EN->CN checks against English text
+    would flag the target language itself as residue.
     """
-    direction = direction or detect_direction(text)
-
     issues = []
     # 空译文: 任何方向都不该出现 (guard 消费为 blocking issue)
     if not text.strip():
         issues.append("empty: 译文为空 — 没有任何可交付内容")
+
+    # 译文仍是源语言 / 与原文一字不差: 方向是任务参数, 这里反向核对——给定方向,
+    # 译文到底是不是目标语言 (双向都要; lite 也跑, 所以放在方向分支之前)
+    issues.extend(check_untranslated(text, direction, source_text))
 
     # 格式门禁: 分割线 --- 数量必须与原文一致 (双向都要; AI 易丢末尾 --- 当元数据扔掉)
     if source_text:
@@ -392,7 +569,7 @@ def check_translation(
         # 原样保留物, 译文里必须逐字存在。格式规则本就要求代码内容不译。
         # 尾部标点剥离: 正则会把紧随 URL 的逗号/句号吃进 token, 而忠实译文里
         # URL 后接的是全角标点, 不剥会误判「链接丢失」。
-        for raw_url in set(re.findall(r"https?://[^\s)\]>\"']+", source_text)):
+        for raw_url in set(re.findall(URL_IN_TEXT, source_text)):
             url = raw_url.rstrip(".,;:!?'\"，。；：！？、）」』")
             if url and url not in text:
                 issues.append(
@@ -772,11 +949,15 @@ def check_term_authority_violations(
     translated_path: Path,
     source_path: Path | None = None,
     lock_path: Path | None = None,
+    *,
+    direction: str,
 ) -> list[str]:
     """Run term_enforcer.py and return formatted issue strings.
 
     Pass lock_path to reuse a pre-built lock (--lock); otherwise pass
-    source_path and let term_enforcer build it (--source).
+    source_path and let term_enforcer build it (--source). direction is the
+    task's own and reaches term_enforcer verbatim, so its lock (when it builds
+    one) and its enforcement always match the caller's.
     """
     script = Path(__file__).parent / "term_enforcer.py"
     if not script.exists():
@@ -789,7 +970,8 @@ def check_term_authority_violations(
     else:
         flag, ref = "--source", str(source_path)
     result = run_utf8(
-        [sys.executable, str(script), str(translated_path), flag, ref, "--json"],
+        [sys.executable, str(script), str(translated_path), flag, ref,
+         "--direction", direction, "--json"],
         timeout=60,
     )
     # No early-return on returncode==0: a rc-0 run can still carry degraded
@@ -846,6 +1028,7 @@ ISSUE_CATEGORIES = {
     "protected token:": "protected_token",
     "empty:": "empty_translation",
     "completeness:": "completeness",
+    "untranslated:": "untranslated",
 }
 
 
@@ -863,7 +1046,8 @@ def main():
     parser.add_argument("--source", help="Source file for term authority enforcement")
     parser.add_argument("--lock", help="Pre-built context lock JSON (reuse, do not rebuild)")
     parser.add_argument("--fix", action="store_true", help="Auto-fix provision-terminology errors only (费→人口)")
-    parser.add_argument("--direction", choices=["encn", "cnen"], help="Translation direction (auto-detected if omitted)")
+    parser.add_argument("--direction", choices=DIRECTIONS, required=True,
+                        help="Translation direction (EN->CN or CN->EN): selects which checks apply and which language counts as residue")
     parser.add_argument("--json", action="store_true", help="Output structured JSON for agent consumption")
     parser.add_argument("--quiet", action="store_true", help="Suppress stderr notes (e.g. --fix no-op on CN->EN)")
     parser.add_argument("--skip-ta", action="store_true",
@@ -880,7 +1064,7 @@ def main():
         sys.exit(1)
 
     text = path.read_text(encoding="utf-8")
-    direction = args.direction or detect_direction(text)
+    direction = args.direction
 
     locked_phrases: set[str] = set()
     source_text: str | None = None
@@ -896,9 +1080,9 @@ def main():
         if source_path.exists():
             source_text = source_path.read_text(encoding="utf-8")
             if not locked_phrases:
-                locked_phrases = load_locked_phrases_from_source(source_path)
+                locked_phrases = load_locked_phrases_from_source(source_path, direction)
 
-    issues, warnings = check_translation(text, locked_phrases, direction, source_text=source_text)
+    issues, warnings = check_translation(text, locked_phrases, direction=direction, source_text=source_text)
 
     # Term authority enforces that locked source terms appear with their
     # official translation. This inline pass covers EN->CN only (English
@@ -913,13 +1097,13 @@ def main():
         if args.lock:
             lock_path = Path(args.lock)
             if lock_path.exists():
-                ta_issues.extend(check_term_authority_violations(path, lock_path=lock_path))
+                ta_issues.extend(check_term_authority_violations(path, lock_path=lock_path, direction=direction))
             else:
                 ta_issues.append(f"term authority: lock file not found: {args.lock}")
         elif args.source:
             source_path = Path(args.source)
             if source_path.exists():
-                ta_issues.extend(check_term_authority_violations(path, source_path=source_path))
+                ta_issues.extend(check_term_authority_violations(path, source_path=source_path, direction=direction))
             else:
                 ta_issues.append(f"term authority: source file not found: {args.source}")
 
@@ -936,7 +1120,7 @@ def main():
             auto_fixed_count = fix_count
             if fix_count > 0:
                 path.write_text(fixed_text, encoding="utf-8")
-                issues, warnings = check_translation(fixed_text, locked_phrases, direction, source_text=source_text)
+                issues, warnings = check_translation(fixed_text, locked_phrases, direction=direction, source_text=source_text)
 
     issues.extend(ta_issues)
 
@@ -949,7 +1133,6 @@ def main():
         ]
         data = {
             "direction": direction,
-            "direction_auto_detected": args.direction is None,
             "issue_count": len(issues),
             "warning_count": len(warnings),
             "auto_fixable_count": auto_fixable,
