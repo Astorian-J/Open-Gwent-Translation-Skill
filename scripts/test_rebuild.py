@@ -613,6 +613,80 @@ def _t_lookup_card_db() -> tuple[str, str]:
     return ("PASS", "lookup card DB: exact EN + CN queries hit the 1381-card corpus, md+DB merged")
 
 
+def _t_lookup_shows_what_it_finds() -> tuple[str, str]:
+    """Every cell of a row lookup.py printed is shown: both sides of a pair and what else the row says.
+
+    A reference file holds several tables with different columns; the deck names of
+    competitive_terms.md sit under `english_deck_name / community_chinese`. The
+    plain layout used to be chosen by file alone and to read one table's columns:
+    of 887 rows with 2825 cells, 613 cells were left out — 102 rows came back as
+    a bare file name, 103 lost one side of a pair, and explanatory columns
+    (slang_map's `literal_forbidden`, a pitfall's `severity`, a keyword's
+    `faction`...) were dropped. The list of searched files is pinned here too: a
+    file dropped from it is no longer searched, and would also drop out of the
+    check below.
+    """
+    import lookup
+    from _shared import parse_markdown_table
+
+    ref_dir = SCRIPT_DIR.parent / "references"
+    if lookup.REFERENCE_FILES != (
+            "terminology_map.md", "reverse_terminology_map.md", "card_overrides.md", "keywords_map.md",
+            "competitive_terms.md", "ambiguous_names.md", "category_map.md", "correction_guide.md",
+            "common_pitfalls.md", "style_fingerprint.md", "version_map.md", "cn_fuzzy_fixes.md",
+            "slang_map.md"):
+        return ("FAIL", "the list of files lookup.py searches changed — update this test with it if intended")
+    missing = [f for f in lookup.REFERENCE_FILES if not (ref_dir / f).exists()]
+    if missing:
+        return ("FAIL", f"lookup.py searches files that do not exist: {missing}")
+    # A cell that only says "nothing here" (a dash) need not be shown.
+    placeholders = {"", "—", "–", "-"}
+    hidden, rows = [], 0
+    for fname in lookup.REFERENCE_FILES:
+        for row in parse_markdown_table((ref_dir / fname).read_text(encoding="utf-8"), min_columns=1):
+            rows += 1
+            shown = "\n".join(lookup.format_result(
+                {"file": fname, "value": "", "row": row, "score": 1.0, "field": ""}).splitlines()[1:])
+            for column, cell in row.items():
+                if (not column.startswith("_") and str(cell).strip() not in placeholders
+                        and str(cell) not in shown):
+                    hidden.append(f"{fname}: {column} = {str(cell)[:30]}")
+    if hidden:
+        return ("FAIL", f"lookup.py leaves out {len(hidden)} cells of the rows it found, e.g. {hidden[:4]}")
+    if rows < 800:
+        return ("FAIL", f"only {rows} reference rows checked — the tables were not read")
+
+    # Through the command: a query taken from one side of a row brings back the other side.
+    # The row is the first whose query side occurs in no other row of its file, so the
+    # hit cannot be answered by some other table.
+    def unique_row(fname: str, query_side: str, *columns: str) -> dict:
+        table = parse_markdown_table((ref_dir / fname).read_text(encoding="utf-8"), min_columns=1)
+
+        def text_of(row: dict) -> str:
+            return " ".join(str(v) for k, v in row.items() if not k.startswith("_"))
+
+        for row in table:
+            if row.get(query_side) and all(c in row for c in columns) \
+                    and sum(row[query_side] in text_of(other) for other in table) == 1:
+                return row
+        return {}
+
+    for fname, query_side, other_side, columns in (
+            ("competitive_terms.md", "community_chinese", "english_deck_name",
+             ("english_deck_name", "community_chinese")),
+            ("common_pitfalls.md", "wrong", "correct", ("severity", "wrong", "correct"))):
+        row = unique_row(fname, query_side, *columns)
+        if not row:
+            return ("FAIL", f"no row in {fname} whose {query_side} occurs once — nothing to look up")
+        r = run_utf8([sys.executable, "-B", str(SCRIPT_DIR / "lookup.py"), row[query_side], "--plain"],
+                     timeout=60)
+        if r.returncode != 0 or row[other_side] not in r.stdout:
+            return ("FAIL", f"lookup.py {row[query_side]!r} --plain did not bring back "
+                            f"{row[other_side]!r} from {fname}: exit {r.returncode} {r.stdout[-200:]}")
+    return ("PASS", "lookup output: every printed row shows all of its cells (deck names, forbidden literals "
+                     "included); the searched files are the pinned 13")
+
+
 def _t_repair_tracking() -> tuple[str, str]:
     """finish repair-regression tracking: baseline -> REGRESS across renamed
     output -> PASS clears the baseline.
@@ -1661,6 +1735,7 @@ _TESTS = [
     _t_cjk_absorb,
     _t_true_unknown,
     _t_lookup_card_db,
+    _t_lookup_shows_what_it_finds,
     _t_repair_tracking,
     _t_new_format_checks,
     _t_h1_guard_fail_closed,

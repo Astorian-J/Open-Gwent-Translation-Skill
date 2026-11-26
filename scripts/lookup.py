@@ -27,28 +27,31 @@ def similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
+# The reference files that are searched. Hits are printed grouped by file name
+# (alphabetically within a score), not in this order.
+REFERENCE_FILES = (
+    "terminology_map.md",
+    "reverse_terminology_map.md",
+    "card_overrides.md",
+    "keywords_map.md",
+    "competitive_terms.md",
+    "ambiguous_names.md",
+    "category_map.md",
+    "correction_guide.md",
+    "common_pitfalls.md",
+    "style_fingerprint.md",
+    "version_map.md",
+    "cn_fuzzy_fixes.md",
+    "slang_map.md",
+)
+
+
 def search_references(query: str, ref_dir: Path, fuzzy: bool = False) -> list[dict]:
     """Search all reference files for query."""
     results = []
     query_lower = query.lower()
 
-    ref_files = [
-        "terminology_map.md",
-        "reverse_terminology_map.md",
-        "card_overrides.md",
-        "keywords_map.md",
-        "competitive_terms.md",
-        "ambiguous_names.md",
-        "category_map.md",
-        "correction_guide.md",
-        "common_pitfalls.md",
-        "style_fingerprint.md",
-        "version_map.md",
-        "cn_fuzzy_fixes.md",
-        "slang_map.md",
-    ]
-
-    for fname in ref_files:
+    for fname in REFERENCE_FILES:
         fpath = ref_dir / fname
         if not fpath.exists():
             continue
@@ -175,16 +178,29 @@ def search_card_db(query: str, ref_dir: Path, fuzzy: bool = False) -> list[dict]
     return results
 
 
+def _has(row: dict, *columns: str) -> bool:
+    """Whether the row's table has these columns, filled or not."""
+    return all(column in row for column in columns)
+
+
 def format_result(r: dict) -> str:
-    """Format a single search result."""
+    """Format a single search result.
+
+    Every cell of a markdown row that holds something is shown. Most reference
+    files hold several tables with different columns, so a layout below applies
+    only to a row that has its columns — the deck names of competitive_terms.md
+    are read under their own column names, as TermAuthority reads them — and it
+    shows the row's other columns too. Any other row is listed field by field.
+    The card DB is the one exception: its rows carry far more than a lookup is
+    asked for, so only the two names and the id are shown.
+    """
     lines = []
     file = r["file"]
-    value = r["value"]
     row = r["row"]
 
     lines.append(f"  [{file}]")
 
-    # Extract relevant fields based on file type
+    # Extract relevant fields based on the row's columns
     if file == CARD_DB_FILE:
         en = row.get("en", "")
         cn = row.get("cn", "")
@@ -198,16 +214,21 @@ def format_result(r: dict) -> str:
             parts.append(f"[{cid}]")
         lines.append(f"    {' '.join(parts)}")
 
-    elif file == "terminology_map.md":
+    elif file == "terminology_map.md" and (
+            _has(row, "english", "chinese") or _has(row, "english", "slang")
+            or _has(row, "forbidden", "must_use")):
         en = row.get("english", row.get("forbidden", ""))
         cn = row.get("chinese", row.get("must_use", row.get("slang", "")))
         notes = row.get("notes", "")
+        example = row.get("example", "")
         if en and cn:
             lines.append(f"    {en} → {cn}")
         if notes:
             lines.append(f"    Notes: {notes}")
+        if example:
+            lines.append(f"    Example: {example}")
 
-    elif file == "reverse_terminology_map.md":
+    elif file == "reverse_terminology_map.md" and _has(row, "chinese", "english"):
         cn = row.get("chinese", "")
         en = row.get("english", "")
         notes = row.get("notes", "")
@@ -216,9 +237,10 @@ def format_result(r: dict) -> str:
         if notes:
             lines.append(f"    Notes: {notes}")
 
-    elif file == "card_overrides.md":
+    elif file == "card_overrides.md" and (
+            _has(row, "english", "chinese") or _has(row, "alias", "maps_to")):
         en = row.get("english", "") or row.get("alias", "")
-        cn = row.get("chinese", "") or row.get("maps_to", "") or row.get("修正后", "")
+        cn = row.get("chinese", "") or row.get("maps_to", "")
         cid = row.get("card_id", "")
         faction = row.get("faction", "")
         parts = []
@@ -231,11 +253,15 @@ def format_result(r: dict) -> str:
         if faction:
             parts.append(f"| {faction}")
         lines.append(f"    {' '.join(parts)}")
+        notes = row.get("notes", "")
+        if notes:
+            lines.append(f"    Notes: {notes}")
 
-    elif file == "keywords_map.md":
+    elif file == "keywords_map.md" and _has(row, "english", "chinese"):
         en = row.get("english", "")
         cn = row.get("chinese", "")
         freq = row.get("freq", "")
+        faction = row.get("faction", "")
         notes = row.get("notes", "")
         parts = []
         if en:
@@ -244,15 +270,17 @@ def format_result(r: dict) -> str:
             parts.append(f"→ {cn}")
         if freq:
             parts.append(f"(freq: {freq})")
+        if faction:
+            parts.append(f"| {faction}")
         lines.append(f"    {' '.join(parts)}")
         if notes:
             lines.append(f"    Notes: {notes}")
 
-    elif file == "competitive_terms.md":
-        en = row.get("english", "")
-        cn = row.get("chinese", "")
+    elif file == "competitive_terms.md" and (
+            _has(row, "english", "chinese") or _has(row, "english_deck_name", "community_chinese")):
+        en = row.get("english", "") or row.get("english_deck_name", "")
+        cn = row.get("chinese", "") or row.get("community_chinese", "")
         abbr = row.get("abbreviations", "")
-        notes = row.get("notes", row.get("context", ""))
         parts = []
         if en:
             parts.append(en)
@@ -261,12 +289,15 @@ def format_result(r: dict) -> str:
         if abbr:
             parts.append(f"| Abbr: {abbr}")
         lines.append(f"    {' '.join(parts)}")
-        if notes:
-            lines.append(f"    {notes}")
+        # A terms row explains itself in `notes`, a deck row in `context`.
+        for column in ("notes", "context"):
+            if row.get(column):
+                lines.append(f"    {row[column]}")
 
-    elif file == "slang_map.md":
+    elif file == "slang_map.md" and _has(row, "english", "intended_cn"):
         en = row.get("english", "")
         cn = row.get("intended_cn", "")
+        forbidden = row.get("literal_forbidden", "")
         note = row.get("note", "")
         parts = []
         if en:
@@ -274,37 +305,47 @@ def format_result(r: dict) -> str:
         if cn:
             parts.append(f"→ {cn}")
         lines.append(f"    {' '.join(parts)}")
+        if forbidden:
+            lines.append(f"    Literal forbidden: {forbidden}")
         if note:
             lines.append(f"    Notes: {note}")
 
-    elif file == "ambiguous_names.md":
+    elif file == "ambiguous_names.md" and _has(row, "full_name", "chinese"):
         en = row.get("full_name", "")
         cn = row.get("chinese", "")
         clue = row.get("clue", "")
+        notes = row.get("notes", "")
         if en and cn:
             lines.append(f"    {en} → {cn}")
         if clue:
             lines.append(f"    Context: {clue}")
+        if notes:
+            lines.append(f"    Notes: {notes}")
 
-    elif file in ("correction_guide.md", "common_pitfalls.md"):
+    elif file in ("correction_guide.md", "common_pitfalls.md") and "wrong" in row and (
+            "right" in row or "correct" in row):
         wrong = row.get("wrong", "")
-        right = row.get("right", "")
-        issue = row.get("issue", "")
+        right = row.get("right", "") or row.get("correct", "")
+        severity = row.get("severity", "")
         if wrong and right:
             lines.append(f"    [WRONG] {wrong} → [RIGHT] {right}")
-        if issue:
-            lines.append(f"    Issue: {issue}")
+        if severity:
+            lines.append(f"    Severity: {severity}")
+        # correction_guide.md explains a fix in `issue`, common_pitfalls.md in `why` or `notes`.
+        for column, label in (("issue", "Issue"), ("why", "Why"), ("notes", "Notes")):
+            if row.get(column):
+                lines.append(f"    {label}: {row[column]}")
 
-    elif file == "cn_fuzzy_fixes.md":
+    elif file == "cn_fuzzy_fixes.md" and _has(row, "wrong", "correct"):
         wrong = row.get("wrong", "")
         correct = row.get("correct", "")
         ftype = row.get("type", "")
-        notes = row.get("notes", "")
         if wrong and correct:
             icon = {"别字": "[TYP]", "同音": "[HOM]", "漏字": "[MISS]", "音近": "[SIM]"}.get(ftype, "[FIX]")
             lines.append(f"    {icon} 「{wrong}」→ 「{correct}」 ({ftype})")
-        if notes:
-            lines.append(f"    Notes: {notes}")
+        for column, label in (("notes", "Notes"), ("context", "Context")):
+            if row.get(column):
+                lines.append(f"    {label}: {row[column]}")
 
     else:
         # Generic: show all non-empty fields
